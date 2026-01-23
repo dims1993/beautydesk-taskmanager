@@ -1,0 +1,35 @@
+version: "3.8"
+
+services:
+  # Servicio de Base de Datos
+  db:
+    image: postgres:15-alpine
+    restart: always
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # Persistencia de datos
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+
+  # Servicio de Backend (FastAPI)
+  backend:
+    build: .
+    container_name: beautytask_api
+    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+    volumes:
+      - .:/app # Hot-reload: los cambios en tu código se reflejan al instante
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - db # Espera a que la DB arranque antes de iniciar (básico)
+
+# Definición de volúmenes
+volumes:
+  postgres_data:

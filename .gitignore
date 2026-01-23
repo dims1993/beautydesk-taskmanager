@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
+#.vscode settings
+vscode/
+
+# Docker logs
+*.log
+
+# Mac basura
+.DS_Store
+
+# Appointment 
+appointment_data.json

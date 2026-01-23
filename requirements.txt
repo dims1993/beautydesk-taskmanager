@@ -1,0 +1,7 @@
+fastapi -> motor de nuestra API
+uvicorn[standard] -> servidor ASGI para FastAPI 
+sqlmodel -> ORM para manejar la base de datos
+psycopg2-binary -> driver síncrono para que Python entienda a PostgreSQL
+python-dotenv -> para manejar variables de entorno desde un archivo .env
+passlib[argon2] -> para hashear contraseñas de forma segura
+email-validator -> para validar formatos de email
