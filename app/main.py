@@ -91,3 +91,23 @@ def read_users(db: Session = Depends(get_session)):
 @app.get("/")
 def read_root():
     return {"message": "Bienvenido a BeautyTask API"}
+
+# --- ENDPOINTS DE CITAS ---
+
+
+@app.patch("/appointments/{appointment_id}/status", response_model=AppointmentOut)
+def update_appointment_status(appointment_id: int, new_status: str, db: Session = Depends(get_session)):
+    # 1. Buscamos la cita por ID
+    db_appointment = db.get(Appointment, appointment_id)
+    if not db_appointment:
+        raise HTTPException(status_code=404, detail="Cita no encontrada")
+
+    # 2. Actualizamos solo el campo status
+    db_appointment.status = new_status
+
+    # 3. Guardamos los cambios
+    db.add(db_appointment)
+    db.commit()
+    db.refresh(db_appointment)
+
+    return db_appointment
