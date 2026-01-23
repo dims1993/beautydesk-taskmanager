@@ -6,8 +6,8 @@ from contextlib import asynccontextmanager
 
 # Importaciones de nuestro propio código
 from app.db import init_db, get_session
-from app.models import User
-from app.schemas import UserCreate, UserOut
+from app.models import User, Service, Appointment
+from app.schemas import UserCreate, UserOut, ServiceCreate, ServiceOut, AppointmentCreate, AppointmentOut
 from app.security import get_password_hash
 
 # 1. Gestión del ciclo de vida (Arranque y Cierre)
@@ -57,6 +57,26 @@ def create_user(user_data: UserCreate, db: Session = Depends(get_session)):
     db.commit()
     db.refresh(new_user)
     return new_user
+
+
+@app.post("/appointments/", response_model=AppointmentOut)
+def create_appointment(data: AppointmentCreate, db: Session = Depends(get_session)):
+    # Podríamos añadir validaciones extra aquí (ej: ¿existe el usuario?)
+
+    new_appointment = Appointment(
+        start_time=data.start_time,
+        end_time=data.end_time,
+        staff_id=data.staff_id,
+        service_id=data.service_id,
+        client_name=data.client_name,
+        client_phone=data.client_phone,
+        notes=data.notes
+    )
+
+    db.add(new_appointment)
+    db.commit()
+    db.refresh(new_appointment)
+    return new_appointment
 
 
 @app.get("/users/", response_model=List[UserOut])

@@ -6,7 +6,7 @@ venv/
 .env
 
 #.vscode settings
-vscode/
+.vscode/
 
 # Docker logs
 *.log

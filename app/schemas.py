@@ -1,6 +1,7 @@
 # app/schemas.py
 from pydantic import BaseModel, EmailStr
 from typing import Optional
+from datetime import datetime
 
 # 1. Esquema para CREAR un usuario (lo que recibimos)
 
@@ -40,6 +41,31 @@ class ServiceOut(BaseModel):
     description: Optional[str]
     price: float
     duration_minutes: int
+
+    class Config:
+        from_attributes = True
+
+# --- Esquemas para CITAS (Los usaremos pronto) ---
+
+
+class AppointmentCreate(BaseModel):
+    client_name: str
+    start_time: datetime
+    end_time: datetime
+    staff_id: int
+    service_id: int
+    client_phone: Optional[str] = None
+    notes: Optional[str] = None
+    # No incluimos "status" porque tiene un valor por defecto ("scheduled")
+
+
+class AppointmentOut(BaseModel):
+    id: int
+    start_time: datetime
+    end_time: datetime
+    staff_id: int
+    service_id: int
+    client_name: str
 
     class Config:
         from_attributes = True

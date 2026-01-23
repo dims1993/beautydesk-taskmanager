@@ -36,3 +36,5 @@ class Appointment(SQLModel, table=True):
 
     # Relaciones para acceder fácil: cita.staff.name
     staff: Optional[User] = Relationship(back_populates="appointments")
+    # Relación inversa: user.
+    appointments: List["Appointment"] = Relationship(back_populates="staff")
