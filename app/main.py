@@ -2,8 +2,9 @@ from fastapi import FastAPI, Depends, HTTPException
 from sqlmodel import SQLModel, Session, select
 from typing import List
 from contextlib import asynccontextmanager
+from sqlalchemy import or_
 
-# Importaciones de tu nueva estructura
+# Importaciones de la nueva estructura
 from app.models import User, Service, Appointment
 from app.schemas import AppointmentCreate, AppointmentOut, UserCreate, UserOut
 from app.db.session import engine, get_session, init_db
@@ -107,7 +108,6 @@ def create_user(user_data: UserCreate, db: Session = Depends(get_session)):
 
 @app.post("/appointments/", response_model=AppointmentOut)
 def create_appointment(data: AppointmentCreate, db: Session = Depends(get_session)):
-    # Podríamos añadir validaciones extra aquí (ej: ¿existe el usuario?)
 
     new_appointment = Appointment(
         start_time=data.start_time,
@@ -132,16 +132,21 @@ def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_session)
 ):
-    # En OAuth2PasswordRequestForm, el 'username' suele ser el email si así lo decides
-    user = db.query(User).filter(User.email == form_data.username).first()
+    # Buscamos al usuario que coincida el EMAIL o el USERNAME con lo que puso en el primer cuadro de Swagger
+    user = db.query(User).filter(
+        or_(User.email == form_data.username,
+            User.username == form_data.username)
+    ).first()
 
     if not user or not verify_password(form_data.password, user.password_hash):
+        print(f"DEBUG: Fallo de login para: {form_data.username}")
         raise HTTPException(
             status_code=401,
-            detail="Email o contraseña incorrectos",
+            detail="Email/Usuario o contraseña incorrectos",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    print(f"DEBUG: Login exitoso para: {user.email}")
     access_token = create_access_token(data={"sub": user.email})
     return {"access_token": access_token, "token_type": "bearer"}
 
@@ -183,3 +188,33 @@ def update_appointment_status(appointment_id: int, new_status: str, db: Session 
     db.refresh(db_appointment)
 
     return db_appointment
+
+# --- ENDPOINTS DE SERVICIOS ---
+
+
+@app.on_event("startup")
+def on_startup():
+    SQLModel.metadata.create_all(engine)
+
+# Listar todos los servicios (Público)
+
+
+@app.get("/services/", response_model=list[Service])
+def read_services(db: Session = Depends(get_session)):
+    services = db.exec(select(Service)).all()
+    return services
+
+# Crear un nuevo servicio (Protegido: requiere Login)
+
+
+@app.post("/services/", response_model=Service)
+def create_service(
+    service: Service,
+    db: Session = Depends(get_session),
+    # Solo usuarios autenticados
+    current_user: User = Depends(get_current_user)
+):
+    db.add(service)
+    db.commit()
+    db.refresh(service)
+    return service
