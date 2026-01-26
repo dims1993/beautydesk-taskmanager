@@ -1,4 +1,4 @@
-# app/db.py
+# app/db/session.py
 import os
 from sqlmodel import create_engine, SQLModel, Session
 from dotenv import load_dotenv
@@ -10,7 +10,7 @@ load_dotenv()
 # Si os.getenv devuelve None, usaremos los valores después de la coma
 POSTGRES_USER = os.getenv("POSTGRES_USER", "postgres")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "beautytask_password")
-POSTGRES_SERVER = os.getenv("POSTGRES_SERVER", "localhost")
+POSTGRES_SERVER = "db"
 # Aquí está el truco: si el puerto es None, ponemos "5432" por defecto como texto
 POSTGRES_PORT = os.getenv("POSTGRES_PORT") or "5432"
 POSTGRES_DB = os.getenv("POSTGRES_DB", "beautytask_db")

@@ -1,14 +1,22 @@
-# app/main.py
 from fastapi import FastAPI, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlmodel import SQLModel, Session, select
 from typing import List
 from contextlib import asynccontextmanager
 
-# Importaciones de nuestro propio código
-from app.db import init_db, get_session
+# Importaciones de tu nueva estructura
 from app.models import User, Service, Appointment
-from app.schemas import UserCreate, UserOut, ServiceCreate, ServiceOut, AppointmentCreate, AppointmentOut
-from app.security import get_password_hash
+from app.schemas import AppointmentCreate, AppointmentOut, UserCreate, UserOut
+from app.db.session import engine, get_session, init_db
+from app.core.security import get_password_hash
+
+# Importaciones para autenticación (si es necesario)
+from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
+from app.core.security import verify_password, create_access_token, SECRET_KEY, ALGORITHM
+from app.schemas.token import Token
+from jose import JWTError, jwt
+
+# 1. Esto habilita el botón "Authorize" en Swagger
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 # 1. Gestión del ciclo de vida (Arranque y Cierre)
 
@@ -29,6 +37,44 @@ app = FastAPI(
 
 # --- ENDPOINTS DE USUARIOS ---
 
+# Función servirá para proteger cualquier ruta en el futuro
+
+
+def get_current_user(db: Session = Depends(get_session), token: str = Depends(oauth2_scheme)):
+    # Solo vemos el inicio por seguridad
+    print(f"DEBUG: Token recibido -> {token[:10]}...")
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        print(f"DEBUG: Email extraído del token -> {email}")
+
+        if email is None:
+            print("DEBUG: El campo 'sub' está vacío")
+            raise HTTPException(status_code=401, detail="Token inválido")
+
+    except JWTError as e:
+        print(f"DEBUG: Error de JWT -> {str(e)}")  # <--- ESTO ES CLAVE
+        raise HTTPException(
+            status_code=401, detail="Error al validar credenciales")
+
+    user = db.query(User).filter(User.email == email).first()
+    if user is None:
+        print(f"DEBUG: Usuario {email} no encontrado en la DB")
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    print(f"DEBUG: Usuario {user.email} autenticado con éxito")
+    return user
+
+# Endpoint protegido de ejemplo
+
+
+@app.get("/users/me", response_model=UserOut)
+def read_users_me(current_user: User = Depends(get_current_user)):
+    """
+    Este endpoint solo funciona si el candado está cerrado (usuario logueado)
+    """
+    return current_user
+
 
 @app.post("/users/", response_model=UserOut)
 def create_user(user_data: UserCreate, db: Session = Depends(get_session)):
@@ -47,10 +93,10 @@ def create_user(user_data: UserCreate, db: Session = Depends(get_session)):
     hashed_pwd = get_password_hash(password_plano)
 
     new_user = User(
-        name=user_data.name,
+        username=user_data.username,
         email=user_data.email,
         role=user_data.role,
-        hashed_password=hashed_pwd
+        password_hash=hashed_pwd
     )
 
     db.add(new_user)
@@ -78,10 +124,36 @@ def create_appointment(data: AppointmentCreate, db: Session = Depends(get_sessio
     db.refresh(new_appointment)
     return new_appointment
 
+# --- ENDPOINTS DE AUTENTICACIÓN ---
 
-@app.get("/users/", response_model=List[UserOut])
-def read_users(db: Session = Depends(get_session)):
-    # Retorna todos los usuarios de la tabla
+
+@app.post("/token", response_model=Token)
+def login_for_access_token(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_session)
+):
+    # En OAuth2PasswordRequestForm, el 'username' suele ser el email si así lo decides
+    user = db.query(User).filter(User.email == form_data.username).first()
+
+    if not user or not verify_password(form_data.password, user.password_hash):
+        raise HTTPException(
+            status_code=401,
+            detail="Email o contraseña incorrectos",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    access_token = create_access_token(data={"sub": user.email})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+# Endpoint protegido que lista todos los usuarios
+
+
+@app.get("/users/", response_model=list[UserOut])
+def read_users(
+    db: Session = Depends(get_session),
+    # <--- ESTA LÍNEA ES LA LLAVE
+    current_user: User = Depends(get_current_user)
+):
     users = db.query(User).all()
     return users
 
