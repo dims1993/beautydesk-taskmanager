@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
 from sqlmodel import SQLModel, Session, select
 from typing import List
 from contextlib import asynccontextmanager
@@ -9,6 +9,7 @@ from app.models import User, Service, Appointment
 from app.schemas import AppointmentCreate, AppointmentOut, UserCreate, UserOut
 from app.db.session import engine, get_session, init_db
 from app.core.security import get_password_hash
+from app.core.notifications import send_appointment_confirmation
 
 # Importaciones para autenticación (si es necesario)
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
@@ -16,8 +17,12 @@ from app.core.security import verify_password, create_access_token, SECRET_KEY, 
 from app.schemas.token import Token
 from jose import JWTError, jwt
 
-# 1. Esto habilita el botón "Authorize" en Swagger
+# Esto habilita el botón "Authorize" en Swagger
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+# Esto fuerza a Pydantic a terminar de procesar los modelos
+AppointmentCreate.model_rebuild()
+AppointmentOut.model_rebuild()
 
 # 1. Gestión del ciclo de vida (Arranque y Cierre)
 
@@ -105,23 +110,34 @@ def create_user(user_data: UserCreate, db: Session = Depends(get_session)):
     db.refresh(new_user)
     return new_user
 
+# Crear una nueva cita y enviar notificación por email
+
 
 @app.post("/appointments/", response_model=AppointmentOut)
-def create_appointment(data: AppointmentCreate, db: Session = Depends(get_session)):
+async def create_appointment(
+    data: AppointmentCreate,
+    background_tasks: BackgroundTasks,  # Permite enviar el mail "por detrás"
+    db: Session = Depends(get_session)
+):
+    # 1. Convertimos el esquema a modelo de base de datos
+    # model_dump() convierte el esquema en un diccionario y ** lo desempaqueta
+    new_appointment = Appointment(**data.model_dump())
 
-    new_appointment = Appointment(
-        start_time=data.start_time,
-        end_time=data.end_time,
-        staff_id=data.staff_id,
-        service_id=data.service_id,
-        client_name=data.client_name,
-        client_phone=data.client_phone,
-        notes=data.notes
-    )
+    # 2. El status no viene en el 'Create', así que se pone el por defecto del modelo
 
     db.add(new_appointment)
     db.commit()
     db.refresh(new_appointment)
+
+    # 3. Disparamos la notificación usando el email que acabamos de guardar
+
+    background_tasks.add_task(
+        send_appointment_confirmation,
+        email=new_appointment.client_email,
+        client_name=new_appointment.client_name,
+        date=new_appointment.start_time.strftime("%d/%m/%Y a las %H:%M")
+    )
+
     return new_appointment
 
 # --- ENDPOINTS DE AUTENTICACIÓN ---

@@ -11,6 +11,7 @@ class Appointment(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     client_name: str
     client_phone: Optional[str] = None
+    client_email: Optional[str] = None
     start_time: datetime
     end_time: datetime
     status: str = Field(default="scheduled")

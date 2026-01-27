@@ -20,12 +20,15 @@ if TYPE_CHECKING:
 
 class AppointmentCreate(BaseModel):
     client_name: str
+    client_phone: Optional[str] = None
+    client_email: Optional[str] = None
     start_time: datetime
     end_time: datetime
+    status: Optional[str] = "scheduled"
+    notes: Optional[str] = None
     staff_id: int
     service_id: int
-    client_phone: Optional[str] = None
-    notes: Optional[str] = None
+
     # No incluimos "status" porque tiene un valor por defecto ("scheduled")
 
 
