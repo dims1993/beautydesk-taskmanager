@@ -29,13 +29,13 @@ class AppointmentCreate(BaseModel):
     # No incluimos "status" porque tiene un valor por defecto ("scheduled")
 
 
-class AppointmentOut(BaseModel):
+class AppointmentOut(SQLModel):
     id: int
+    client_name: str
     start_time: datetime
     end_time: datetime
-    staff_id: int
+    status: str
     service_id: int
-    client_name: str
 
     class Config:
         from_attributes = True

@@ -218,3 +218,40 @@ def create_service(
     db.commit()
     db.refresh(service)
     return service
+
+# Nuevo endpoint: Obtener la agenda diaria filtrada por Servicio y Profesional
+
+
+@app.get("/appointments/daily/", response_model=List[AppointmentOut])
+def get_daily_agenda(
+    date: str,  # Formato "2026-01-27"
+    service_id: int,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    from datetime import datetime, timedelta
+
+    try:
+        # Convertimos el string a objeto datetime
+        target_date = datetime.strptime(date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="Fecha inválida. Formato esperado: YYYY-MM-DD"
+        )
+
+    start_of_day = target_date
+    end_of_day = target_date + timedelta(days=1)
+
+    # Consulta filtrando por Servicio, Rango de Fecha y Profesional (Saray)
+    statement = select(Appointment).where(
+        Appointment.service_id == service_id,
+        # <--- Importante para su agenda personal
+        Appointment.staff_id == current_user.id,
+        Appointment.start_time >= start_of_day,
+        Appointment.start_time < end_of_day
+    )
+
+    appointments = db.exec(statement).all()
+
+    return appointments
