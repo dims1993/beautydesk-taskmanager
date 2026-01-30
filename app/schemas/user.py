@@ -10,6 +10,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     role: str  # "admin" o "staff"
     password: str
+    role: str = "user"  # Valor por defecto si no se proporciona
 
 # 2. Esquema para DEVOLVER un usuario (lo que enviamos al exterior)
 

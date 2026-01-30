@@ -13,6 +13,7 @@ ecdsa==0.19.1
 email-validator==2.3.0
 fastapi==0.128.0
 fastapi-mail==1.6.1
+greenlet==3.3.1
 h11==0.16.0
 httptools==0.7.1
 idna==3.11
@@ -41,5 +42,3 @@ uvicorn==0.40.0
 uvloop==0.22.1
 watchfiles==1.1.1
 websockets==16.0
-fastapi-mail
-python-dotenv

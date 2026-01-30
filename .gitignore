@@ -16,3 +16,14 @@ venv/
 
 # Appointment 
 appointment_data.json
+
+# Dependencias de Node.js
+node_modules/
+dist/
+
+# Docker logs
+*.log
+docker-compose.override.yml
+
+# IDEs
+.idea/

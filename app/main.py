@@ -1,28 +1,37 @@
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
-from sqlmodel import SQLModel, Session, select
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
+from sqlmodel import Session, select
 from typing import List
 from contextlib import asynccontextmanager
 from sqlalchemy import or_
+from app.db.session import engine
+from sqlmodel import SQLModel
 
-# Importaciones de la nueva estructura
-from app.models import User, Service, Appointment
-from app.schemas import AppointmentCreate, AppointmentOut, UserCreate, UserOut
-from app.db.session import engine, get_session, init_db
-from app.core.security import get_password_hash
-from app.core.notifications import send_appointment_confirmation
 
-# Importaciones para autenticación (si es necesario)
-from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
-from app.core.security import verify_password, create_access_token, SECRET_KEY, ALGORITHM
-from app.schemas.token import Token
+# 1. Librerías externas que faltaban
 from jose import JWTError, jwt
 
-# Esto habilita el botón "Authorize" en Swagger
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+# 2. Importación maestra desde tu __init__.py
+from app import (
+    User, Service, Appointment,
+    UserCreate, UserOut, AppointmentCreate, AppointmentOut, Token,
+    get_session, init_db, seed_services,
+    verify_password, create_access_token,
+    send_appointment_confirmation,
+    get_password_hash
+)
 
-# Esto fuerza a Pydantic a terminar de procesar los modelos
-AppointmentCreate.model_rebuild()
-AppointmentOut.model_rebuild()
+# 3. Importar constantes de seguridad (suelen estar en core.security)
+from app.core.security import SECRET_KEY, ALGORITHM
+
+# Archivos directamente
+from app.schemas.appointment import AppointmentCreate, AppointmentOut
+from app.schemas.user import UserCreate, UserOut
+from app.schemas.token import Token
+
+# 4. Librerías estándar
+from datetime import timedelta
 
 # 1. Gestión del ciclo de vida (Arranque y Cierre)
 
@@ -31,6 +40,11 @@ AppointmentOut.model_rebuild()
 async def lifespan(app: FastAPI):
     print("Iniciando la base de datos...")
     init_db()
+    try:
+        seed_services()  # <--- Llamamos a la función aquí
+        print("Servicios cargados/verificados.")
+    except Exception as e:
+        print(f"Nota: No se pudieron cargar semillas: {e}")
     yield
     print("Cerrando recursos...")
 
@@ -40,6 +54,25 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan
 )
+
+# 3. Configurar quién tiene permiso para llamar a la API
+
+app.add_middleware(
+    CORSMiddleware,
+    # El asterisco permite CUALQUIER origen. Solo para desarrollo.
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+
+)
+
+# Esto habilita el botón "Authorize" en Swagger
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+# Esto fuerza a Pydantic a terminar de procesar los modelos
+AppointmentCreate.model_rebuild()
+AppointmentOut.model_rebuild()
 
 # --- ENDPOINTS DE USUARIOS ---
 
@@ -81,6 +114,8 @@ def read_users_me(current_user: User = Depends(get_current_user)):
     """
     return current_user
 
+# Crear un nuevo usuario
+
 
 @app.post("/users/", response_model=UserOut)
 def create_user(user_data: UserCreate, db: Session = Depends(get_session)):
@@ -110,6 +145,15 @@ def create_user(user_data: UserCreate, db: Session = Depends(get_session)):
     db.refresh(new_user)
     return new_user
 
+# 1. LISTAR TODAS LAS CITAS (Añadido el decorador que faltaba)
+
+
+@app.get("/appointments/", response_model=List[AppointmentOut])
+def get_appointments(db: Session = Depends(get_session)):
+    """Trae todas las citas para mostrar en la agenda de la derecha"""
+    return db.exec(select(Appointment)).all()
+
+
 # Crear una nueva cita y enviar notificación por email
 
 
@@ -123,7 +167,18 @@ async def create_appointment(
     # model_dump() convierte el esquema en un diccionario y ** lo desempaqueta
     new_appointment = Appointment(**data.model_dump())
 
-    # 2. El status no viene en el 'Create', así que se pone el por defecto del modelo
+    # 2. Buscamos el servicio en la DB para saber su duración
+    service = db.get(Service, data.service_id)
+    if service:
+        # Sumamos la duración del servicio a la hora de inicio
+        new_appointment.end_time = new_appointment.start_time + \
+            timedelta(minutes=service.duration)
+    else:
+        # Si por algo no hay servicio, le damos 1 hora por defecto
+        new_appointment.end_time = new_appointment.start_time + \
+            timedelta(hours=1)
+
+    # 3. El status no viene en el 'Create', así que se pone el por defecto del modelo
 
     db.add(new_appointment)
     db.commit()
@@ -139,6 +194,11 @@ async def create_appointment(
     )
 
     return new_appointment
+
+
+def get_appointments(db: Session = Depends(get_session)):
+    # Traemos todas las citas de la base de datos
+    return db.exec(select(Appointment)).all()
 
 # --- ENDPOINTS DE AUTENTICACIÓN ---
 
@@ -187,22 +247,18 @@ def read_root():
 
 # --- ENDPOINTS DE CITAS ---
 
+# Actualizar el estado de una cita (Protegido)
+
 
 @app.patch("/appointments/{appointment_id}/status", response_model=AppointmentOut)
 def update_appointment_status(appointment_id: int, new_status: str, db: Session = Depends(get_session)):
-    # 1. Buscamos la cita por ID
     db_appointment = db.get(Appointment, appointment_id)
     if not db_appointment:
         raise HTTPException(status_code=404, detail="Cita no encontrada")
-
-    # 2. Actualizamos solo el campo status
     db_appointment.status = new_status
-
-    # 3. Guardamos los cambios
     db.add(db_appointment)
     db.commit()
     db.refresh(db_appointment)
-
     return db_appointment
 
 # --- ENDPOINTS DE SERVICIOS ---

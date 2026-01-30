@@ -30,6 +30,20 @@ services:
     depends_on:
       - db # Espera a que la DB arranque antes de iniciar (básico)
 
+  # Servicio de Frontend (Vite + React)
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+
 # Definición de volúmenes
 volumes:
   postgres_data:

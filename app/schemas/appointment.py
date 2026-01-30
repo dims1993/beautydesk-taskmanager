@@ -23,10 +23,10 @@ class AppointmentCreate(BaseModel):
     client_phone: Optional[str] = None
     client_email: Optional[str] = None
     start_time: datetime
-    end_time: datetime
+    end_time: Optional[datetime] = None
     status: Optional[str] = "scheduled"
     notes: Optional[str] = None
-    staff_id: int
+    staff_id: int = 1  # Por defecto, asignamos al primer profesional
     service_id: int
 
     # No incluimos "status" porque tiene un valor por defecto ("scheduled")
@@ -36,7 +36,7 @@ class AppointmentOut(SQLModel):
     id: int
     client_name: str
     start_time: datetime
-    end_time: datetime
+    end_time: Optional[datetime] = None
     status: str
     service_id: int
 

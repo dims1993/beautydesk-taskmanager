@@ -14,3 +14,4 @@ class User(SQLModel, table=True):
 
     # Relación
     appointments: List["Appointment"] = Relationship(back_populates="staff")
+    

@@ -1,3 +1,6 @@
-from .appointment import AppointmentCreate, AppointmentOut
 from .user import UserCreate, UserOut
-# Aquí irás añadiendo UserCreate, ServiceCreate, etc.
+from .appointment import AppointmentCreate, AppointmentOut
+from .token import Token
+
+__all__ = ["UserCreate", "UserOut",
+           "AppointmentCreate", "AppointmentOut", "Token"]
