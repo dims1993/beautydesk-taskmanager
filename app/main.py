@@ -31,7 +31,7 @@ from app.schemas.user import UserCreate, UserOut
 from app.schemas.token import Token
 
 # 4. Librerías estándar
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 # 1. Gestión del ciclo de vida (Arranque y Cierre)
 
@@ -167,36 +167,53 @@ def get_appointments(
 async def create_appointment(
     data: AppointmentCreate,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_session),  # <--- Añadida coma que faltaba
+    db: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    # 1. Convertimos a diccionario y añadimos el ID del profesional logueado
+    # 1. Preparar datos base
     appointment_data = data.model_dump()
-    # <--- Aquí inyectamos el ID
     appointment_data["staff_id"] = current_user.id
 
-    # 2. Creamos el modelo usando el diccionario YA MODIFICADO
+    # 2. Crear instancia temporal para calcular
     new_appointment = Appointment(**appointment_data)
 
-    # 3. Buscamos el servicio en la DB para saber su duración
+    # 3. Calcular el final de la cita (Necesario para la validación)
     service = db.get(Service, data.service_id)
     if service:
-        # Sumamos la duración del servicio a la hora de inicio
         new_appointment.end_time = new_appointment.start_time + \
             timedelta(minutes=service.duration)
     else:
-        # Si por algo no hay servicio, le damos 1 hora por defecto
         new_appointment.end_time = new_appointment.start_time + \
             timedelta(hours=1)
 
-    # 4. El status no viene en el 'Create', así que se pone el por defecto del modelo
+    # --- 4. VALIDACIÓN DE COLISIONES (EL BLOQUEO) ---
+    # Buscamos si existe alguna cita que:
+    # - Sea del mismo profesional
+    # - Esté programada (status == 'scheduled')
+    # - Se solape: (Nueva_Inicio < Existente_Fin) Y (Nueva_Fin > Existente_Inicio)
+    statement = select(Appointment).where(
+        Appointment.staff_id == current_user.id,
+        Appointment.status == "scheduled",
+        new_appointment.start_time < Appointment.end_time,
+        new_appointment.end_time > Appointment.start_time
+    )
 
+    collision = db.exec(statement).first()
+
+    if collision:
+        # Si hay choque, lanzamos error y detenemos todo
+        raise HTTPException(
+            status_code=400,
+            detail=f"Horario ocupado por una cita de {collision.client_name} ({collision.start_time.strftime('%H:%M')} - {collision.end_time.strftime('%H:%M')})"
+        )
+    # -----------------------------------------------
+
+    # 5. Guardar en base de datos
     db.add(new_appointment)
     db.commit()
     db.refresh(new_appointment)
 
-    # 5. Disparamos la notificación usando el email que acabamos de guardar
-
+    # 6. Notificación (Solo ocurre si no hubo colisión)
     background_tasks.add_task(
         send_appointment_confirmation,
         email=new_appointment.client_email,
@@ -323,7 +340,7 @@ def create_service(
     db.refresh(service)
     return service
 
-# Nuevo endpoint: Obtener la agenda diaria filtrada por Servicio y Profesional
+# Obtener la agenda diaria filtrada por Servicio y Profesional
 
 
 @app.get("/appointments/daily/", response_model=List[AppointmentOut])
@@ -359,3 +376,39 @@ def get_daily_agenda(
     appointments = db.exec(statement).all()
 
     return appointments
+
+
+@app.get("/appointments/availability")
+def get_all_availability(
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    # Filtramos:
+    # 1. Solo status "scheduled" (pendiente)
+    # 2. Solo citas cuya hora de inicio sea mayor o igual a "ahora"
+    now = datetime.now()
+    statement = select(Appointment).where(
+        Appointment.status == "scheduled",
+        Appointment.start_time >= now
+    )
+    all_appointments = db.exec(statement).all()
+
+    return all_appointments
+
+
+@app.get("/staff/availability-map")
+def get_availability_map(db: Session = Depends(get_session)):
+    # Traemos citas futuras y horarios de todas
+    appointments = db.exec(select(Appointment).where(
+        Appointment.status == "scheduled")).all()
+    return appointments
+
+
+@app.get("/users/me")
+async def read_users_me(current_user: User = Depends(get_current_user)):
+    # Retorna la info del usuario logueado (incluyendo su ID)
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "email": current_user.email
+    }
