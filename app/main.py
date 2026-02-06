@@ -119,18 +119,19 @@ def read_users_me(current_user: User = Depends(get_current_user)):
 
 @app.post("/users/", response_model=UserOut)
 def create_user(user_data: UserCreate, db: Session = Depends(get_session)):
-    # Verificar si ya existe el email
+    # 1. Verificar si el email O el username ya existen
     existing_user = db.query(User).filter(
-        User.email == user_data.email).first()
+        or_(User.email == user_data.email, User.username == user_data.username)
+    ).first()
+
     if existing_user:
         raise HTTPException(
             status_code=400,
-            detail="El email ya está registrado"
+            detail="El email o el nombre de usuario ya están registrados"
         )
 
-    # Extraemos el password del esquema ANTES de enviarlo a la función
+    # 2. Encriptar y crear
     password_plano = str(user_data.password)
-    # Encriptamos
     hashed_pwd = get_password_hash(password_plano)
 
     new_user = User(
@@ -149,9 +150,14 @@ def create_user(user_data: UserCreate, db: Session = Depends(get_session)):
 
 
 @app.get("/appointments/", response_model=List[AppointmentOut])
-def get_appointments(db: Session = Depends(get_session)):
-    """Trae todas las citas para mostrar en la agenda de la derecha"""
-    return db.exec(select(Appointment)).all()
+def get_appointments(
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)  # <-- Esto es obligatorio
+):
+    # Solo filtramos las que pertenecen al ID del usuario logueado
+    statement = select(Appointment).where(
+        Appointment.staff_id == current_user.id)
+    return db.exec(statement).all()
 
 
 # Crear una nueva cita y enviar notificación por email
@@ -160,14 +166,19 @@ def get_appointments(db: Session = Depends(get_session)):
 @app.post("/appointments/", response_model=AppointmentOut)
 async def create_appointment(
     data: AppointmentCreate,
-    background_tasks: BackgroundTasks,  # Permite enviar el mail "por detrás"
-    db: Session = Depends(get_session)
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_session),  # <--- Añadida coma que faltaba
+    current_user: User = Depends(get_current_user)
 ):
-    # 1. Convertimos el esquema a modelo de base de datos
-    # model_dump() convierte el esquema en un diccionario y ** lo desempaqueta
-    new_appointment = Appointment(**data.model_dump())
+    # 1. Convertimos a diccionario y añadimos el ID del profesional logueado
+    appointment_data = data.model_dump()
+    # <--- Aquí inyectamos el ID
+    appointment_data["staff_id"] = current_user.id
 
-    # 2. Buscamos el servicio en la DB para saber su duración
+    # 2. Creamos el modelo usando el diccionario YA MODIFICADO
+    new_appointment = Appointment(**appointment_data)
+
+    # 3. Buscamos el servicio en la DB para saber su duración
     service = db.get(Service, data.service_id)
     if service:
         # Sumamos la duración del servicio a la hora de inicio
@@ -178,13 +189,13 @@ async def create_appointment(
         new_appointment.end_time = new_appointment.start_time + \
             timedelta(hours=1)
 
-    # 3. El status no viene en el 'Create', así que se pone el por defecto del modelo
+    # 4. El status no viene en el 'Create', así que se pone el por defecto del modelo
 
     db.add(new_appointment)
     db.commit()
     db.refresh(new_appointment)
 
-    # 3. Disparamos la notificación usando el email que acabamos de guardar
+    # 5. Disparamos la notificación usando el email que acabamos de guardar
 
     background_tasks.add_task(
         send_appointment_confirmation,
@@ -210,8 +221,8 @@ def login_for_access_token(
 ):
     # Buscamos al usuario que coincida el EMAIL o el USERNAME con lo que puso en el primer cuadro de Swagger
     user = db.query(User).filter(
-        or_(User.email == form_data.username,
-            User.username == form_data.username)
+        or_(User.email == form_data.username.lower(),
+            User.username == form_data.username.lower())
     ).first()
 
     if not user or not verify_password(form_data.password, user.password_hash):
@@ -237,6 +248,27 @@ def read_users(
 ):
     users = db.query(User).all()
     return users
+
+
+# Borrar un usuario específico por ID
+@app.delete("/users/{user_id}", status_code=204)
+def delete_user(user_id: int, db: Session = Depends(get_session)):
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    db.delete(user)
+    db.commit()
+    return {"message": f"Usuario {user_id} eliminado con éxito"}
+
+# Borrar todos los usuarios (Úsalo con cuidado)
+
+
+@app.delete("/users/danger/all", status_code=204)
+def delete_all_users(db: Session = Depends(get_session)):
+    db.query(User).delete()
+    db.commit()
+    return {"message": "Todos los usuarios han sido eliminados"}
 
 # Endpoint de bienvenida básico
 

@@ -1,4 +1,4 @@
-# Python
+# Backend y Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -17,9 +17,9 @@ venv/
 # Appointment 
 appointment_data.json
 
-# Dependencias de Node.js
-node_modules/
-dist/
+# Frontend build
+frontend/node_modules/
+frontend/dist/
 
 # Docker logs
 *.log

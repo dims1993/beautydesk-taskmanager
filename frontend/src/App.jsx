@@ -1,6 +1,11 @@
 import { useState, useEffect } from "react";
 
 function App() {
+  // --- ESTADOS PRINCIPALES ---
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [loginData, setLoginData] = useState({ username: "", password: "" });
+  const [loginError, setLoginError] = useState("");
+
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [services, setServices] = useState([]);
@@ -19,9 +24,11 @@ function App() {
   const minDateTime = new Date().toISOString().slice(0, 16);
 
   useEffect(() => {
-    fetchServices();
-    fetchAppointments();
-  }, []);
+    if (isLoggedIn) {
+      fetchServices();
+      fetchAppointments();
+    }
+  }, [isLoggedIn]); // <-- Ahora se ejecutará justo en el momento de loguearse
 
   const fetchServices = async () => {
     try {
@@ -39,12 +46,25 @@ function App() {
 
   const fetchAppointments = async () => {
     try {
-      const res = await fetch("http://localhost:8000/appointments/");
+      const token = localStorage.getItem("token"); // Sacamos la llave guardada
+
+      const res = await fetch("http://localhost:8000/appointments/", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`, // <-- Esto le dice al Back quién eres
+          "Content-Type": "application/json",
+        },
+      });
+
       if (res.ok) {
         const data = await res.json();
+        // Ahora data solo contiene las citas que el Back filtró para este usuario
         setAppointments(
           data.sort((a, b) => new Date(b.start_time) - new Date(a.start_time)),
         );
+      } else if (res.status === 401) {
+        // Si el token no vale, cerramos sesión
+        setIsLoggedIn(false);
       }
     } catch (err) {
       console.error("Error citas:", err);
@@ -93,10 +113,14 @@ function App() {
 
   const updateStatus = async (id, newStatus) => {
     try {
+      const token = localStorage.getItem("token");
       const response = await fetch(
         `http://localhost:8000/appointments/${id}/status?new_status=${newStatus}`,
         {
           method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`, // <-- Seguridad activada
+          },
         },
       );
       if (response.ok) fetchAppointments();
@@ -108,6 +132,7 @@ function App() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+
     let formattedTime = formData.start_time;
     if (formattedTime && formattedTime.split(":").length === 2)
       formattedTime += ":00";
@@ -116,14 +141,21 @@ function App() {
       ...formData,
       service_id: parseInt(formData.service_id),
       start_time: formattedTime,
+      // Nota: staff_id ya no es necesario enviarlo, el backend lo pondrá solo
     };
 
     try {
+      const token = localStorage.getItem("token"); // Recuperamos la llave
+
       const response = await fetch("http://localhost:8000/appointments/", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`, // <--- La llave para entrar
+        },
         body: JSON.stringify(payload),
       });
+
       if (response.ok) {
         setSuccess(true);
         setFormData({
@@ -134,6 +166,9 @@ function App() {
         });
         fetchAppointments();
         setTimeout(() => setSuccess(false), 3000);
+      } else {
+        const errorData = await response.json();
+        alert(`Error: ${errorData.detail}`);
       }
     } catch (err) {
       alert("Error de conexión");
@@ -151,6 +186,115 @@ function App() {
       minute: "2-digit",
     });
   };
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoginError("");
+
+    const cleanUsername = loginData.username.trim().toLowerCase();
+    const cleanPassword = loginData.password.trim();
+
+    const params = new URLSearchParams();
+    params.append("username", cleanUsername);
+    params.append("password", cleanPassword);
+
+    try {
+      const response = await fetch("http://localhost:8000/token", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: params,
+      });
+
+      // LEEMOS EL JSON UNA SOLA VEZ AQUÍ
+      const data = await response.json();
+
+      if (response.ok) {
+        // Usamos 'data' que ya contiene el json
+        localStorage.setItem("token", data.access_token);
+        setIsLoggedIn(true);
+      } else {
+        // Si el backend da error (401), el mensaje viene en data.detail
+        setLoginError(data.detail || "Credenciales incorrectas");
+      }
+    } catch (error) {
+      console.error("Error de conexión:", error);
+      setLoginError("Servidor fuera de servicio");
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    setIsLoggedIn(false);
+    // ¡Muy importante! Limpiamos las listas para que el siguiente no vea nada del anterior
+    setAppointments([]);
+    setLoginData({ username: "", password: "" });
+  };
+
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-[#f8f5f2] flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white/80 backdrop-blur-xl rounded-[3rem] shadow-[0_30px_60px_rgba(93,80,69,0.1)] border border-white/20 overflow-hidden">
+          <div className="bg-[#e8ddd0] p-12 text-center relative">
+            <span className="text-4xl mb-4 block">🌿</span>
+            <h2 className="text-2xl font-black text-[#5d5045] uppercase tracking-[0.3em]">
+              BeautyTask
+            </h2>
+            <p className="text-[10px] text-[#a39485] font-bold uppercase tracking-widest mt-2 italic text-opacity-80">
+              Gestión Exclusiva
+            </p>
+          </div>
+
+          <form onSubmit={handleLogin} className="p-10 space-y-6">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-[#a39485] uppercase ml-2 tracking-widest">
+                Usuario o Email
+              </label>
+              <input
+                required
+                className="w-full px-6 py-4 bg-[#fcfaf8] border border-[#eee8e2] rounded-2xl focus:ring-2 focus:ring-[#dcc7b1] outline-none transition-all"
+                placeholder="saray_beauty"
+                value={loginData.username}
+                onChange={(e) =>
+                  setLoginData({ ...loginData, username: e.target.value })
+                }
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-[#a39485] uppercase ml-2 tracking-widest">
+                Contraseña
+              </label>
+              <input
+                required
+                type="password"
+                className="w-full px-6 py-4 bg-[#fcfaf8] border border-[#eee8e2] rounded-2xl focus:ring-2 focus:ring-[#dcc7b1] outline-none transition-all"
+                placeholder="••••••••"
+                value={loginData.password}
+                onChange={(e) =>
+                  setLoginData({ ...loginData, password: e.target.value })
+                }
+              />
+            </div>
+
+            {loginError && (
+              <p className="text-red-400 text-[10px] font-bold text-center uppercase tracking-tight animate-pulse">
+                {loginError}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              className="w-full py-5 bg-[#5d5045] text-[#f5f5f1] rounded-2xl font-bold uppercase text-[11px] tracking-[0.3em] shadow-lg hover:bg-[#4a3f35] transition-all transform hover:-translate-y-1"
+            >
+              Entrar al Salón
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#f8f5f2] py-12 px-6 font-sans text-[#5d5045]">
@@ -405,6 +549,12 @@ function App() {
                 ))}
               </div>
             )}
+            <button
+              onClick={handleLogout}
+              className="text-[10px] font-black text-red-400 uppercase tracking-widest border border-red-100 px-4 py-2 rounded-xl hover:bg-red-50 transition-all"
+            >
+              Cerrar Sesión
+            </button>
           </div>
         </div>
       </div>
