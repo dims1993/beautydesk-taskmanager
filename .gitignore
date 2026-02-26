@@ -27,3 +27,8 @@ docker-compose.override.yml
 
 # IDEs
 .idea/
+
+
+node_modules/
+.env
+dist/
