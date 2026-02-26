@@ -41,6 +41,21 @@ beautytask-backend/
 │   ├── core/
 │   │   └── security.py      <-- JWT y Passwords
 │   └── schemas/             <-- Modelos Pydantic (User, Appointment)
+├── frontend/ (Frontend - React)
+│   ├── src/
+│   │   ├── hooks/
+│   │   │   └── useApi.js        <-- El "motor" de las llamadas al Back
+│   │   │
+│   │   ├── components/          <-- Piezas visuales independientes
+│   │   │   ├── LoginView.jsx    <-- Pantalla de acceso
+│   │   │   ├── Dashboard.jsx    <-- Tarjeta de ingresos mensuales
+│   │   │   ├── AppointmentForm.jsx <-- Formulario de nueva cita
+│   │   │   ├── AppointmentList.jsx <-- Lista de citas activas
+│   │   │   ├── HistoryList.jsx     <-- Citas pasadas y reactivación
+│   │   │   └── TeamView.jsx        <-- Vista compartida (Saray/Stefany)
+│   │   │
+│   │   ├── App.jsx              <-- El "Cerebro" que une todo
+│   │   └── main.jsx
 ├── .env                 # Variables de entorno (Ignorado en Git)
 ├── .gitignore           # Archivos excluidos
 ├── docker-compose.yml   # Orquestación de contenedores
