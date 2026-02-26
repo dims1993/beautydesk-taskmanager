@@ -1,7 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react"; // 1. Añadimos useEffect aquí
 import { useApi } from "../hooks/useApi";
 
-const AppointmentForm = ({ services, currentUser, onSuccess, onError }) => {
+const AppointmentForm = ({
+  services,
+  currentUser,
+  onSuccess,
+  onError,
+  initialDate,
+}) => {
   const { apiRequest } = useApi();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -9,28 +15,31 @@ const AppointmentForm = ({ services, currentUser, onSuccess, onError }) => {
     client_email: "",
     service_id: services[0]?.id || "",
     start_time: "",
+    staff_id: currentUser?.id || "",
   });
+
+  // 2. AÑADIMOS ESTO: Escucha cuando el calendario manda una fecha
+  useEffect(() => {
+    if (currentUser?.id) {
+      setFormData((prev) => ({ ...prev, staff_id: currentUser.id }));
+    }
+  }, [currentUser]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      // Formatear fecha para el backend
-      let formattedTime = formData.start_time;
-      if (formattedTime && formattedTime.split(":").length === 2)
-        formattedTime += ":00";
-
       const payload = {
         ...formData,
         service_id: parseInt(formData.service_id),
-        start_time: formattedTime,
-        staff_id: currentUser.id,
+        // Nos aseguramos de que el staff_id sea el del usuario actual si el form no lo tiene
+        staff_id: formData.staff_id || currentUser?.id || 1,
       };
+      console.log("Enviando cita con staff_id:", payload.staff_id); // Esto dirá si es 1, 2 o undefined
 
       await apiRequest("/appointments/", "POST", payload);
 
-      // Resetear formulario si todo va bien
       setFormData({
         ...formData,
         client_name: "",
