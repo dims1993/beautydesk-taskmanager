@@ -34,13 +34,13 @@ Las capas estaran separadas para que el codigo sea mantenible.
 
 ```bash
 beautytask-backend/
-├── app/
-│   ├── __init__.py
-│   ├── main.py          # Punto de entrada y Endpoints
-│   ├── db.py            # Configuración de base de datos y sesión
-│   ├── models.py        # Modelos de datos (User, Service, Appointment)
-│   ├── schemas.py       # Validación de datos (Pydantic)
-│   ├── security.py      # Lógica de hashing (Argon2)
+├── app/ (Backend - FastAPI)
+│   ├── main.py              <-- El que limpiamos (rutas y lógica)
+│   ├── db/
+│   │   └── session.py       <-- Conexión a Postgres
+│   ├── core/
+│   │   └── security.py      <-- JWT y Passwords
+│   └── schemas/             <-- Modelos Pydantic (User, Appointment)
 ├── .env                 # Variables de entorno (Ignorado en Git)
 ├── .gitignore           # Archivos excluidos
 ├── docker-compose.yml   # Orquestación de contenedores
