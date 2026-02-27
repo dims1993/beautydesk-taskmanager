@@ -3,7 +3,6 @@ import { useApi } from "./hooks/useApi";
 
 // Componentes
 import LoginView from "./components/LoginView";
-import Dashboard from "./components/Dashboard";
 import AppointmentForm from "./components/AppointmentForm";
 import AppointmentList from "./components/AppointmentList";
 import HistoryList from "./components/HistoryList";
@@ -151,8 +150,6 @@ function App() {
 
             {activeTab === "stats" && (
               <div className="animate-fadeIn space-y-6">
-                <Dashboard appointments={appointments} services={services} />
-
                 {/* LAS NUEVAS GRÁFICAS */}
                 <StatsCharts
                   appointments={appointments}

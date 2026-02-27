@@ -1,44 +1,28 @@
-from sqlmodel import SQLModel, Field, Relationship
-from typing import Optional, TYPE_CHECKING
 from pydantic import BaseModel
-from datetime import datetime
 from typing import Optional
+from datetime import datetime
 
-
-class AppointmentBase(BaseModel):
-    client_name: str
-    start_time: datetime
-    end_time: datetime
-    staff_id: int
-    service_id: int
-
-
-if TYPE_CHECKING:
-    from .user import User
-    from .services import Service
-
-
+# Lo que recibimos de React al crear una cita
 class AppointmentCreate(BaseModel):
     client_name: str
     client_phone: Optional[str] = None
     client_email: Optional[str] = None
     start_time: datetime
     end_time: Optional[datetime] = None
-    status: Optional[str] = "scheduled"
-    notes: Optional[str] = None
-    staff_id: int = 1  # Por defecto, asignamos al primer profesional
     service_id: int
+    staff_id: Optional[int] = 1
 
-    # No incluimos "status" porque tiene un valor por defecto ("scheduled")
-
-
-class AppointmentOut(SQLModel):
+# Lo que enviamos a React (incluyendo los nuevos campos para la gráfica)
+class AppointmentOut(BaseModel):
     id: int
     client_name: str
     start_time: datetime
     end_time: Optional[datetime] = None
     status: str
     service_id: int
+    staff_id: int
+    final_price: float = 0.0
+    payment_method: str = "efectivo"
 
     class Config:
         from_attributes = True

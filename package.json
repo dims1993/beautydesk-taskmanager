@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "json-as-xlsx": "^2.5.6",
     "recharts": "^3.7.0"
   }
 }

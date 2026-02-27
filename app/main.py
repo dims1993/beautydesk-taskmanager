@@ -1,14 +1,15 @@
-from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, status
+from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, status, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from sqlmodel import Session, select
-from typing import List
+from typing import List, Optional
 from contextlib import asynccontextmanager
 from sqlalchemy import or_
 from datetime import timedelta, datetime
 from jose import JWTError, jwt
+from pydantic import BaseModel
 
-# Importaciones internas
+# Importaciones internas de schemas
 from app import (
     User, Service, Appointment,
     UserCreate, UserOut, AppointmentCreate, AppointmentOut, Token,
@@ -17,6 +18,12 @@ from app import (
     send_appointment_confirmation
 )
 from app.core.security import SECRET_KEY, ALGORITHM
+
+# --- ESQUEMAS PARA RECEPCIÓN DE DATOS ---
+
+class StatusUpdate(BaseModel):
+    final_price: float
+    payment_method: str
 
 # --- CONFIGURACIÓN Y CICLO DE VIDA ---
 
@@ -119,7 +126,6 @@ def delete_user(user_id: int, db: Session = Depends(get_session)):
 
 @app.get("/appointments/", response_model=List[AppointmentOut])
 def get_appointments(db: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
-    # Cada profesional solo ve sus propias citas
     return db.exec(select(Appointment).where(Appointment.staff_id == current_user.id)).all()
 
 @app.post("/appointments/", response_model=AppointmentOut)
@@ -133,12 +139,10 @@ async def create_appointment(
     appointment_data["staff_id"] = current_user.id
     new_appo = Appointment(**appointment_data)
 
-    # Calcular duración
     service = db.get(Service, data.service_id)
     duration = service.duration if service else 60
     new_appo.end_time = new_appo.start_time + timedelta(minutes=duration)
 
-    # Validación de Colisiones
     collision = db.exec(select(Appointment).where(
         Appointment.staff_id == current_user.id,
         Appointment.status == "scheduled",
@@ -161,11 +165,23 @@ async def create_appointment(
     )
     return new_appo
 
+
 @app.patch("/appointments/{appointment_id}/status", response_model=AppointmentOut)
-def update_status(appointment_id: int, new_status: str, db: Session = Depends(get_session)):
+def update_status(
+    appointment_id: int, 
+    data: StatusUpdate, # Ahora el 'status' vendrá aquí dentro si quieres, o lo fijamos
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
     appo = db.get(Appointment, appointment_id)
-    if not appo: raise HTTPException(status_code=404)
-    appo.status = new_status
+    if not appo: 
+        raise HTTPException(status_code=404, detail="Cita no encontrada")
+    
+    # IMPORTANTE: Forzamos el estado a "completed" (en inglés, como tus semillas)
+    appo.status = "completed"
+    appo.final_price = data.final_price
+    appo.payment_method = data.payment_method
+            
     db.add(appo)
     db.commit()
     db.refresh(appo)
@@ -173,7 +189,6 @@ def update_status(appointment_id: int, new_status: str, db: Session = Depends(ge
 
 @app.get("/staff/availability-map")
 def get_global_availability(db: Session = Depends(get_session)):
-    """Vista de equipo: todas las citas agendadas"""
     return db.exec(select(Appointment).where(Appointment.status == "scheduled")).all()
 
 # --- ENDPOINTS DE SERVICIOS ---
