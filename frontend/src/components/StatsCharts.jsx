@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import xlsx from "json-as-xlsx";
 
 const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
   const [viewDate, setViewDate] = useState(new Date());

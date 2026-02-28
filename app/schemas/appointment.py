@@ -21,8 +21,9 @@ class AppointmentOut(BaseModel):
     status: str
     service_id: int
     staff_id: int
-    final_price: float = 0.0
-    payment_method: str = "efectivo"
+    # Cambiamos estos dos para que acepten valores nulos de la base de datos
+    final_price: Optional[float] = 0.0
+    payment_method: Optional[str] = "efectivo" 
 
     class Config:
         from_attributes = True

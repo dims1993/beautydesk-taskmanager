@@ -36,7 +36,8 @@ const CalendarView = ({
       return (
         d.getDate() === day &&
         d.getMonth() === currentDate.getMonth() &&
-        d.getFullYear() === currentDate.getFullYear()
+        d.getFullYear() === currentDate.getFullYear() &&
+        appo.status !== "deleted" // No mostramos las archivadas en el calendario
       );
     });
   };
@@ -44,6 +45,16 @@ const CalendarView = ({
   const handleDayClick = (day) => {
     setSelectedDay(selectedDay === day ? null : day);
   };
+
+  const dayApps = selectedDay
+    ? getAppsForDay(selectedDay).sort(
+        (a, b) => new Date(a.start_time) - new Date(b.start_time),
+      )
+    : [];
+
+  const pendingApps = dayApps.filter((a) => a.status === "scheduled");
+  // Aquí filtramos para que en "Finalizadas" solo salgan las 'completed'
+  const completedApps = dayApps.filter((a) => a.status === "completed");
 
   return (
     <div className="space-y-6 animate-fadeIn pb-16">
@@ -83,11 +94,9 @@ const CalendarView = ({
               {d}
             </span>
           ))}
-
           {[...Array(startingDay)].map((_, i) => (
             <div key={`empty-${i}`}></div>
           ))}
-
           {[...Array(daysInMonth)].map((_, i) => {
             const day = i + 1;
             const dayApps = getAppsForDay(day);
@@ -131,45 +140,43 @@ const CalendarView = ({
         </div>
       </div>
 
-      {/* PANEL DE DETALLES MEJORADO */}
       {selectedDay && (
-        <div className="bg-[#5d5045] rounded-[2.5rem] p-8 text-white shadow-2xl animate-slideUp">
-          <div className="flex justify-between items-start mb-8">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-50 mb-1">
-                Citas del día
-              </p>
-              <h4 className="text-2xl font-black">
-                {selectedDay} {monthName}
-              </h4>
+        <div className="space-y-6">
+          {/* BLOQUE DE PENDIENTES */}
+          <div className="bg-[#5d5045] rounded-[2.5rem] p-8 text-white shadow-2xl animate-slideUp">
+            <div className="flex justify-between items-start mb-8">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-50 mb-1">
+                  Citas del día
+                </p>
+                <h4 className="text-2xl font-black">
+                  {selectedDay} {monthName}
+                </h4>
+              </div>
+              <button
+                onClick={() =>
+                  onAddClick &&
+                  onAddClick(
+                    new Date(
+                      currentDate.getFullYear(),
+                      currentDate.getMonth(),
+                      selectedDay,
+                    ),
+                  )
+                }
+                className="bg-white/10 hover:bg-white/20 backdrop-blur-md text-white border border-white/20 px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
+              >
+                + Nueva Cita
+              </button>
             </div>
-            <button
-              onClick={() =>
-                onAddClick &&
-                onAddClick(
-                  new Date(
-                    currentDate.getFullYear(),
-                    currentDate.getMonth(),
-                    selectedDay,
-                  ),
-                )
-              }
-              className="bg-white/10 hover:bg-white/20 backdrop-blur-md text-white border border-white/20 px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
-            >
-              + Nueva Cita
-            </button>
-          </div>
 
-          <div className="space-y-4">
-            {getAppsForDay(selectedDay).length > 0 ? (
-              getAppsForDay(selectedDay)
-                .sort((a, b) => new Date(a.start_time) - new Date(b.start_time)) // Ordenar por hora
-                .map((appo) => {
+            <div className="space-y-4">
+              {pendingApps.length > 0 ? (
+                pendingApps.map((appo) => {
                   const service = safeServices.find(
                     (s) => s.id === appo.service_id,
                   );
                   const isSaray = appo.staff_id === 1;
-
                   return (
                     <div
                       key={appo.id}
@@ -177,7 +184,7 @@ const CalendarView = ({
                     >
                       <div className="flex items-center gap-4">
                         <div className="bg-white/10 px-3 py-2 rounded-xl text-center min-w-[65px]">
-                          <p className="text-xs font-black tracking-tighter">
+                          <p className="text-xs font-black">
                             {new Date(appo.start_time).toLocaleTimeString([], {
                               hour: "2-digit",
                               minute: "2-digit",
@@ -201,19 +208,21 @@ const CalendarView = ({
                           </div>
                         </div>
                       </div>
-
                       <div className="flex gap-2 justify-end">
+                        {/* BOTÓN COMPLETAR: Ahora llama al modal de App.jsx */}
                         <button
-                          onClick={() => onUpdateStatus(appo.id, "completada")}
+                          onClick={() => onUpdateStatus(appo.id, "completed")}
                           className="h-10 w-10 flex items-center justify-center bg-white/10 hover:bg-green-500/20 hover:text-green-300 rounded-xl transition-all border border-white/5"
-                          title="Completar"
                         >
                           ✓
                         </button>
+                        {/* BOTÓN ARCHIVAR */}
                         <button
-                          onClick={() => onUpdateStatus(appo.id, "cancelada")}
+                          onClick={() => {
+                            if (window.confirm("¿Archivar cita?"))
+                              onUpdateStatus(appo.id, "deleted");
+                          }}
                           className="h-10 w-10 flex items-center justify-center bg-white/10 hover:bg-red-500/20 hover:text-red-300 rounded-xl transition-all border border-white/5"
-                          title="Cancelar"
                         >
                           ×
                         </button>
@@ -221,14 +230,67 @@ const CalendarView = ({
                     </div>
                   );
                 })
-            ) : (
-              <div className="text-center py-10 opacity-30">
-                <p className="text-[10px] font-black uppercase tracking-widest">
-                  Día libre sin citas
+              ) : (
+                <p className="text-center py-4 text-[10px] font-black uppercase opacity-30">
+                  No hay citas pendientes
                 </p>
-              </div>
-            )}
+              )}
+            </div>
           </div>
+
+          {/* BLOQUE DE FINALIZADAS */}
+          {completedApps.length > 0 && (
+            <div className="bg-white rounded-[2.5rem] p-8 border border-[#e5e0d8] shadow-sm animate-slideUp">
+              <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-[#a39485] mb-6">
+                Finalizadas
+              </h4>
+              <div className="space-y-3">
+                {completedApps.map((appo) => (
+                  <div
+                    key={appo.id}
+                    className="bg-[#fcfaf8] rounded-3xl p-4 flex items-center justify-between border border-[#eee8e2]"
+                  >
+                    <div className="flex items-center gap-4 opacity-40">
+                      <span className="text-[9px] font-black text-[#5d5045]">
+                        {new Date(appo.start_time).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                      <p className="font-bold text-sm text-[#5d5045] line-through">
+                        {appo.client_name}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      {/* BOTÓN RETORNO: Vuelve a 'scheduled' */}
+                      <button
+                        onClick={() => onUpdateStatus(appo.id, "scheduled")}
+                        className="h-9 w-9 flex items-center justify-center bg-white text-[#a39485] border border-[#eee8e2] rounded-xl hover:text-[#5d5045] transition-all text-lg"
+                        title="Devolver a pendientes"
+                      >
+                        ↺
+                      </button>
+                      {/* BOTÓN ARCHIVAR: Pasa a 'deleted' */}
+                      <button
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              "¿Mover esta cita al historial de archivadas?",
+                            )
+                          )
+                            onUpdateStatus(appo.id, "deleted");
+                        }}
+                        className="h-9 w-9 flex items-center justify-center bg-white text-red-300 border border-red-100 rounded-xl hover:bg-red-500 hover:text-white transition-all text-sm"
+                        title="Archivar"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

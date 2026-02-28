@@ -20,11 +20,10 @@ from app import (
 from app.core.security import SECRET_KEY, ALGORITHM
 
 # --- ESQUEMAS PARA RECEPCIÓN DE DATOS ---
-
 class StatusUpdate(BaseModel):
-    final_price: float
-    payment_method: str
-
+    new_status: str
+    final_price: Optional[float] = 0.0
+    payment_method: Optional[str] = "ninguno"
 # --- CONFIGURACIÓN Y CICLO DE VIDA ---
 
 @asynccontextmanager
@@ -126,7 +125,20 @@ def delete_user(user_id: int, db: Session = Depends(get_session)):
 
 @app.get("/appointments/", response_model=List[AppointmentOut])
 def get_appointments(db: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
-    return db.exec(select(Appointment).where(Appointment.staff_id == current_user.id)).all()
+    # Filtramos para que NO traiga las borradas
+    statement = select(Appointment).where(
+        Appointment.staff_id == current_user.id,
+        Appointment.status != "deleted"
+    )
+    return db.exec(statement).all()
+
+# Nuevo endpoint para ver los archivados (Opcional por ahora)
+@app.get("/appointments/archived", response_model=List[AppointmentOut])
+def get_archived(db: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
+    return db.exec(select(Appointment).where(
+        Appointment.staff_id == current_user.id, 
+        Appointment.status == "deleted"
+    )).all()
 
 @app.post("/appointments/", response_model=AppointmentOut)
 async def create_appointment(
@@ -167,21 +179,19 @@ async def create_appointment(
 
 
 @app.patch("/appointments/{appointment_id}/status", response_model=AppointmentOut)
-def update_status(
-    appointment_id: int, 
-    data: StatusUpdate, # Ahora el 'status' vendrá aquí dentro si quieres, o lo fijamos
-    db: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
-):
+def update_status(appointment_id: int, data: StatusUpdate, db: Session = Depends(get_session)):
     appo = db.get(Appointment, appointment_id)
-    if not appo: 
-        raise HTTPException(status_code=404, detail="Cita no encontrada")
+    if not appo: raise HTTPException(status_code=404)
     
-    # IMPORTANTE: Forzamos el estado a "completed" (en inglés, como tus semillas)
-    appo.status = "completed"
-    appo.final_price = data.final_price
-    appo.payment_method = data.payment_method
-            
+    appo.status = data.new_status
+    # Si completamos, guardamos dinero. Si no, reseteamos a 0.
+    if data.new_status == "completed":
+        appo.final_price = data.final_price
+        appo.payment_method = data.payment_method
+    else:
+        appo.final_price = 0.0
+        appo.payment_method = None
+        
     db.add(appo)
     db.commit()
     db.refresh(appo)
