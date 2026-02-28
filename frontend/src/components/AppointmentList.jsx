@@ -57,7 +57,7 @@ const AppointmentList = ({ appointments, services, onUpdateStatus }) => {
                 <button
                   onClick={() => {
                     if (window.confirm("¿Archivar esta cita?")) {
-                      onUpdateStatus(appo.id, "deleted");
+                      onUpdateStatus(appo.id, "cancelled");
                     }
                   }}
                   className="w-12 h-12 flex items-center justify-center bg-white hover:text-red-400 rounded-2xl border border-[#eee8e2] transition-all"

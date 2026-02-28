@@ -10,6 +10,7 @@ import TeamView from "./components/TeamView";
 import MobileNavbar from "./components/MobileNavbar";
 import StatsCharts from "./components/StatsCharts";
 import PaymentModal from "./components/PaymentModal"; // Importado
+import ArchivedList from "./components/ArchivedList";
 
 function App() {
   const { apiRequest } = useApi();
@@ -31,6 +32,7 @@ function App() {
         apiRequest("/services/"),
         apiRequest("/appointments/"),
       ]);
+
       if (user) setCurrentUser(user);
       if (svcs) setServices(svcs);
       if (apps) {
@@ -161,6 +163,11 @@ function App() {
                   services={services}
                   currentUser={currentUser}
                 />
+                <ArchivedList
+                  appointments={appointments}
+                  onRestore={handleUpdateStatus}
+                />
+
                 {/* ... (tu resumen de actividad actual) ... */}
               </div>
             )}

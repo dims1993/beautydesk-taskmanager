@@ -37,7 +37,7 @@ const CalendarView = ({
         d.getDate() === day &&
         d.getMonth() === currentDate.getMonth() &&
         d.getFullYear() === currentDate.getFullYear() &&
-        appo.status !== "deleted" // No mostramos las archivadas en el calendario
+        appo.status !== "cancelled" // No mostramos las archivadas en el calendario
       );
     });
   };
@@ -220,7 +220,7 @@ const CalendarView = ({
                         <button
                           onClick={() => {
                             if (window.confirm("¿Archivar cita?"))
-                              onUpdateStatus(appo.id, "deleted");
+                              onUpdateStatus(appo.id, "cancelled");
                           }}
                           className="h-10 w-10 flex items-center justify-center bg-white/10 hover:bg-red-500/20 hover:text-red-300 rounded-xl transition-all border border-white/5"
                         >
@@ -270,7 +270,7 @@ const CalendarView = ({
                       >
                         ↺
                       </button>
-                      {/* BOTÓN ARCHIVAR: Pasa a 'deleted' */}
+                      {/* BOTÓN ARCHIVAR: Pasa a 'cancelled' */}
                       <button
                         onClick={() => {
                           if (
@@ -278,7 +278,7 @@ const CalendarView = ({
                               "¿Mover esta cita al historial de archivadas?",
                             )
                           )
-                            onUpdateStatus(appo.id, "deleted");
+                            onUpdateStatus(appo.id, "cancelled");
                         }}
                         className="h-9 w-9 flex items-center justify-center bg-white text-red-300 border border-red-100 rounded-xl hover:bg-red-500 hover:text-white transition-all text-sm"
                         title="Archivar"
