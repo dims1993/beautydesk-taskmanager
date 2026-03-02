@@ -7,7 +7,7 @@ const CalendarView = ({
   onAddClick,
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDay, setSelectedDay] = useState(null);
+  const [selectedDay, setSelectedDay] = useState(new Date().getDate());
 
   const safeAppointments = Array.isArray(allAppointments)
     ? allAppointments

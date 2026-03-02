@@ -1,20 +1,46 @@
 import React, { useState } from "react";
+import * as XLSX from "xlsx/xlsx.mjs";
 
 const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
   const [viewDate, setViewDate] = useState(new Date());
-  const [isLocked, setIsLocked] = useState(false); // Estado temporal de bloqueo
+  const [isLocked, setIsLocked] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [password, setPassword] = useState("");
 
-  // --- CONFIGURACIÓN ---
   const PERSONAL_GOAL = 2000;
-  const BAR_CHART_HEIGHT = 120;
-  // ---------------------
+  const currentStaffId = currentUser?.id;
+  const currentStaffName =
+    currentUser?.nombre || currentUser?.username || "Staff";
 
-  const isSaray =
-    currentUser?.username?.toLowerCase().includes("saray") ||
-    currentUser?.email?.toLowerCase().includes("saray");
+  // --- 1. LÓGICA DE FILTRADO (DÍA Y MES) ---
 
-  // 1. FILTRADO Y CÁLCULO
-  const stats = appointments.reduce(
+  // Filtramos las citas del día seleccionado para el total y para el Excel
+  const appsDelDia = appointments.filter((app) => {
+    const appDate = new Date(app.start_time);
+    const isSameDay =
+      appDate.getDate() === viewDate.getDate() &&
+      appDate.getMonth() === viewDate.getMonth() &&
+      appDate.getFullYear() === viewDate.getFullYear();
+    const isCompleted =
+      app.status === "completed" || app.status === "completada";
+    const belongsToMe = app.staff_id === currentStaffId;
+    return isSameDay && isCompleted && belongsToMe;
+  });
+
+  const statsHoy = appsDelDia.reduce(
+    (acc, app) => {
+      const monto = parseFloat(app.final_price) || 0;
+      const metodo = (app.payment_method || "").toLowerCase().trim();
+      if (metodo === "tarjeta") acc.metodos.tarjeta += monto;
+      else acc.metodos.efectivo += monto;
+      acc.total += monto;
+      return acc;
+    },
+    { metodos: { efectivo: 0, tarjeta: 0 }, total: 0 },
+  );
+
+  // Stats para la gráfica y el progreso (MENSUAL)
+  const statsMes = appointments.reduce(
     (acc, app) => {
       const appDate = new Date(app.start_time);
       const isSameMonth =
@@ -22,129 +48,167 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
         appDate.getFullYear() === viewDate.getFullYear();
       const isCompleted =
         app.status === "completed" || app.status === "completada";
+      const belongsToMe = app.staff_id === currentStaffId;
 
-      if (isSameMonth && isCompleted) {
+      if (isSameMonth && isCompleted && belongsToMe) {
         const monto = parseFloat(app.final_price) || 0;
-        const metodo = (app.payment_method || "").toLowerCase().trim();
-        if (metodo === "tarjeta") acc.metodos.tarjeta += monto;
-        else acc.metodos.efectivo += monto;
-
         const servicioObj = services.find((s) => s.id === app.service_id);
         const nombreServicio = servicioObj ? servicioObj.name : "Otros";
         acc.servicios[nombreServicio] =
           (acc.servicios[nombreServicio] || 0) + monto;
-
         acc.total += monto;
-        acc.rawApps.push({ ...app, serviceName: nombreServicio });
       }
       return acc;
     },
-    {
-      metodos: { efectivo: 0, tarjeta: 0 },
-      servicios: {},
-      total: 0,
-      rawApps: [],
-    },
+    { servicios: {}, total: 0 },
   );
 
-  const percentage = Math.min((stats.total / PERSONAL_GOAL) * 100, 100);
-  const monthName = viewDate.toLocaleString("es-ES", {
+  // --- 2. FUNCIONES DE EXPORTACIÓN ---
+
+  // --- LÓGICA DE EXPORTACIÓN MENSUAL ---
+
+  const exportToExcel = () => {
+    // 1. Filtramos TODAS las citas del mes que estamos viendo
+    const appsDelMes = appointments.filter((app) => {
+      const appDate = new Date(app.start_time);
+      const isSameMonth =
+        appDate.getMonth() === viewDate.getMonth() &&
+        appDate.getFullYear() === viewDate.getFullYear();
+      const isCompleted =
+        app.status === "completed" || app.status === "completada";
+      const belongsToMe = app.staff_id === currentStaffId;
+
+      return isSameMonth && isCompleted && belongsToMe;
+    });
+
+    if (appsDelMes.length === 0) {
+      alert(`No hay citas completadas en ${monthName} para exportar.`);
+      return;
+    }
+
+    // 2. Ordenar por fecha (de la más antigua a la más reciente)
+    const appsOrdenadas = [...appsDelMes].sort(
+      (a, b) => new Date(a.start_time) - new Date(b.start_time),
+    );
+
+    // 3. Formatear datos para el gestor
+    const dataToExport = appsOrdenadas.map((app) => ({
+      Día: new Date(app.start_time).toLocaleDateString("es-ES"),
+      Hora: new Date(app.start_time).toLocaleTimeString("es-ES", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      Cliente: app.client_name || "N/A",
+      Servicio: services.find((s) => s.id === app.service_id)?.name || "Otro",
+      Método: (app.payment_method || "efectivo").toUpperCase(),
+      "Total (€)": parseFloat(app.final_price || 0),
+    }));
+
+    // 4. Añadir una fila de TOTAL al final para el gestor
+    const totalMes = appsOrdenadas.reduce(
+      (sum, app) => sum + (parseFloat(app.final_price) || 0),
+      0,
+    );
+    dataToExport.push({
+      Día: "",
+      Hora: "",
+      Cliente: "",
+      Servicio: "",
+      Método: "TOTAL MES:",
+      "Total (€)": totalMes,
+    });
+
+    // 5. Crear el archivo
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+
+    // Ajustar ancho de columnas para que el Gestor lo vea bien
+    const wscols = [
+      { wch: 12 },
+      { wch: 10 },
+      { wch: 25 },
+      { wch: 20 },
+      { wch: 15 },
+      { wch: 12 },
+    ];
+    worksheet["!cols"] = wscols;
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, `Cierre ${monthName}`);
+
+    // 6. Nombre del archivo: Cierre_Saray_Marzo_2026.xlsx
+    const fileName = `Informe_${currentStaffName}_${monthName.replace(" ", "_")}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
+  };
+
+  // --- 3. FORMATEO Y NAVEGACIÓN ---
+
+  const percentage = Math.min((statsMes.total / PERSONAL_GOAL) * 100, 100);
+  const monthName = viewDate.toLocaleString("es-ES", { month: "long" });
+  const dayLabel = viewDate.toLocaleDateString("es-ES", {
+    weekday: "long",
+    day: "numeric",
     month: "long",
-    year: "numeric",
   });
   const formatMoney = (amount) =>
     amount.toLocaleString("es-ES", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
+  const serviceLabels = Object.keys(statsMes.servicios);
+  const maxServiceValue = Math.max(...Object.values(statsMes.servicios), 1);
 
-  const serviceLabels = Object.keys(stats.servicios);
-  const maxServiceValue = Math.max(...Object.values(stats.servicios), 1);
-
-  const nextMonth = () =>
-    setViewDate(new Date(viewDate.setMonth(viewDate.getMonth() + 1)));
-  const prevMonth = () =>
-    setViewDate(new Date(viewDate.setMonth(viewDate.getMonth() - 1)));
-
-  const handleLockBox = () => {
-    if (
-      window.confirm(
-        `¿Estás segura de cerrar la caja de ${monthName}? Una vez cerrada, los datos se considerarán definitivos.`,
-      )
-    ) {
+  const handleConfirmLock = () => {
+    if (password.length > 0) {
       setIsLocked(true);
-      // Aquí en el futuro haríamos un fetch al backend para guardar el cierre
+      setShowPasswordModal(false);
+      setPassword("");
+      // exportToExcel(); // Descomenta esta línea si quieres que se descargue solo al poner la clave
     }
-  };
-
-  const exportToExcel = () => {
-    const data = [
-      {
-        sheet: "Cierre de Caja",
-        columns: [
-          {
-            label: "Fecha",
-            value: (row) =>
-              new Date(row.start_time).toLocaleDateString("es-ES"),
-          },
-          { label: "Cliente", value: "client_name" },
-          { label: "Servicio", value: "serviceName" },
-          {
-            label: "Método",
-            value: (row) => (row.payment_method || "efectivo").toUpperCase(),
-          },
-          {
-            label: "Total (€)",
-            value: (row) => parseFloat(row.final_price || 0),
-          },
-        ],
-        content: stats.rawApps,
-      },
-    ];
-    xlsx(data, { fileName: `Cierre_${monthName.replace(" ", "_")}` });
   };
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10">
-      {/* 1. SALUDO Y TOTAL */}
-      <div
-        className={`p-8 rounded-[2.5rem] text-white shadow-xl ${isSaray ? "bg-[#dcc7b1]" : "bg-[#5d5045]"}`}
-      >
+      {/* CABECERA DIARIA */}
+      <div className="p-8 rounded-[2.5rem] text-white shadow-xl bg-[#5d5045]">
         <div className="flex justify-between items-center">
           <div>
             <p className="text-[10px] font-black uppercase opacity-70 tracking-widest mb-1">
-              {isSaray ? "Saray" : "Staff"} • Mi Salón
+              {currentStaffName} • Mi Salón
             </p>
             <p className="text-3xl font-black text-white">
-              Llevas {formatMoney(stats.total)}€
+              Hoy: {formatMoney(statsHoy.total)}€
             </p>
-            <p className="text-[10px] font-bold opacity-60 uppercase mt-1">
-              {monthName}
+            <p className="text-[10px] font-bold opacity-60 uppercase mt-1 capitalize">
+              {dayLabel}
             </p>
           </div>
           <div className="text-4xl">{isLocked ? "🔒" : "💅"}</div>
         </div>
       </div>
 
-      {/* 2. INGRESOS POR MÉTODO + CIERRE DE CAJA */}
+      {/* MÉTODOS Y CIERRE */}
       <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-[#eee8e2]">
         <div className="flex justify-between items-center mb-8">
           <button
-            onClick={prevMonth}
+            onClick={() =>
+              setViewDate(new Date(viewDate.setDate(viewDate.getDate() - 1)))
+            }
             className="w-10 h-10 flex items-center justify-center rounded-full bg-[#f8f5f2]"
           >
             ←
           </button>
           <div className="text-center">
             <h5 className="text-[9px] font-black uppercase tracking-[0.2em] text-[#a39485]">
-              Ingresos por Método
+              Caja Diaria
             </h5>
             <p className="text-[11px] font-bold text-[#5d5045] capitalize">
-              {monthName}
+              {dayLabel}
             </p>
           </div>
           <button
-            onClick={nextMonth}
+            onClick={() =>
+              setViewDate(new Date(viewDate.setDate(viewDate.getDate() + 1)))
+            }
             className="w-10 h-10 flex items-center justify-center rounded-full bg-[#f8f5f2]"
           >
             →
@@ -152,19 +216,18 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
         </div>
 
         <div className="space-y-6 mb-8">
-          {/* Barras horizontales */}
           <div>
             <div className="flex justify-between text-[10px] font-black mb-2 px-1">
               <span className="text-[#a39485]">EFECTIVO</span>
               <span className="text-[#5d5045]">
-                {formatMoney(stats.metodos.efectivo)}€
+                {formatMoney(statsHoy.metodos.efectivo)}€
               </span>
             </div>
             <div className="h-3 bg-[#f8f5f2] rounded-full overflow-hidden">
               <div
                 className="h-full bg-[#dcc7b1] transition-all duration-1000"
                 style={{
-                  width: `${stats.total > 0 ? (stats.metodos.efectivo / stats.total) * 100 : 0}%`,
+                  width: `${statsHoy.total > 0 ? (statsHoy.metodos.efectivo / statsHoy.total) * 100 : 0}%`,
                 }}
               />
             </div>
@@ -173,149 +236,165 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
             <div className="flex justify-between text-[10px] font-black mb-2 px-1">
               <span className="text-[#a39485]">TARJETA</span>
               <span className="text-[#5d5045]">
-                {formatMoney(stats.metodos.tarjeta)}€
+                {formatMoney(statsHoy.metodos.tarjeta)}€
               </span>
             </div>
             <div className="h-3 bg-[#f8f5f2] rounded-full overflow-hidden">
               <div
                 className="h-full bg-[#5d5045] transition-all duration-1000"
                 style={{
-                  width: `${stats.total > 0 ? (stats.metodos.tarjeta / stats.total) * 100 : 0}%`,
+                  width: `${statsHoy.total > 0 ? (statsHoy.metodos.tarjeta / statsHoy.total) * 100 : 0}%`,
                 }}
               />
             </div>
           </div>
         </div>
 
-        {/* BOTÓN CIERRE DE CAJA (DEBAJO DE LOS MÉTODOS) */}
         {!isLocked ? (
           <button
-            onClick={handleLockBox}
-            className="w-full py-3 bg-[#5d5045] text-white rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg shadow-[#5d5045]/20"
+            onClick={() => setShowPasswordModal(true)}
+            className="w-full py-3 bg-[#5d5045] text-white rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-black transition-all"
           >
             🔒 Confirmar y Cerrar Caja
           </button>
         ) : (
           <div className="w-full py-3 bg-green-50 text-green-600 rounded-2xl text-[9px] font-black uppercase text-center border border-green-100">
-            ✅ Caja de {monthName} cerrada y bloqueada
+            ✅ Caja cerrada correctamente
           </div>
         )}
       </div>
 
-      {/* 3. GRÁFICA DE SERVICIOS (CON EJE Y SUELO SEPARADO) */}
+      {/* GRÁFICA DE SERVICIOS (MENSUAL) */}
       <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-[#eee8e2]">
-        <h5 className="text-[9px] font-black uppercase tracking-[0.2em] text-[#a39485] mb-10 text-center">
-          Rendimiento por Servicio
+        <h5 className="text-[9px] font-black uppercase tracking-[0.2em] text-[#a39485] mb-10 text-center uppercase">
+          Rendimiento Mensual ({monthName})
         </h5>
-
         <div className="relative">
-          {/* Contenedor de la gráfica y el Eje Y */}
           <div className="relative h-48 flex">
-            {/* EJE Y (Precios a la izquierda) */}
             <div className="flex flex-col justify-between h-full pb-0.5 text-right pr-3 border-r border-[#f8f5f2]">
-              {[1, 0.75, 0.5, 0.25, 0].map((factor) => (
+              {[1, 0.75, 0.5, 0.25, 0].map((f) => (
                 <span
-                  key={factor}
+                  key={f}
                   className="text-[7px] font-bold text-[#b5a798] leading-none"
                 >
-                  {Math.round(maxServiceValue * factor)}€
+                  {Math.round(maxServiceValue * f)}€
                 </span>
               ))}
             </div>
-
-            {/* ÁREA DE DIBUJO (Barras y Líneas horizontales) */}
-            <div className="relative flex-1 h-full">
-              {/* Líneas de cuadrícula de fondo */}
-              <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
-                {[1, 0.75, 0.5, 0.25, 0].map((factor) => (
+            <div className="relative flex-1 h-full px-2 flex items-end justify-around">
+              {serviceLabels.map((label, i) => (
+                <div
+                  key={i}
+                  className="flex-1 flex flex-col items-center group relative h-full justify-end"
+                >
+                  <span className="absolute -top-6 text-[9px] font-bold text-[#5d5045] bg-white px-2 py-1 rounded-lg shadow-sm border border-[#eee8e2] opacity-0 group-hover:opacity-100 transition-opacity z-20 whitespace-nowrap">
+                    {formatMoney(statsMes.servicios[label])}€
+                  </span>
                   <div
-                    key={factor}
-                    className="w-full border-b border-[#f8f5f2] h-0"
+                    className={`w-full max-w-[24px] rounded-t-sm transition-all duration-1000 ${i % 2 === 0 ? "bg-[#dcc7b1]" : "bg-[#5d5045]"}`}
+                    style={{
+                      height: `${(statsMes.servicios[label] / maxServiceValue) * 100}%`,
+                    }}
                   ></div>
-                ))}
-              </div>
-
-              {/* Las Barras */}
-              <div className="relative z-10 flex items-end justify-around h-full px-2">
-                {serviceLabels.length > 0
-                  ? serviceLabels.map((label, index) => (
-                      <div
-                        key={index}
-                        className="flex flex-col items-center flex-1 group relative h-full justify-end"
-                      >
-                        {/* Tooltip con el dinero */}
-                        <span className="absolute -top-6 text-[9px] font-bold text-[#5d5045] bg-white px-2 py-1 rounded-lg shadow-sm border border-[#eee8e2] opacity-0 group-hover:opacity-100 transition-opacity z-20 whitespace-nowrap">
-                          {stats.servicios[label].toLocaleString("es-ES")}€
-                        </span>
-
-                        <div
-                          className={`w-full max-w-[24px] rounded-t-sm transition-all duration-1000 shadow-sm ${
-                            index % 2 === 0 ? "bg-[#dcc7b1]" : "bg-[#5d5045]"
-                          }`}
-                          style={{
-                            height: `${(stats.servicios[label] / maxServiceValue) * 100}%`,
-                          }}
-                        ></div>
-                      </div>
-                    ))
-                  : null}
-              </div>
+                </div>
+              ))}
             </div>
           </div>
-
-          {/* EJE X (Nombres de servicios debajo de la línea del 0) */}
           <div className="flex ml-[40px] mt-4 justify-around">
-            {serviceLabels.map((label, index) => (
-              <div key={index} className="flex-1 text-center px-1">
-                <p className="text-[7px] font-black uppercase text-[#a39485] leading-tight break-words">
-                  {label}
-                </p>
-              </div>
+            {serviceLabels.map((l, i) => (
+              <p
+                key={i}
+                className="flex-1 text-[7px] font-black uppercase text-[#a39485] text-center leading-tight"
+              >
+                {l}
+              </p>
             ))}
           </div>
         </div>
       </div>
-      {/* 4. ANILLO DE PROGRESO */}
+
+      {/* PROGRESO MENSUAL */}
       <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-[#eee8e2] flex flex-col items-center">
-        <h5 className="text-[9px] font-black uppercase tracking-[0.2em] text-[#a39485] mb-6">
-          Meta: {PERSONAL_GOAL}€
+        <h5 className="text-[9px] font-black uppercase tracking-[0.2em] text-[#a39485] mb-8">
+          Progreso Mensual
         </h5>
-        <div className="relative w-32 h-32 flex items-center justify-center">
+        <div className="relative w-40 h-40 flex items-center justify-center">
           <svg className="w-full h-full transform -rotate-90">
             <circle
-              cx="64"
-              cy="64"
-              r="56"
+              cx="80"
+              cy="80"
+              r="70"
               stroke="#f8f5f2"
-              strokeWidth="10"
+              strokeWidth="12"
               fill="transparent"
             />
             <circle
-              cx="64"
-              cy="64"
-              r="56"
-              stroke={isSaray ? "#dcc7b1" : "#5d5045"}
-              strokeWidth="10"
+              cx="80"
+              cy="80"
+              r="70"
+              stroke="#5d5045"
+              strokeWidth="12"
               fill="transparent"
-              strokeDasharray={351.8}
-              strokeDashoffset={351.8 - (351.8 * percentage) / 100}
+              strokeDasharray={439.8}
+              strokeDashoffset={439.8 - (439.8 * percentage) / 100}
               strokeLinecap="round"
               className="transition-all duration-1000"
             />
           </svg>
-          <span className="absolute text-xl font-black text-[#5d5045]">
-            {Math.round(percentage)}%
-          </span>
+          <div className="absolute text-center">
+            <p className="text-[10px] font-black text-[#a39485] uppercase mb-0.5">
+              Acumulado
+            </p>
+            <p className="text-xl font-black text-[#5d5045] leading-none">
+              {formatMoney(statsMes.total)}€
+            </p>
+            <div className="h-[1px] bg-[#eee8e2] w-12 mx-auto my-2"></div>
+            <p className="text-[10px] font-bold text-[#b5a798]">
+              Meta: {PERSONAL_GOAL}€
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* 5. BOTÓN EXPORTAR (AL FINAL DEL TODO) */}
+      {/* BOTÓN EXCEL (FINAL) */}
       <button
         onClick={exportToExcel}
-        className="w-full py-5 bg-white border-2 border-[#eee8e2] text-[#5d5045] rounded-[2rem] text-[10px] font-black uppercase hover:bg-[#f8f5f2] transition-all flex items-center justify-center gap-3 shadow-sm"
+        className="w-full py-5 bg-[#5d5045] text-white rounded-[2rem] text-[10px] font-black uppercase hover:bg-black transition-all flex items-center justify-center gap-3 shadow-xl active:scale-95"
       >
-        <span>📥</span> Descargar Informe Excel de {monthName}
+        <span>📊</span> Descargar Informe Mensual: {monthName}
       </button>
+
+      {/* MODAL CONTRASEÑA */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl">
+            <h4 className="text-[11px] font-black uppercase tracking-widest text-[#5d5045] mb-2 text-center">
+              Validar Cierre
+            </h4>
+            <input
+              type="password"
+              className="w-full p-4 bg-[#f8f5f2] border-none rounded-2xl mb-4 text-center outline-none"
+              placeholder="••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowPasswordModal(false)}
+                className="flex-1 py-3 text-[10px] font-black uppercase text-[#a39485]"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmLock}
+                className="flex-1 py-3 bg-[#5d5045] text-white rounded-xl text-[10px] font-black uppercase tracking-widest"
+              >
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
