@@ -118,14 +118,25 @@ function App() {
           className={`lg:col-span-5 ${activeTab !== "agenda" ? "hidden lg:block" : "block"}`}
         >
           {currentUser && (
-            <AppointmentForm
-              services={services}
-              clients={clients}
-              currentUser={currentUser}
-              onSuccess={fetchInitialData}
-              initialDate={preselectedDate}
-              onError={(msg) => setErrorMessage(msg)}
-            />
+            <div className="space-y-4">
+              {" "}
+              {/* Contenedor para agrupar Form + Botón */}
+              <AppointmentForm
+                services={services}
+                clients={clients}
+                currentUser={currentUser}
+                onSuccess={fetchInitialData}
+                initialDate={preselectedDate}
+                onError={(msg) => setErrorMessage(msg)}
+              />
+              {/* BOTÓN DE LOGOUT PARA MÓVIL (Visible solo en pantallas pequeñas) */}
+              <button
+                onClick={handleLogout}
+                className="md:hidden w-full bg-white/50 text-[10px] font-black text-red-400 uppercase border border-red-100 py-4 rounded-2xl shadow-sm active:bg-red-50 transition-all"
+              >
+                Cerrar Sesión del Salón
+              </button>
+            </div>
           )}
         </aside>
 
@@ -197,6 +208,8 @@ function App() {
             {activeTab === "clientes" && (
               <ClientsView
                 clients={clients}
+                onRefresh={fetchInitialData}
+                onError={(msg) => setErrorMessage(msg)}
                 onAddClient={async (newClient) => {
                   try {
                     // 1. Lo guardamos en la Base de Datos

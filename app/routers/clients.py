@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlmodel import Session, select
 from typing import List
 from app.db.session import get_session
@@ -33,3 +33,25 @@ def list_clients(
     current_user: User = Depends(get_current_user) # Protegido
 ):
     return db.exec(select(Client)).all()
+
+@router.patch("/{client_id}", response_model=ClientOut)
+def update_client(
+    client_id: int,
+    client_data: dict = Body(...), 
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    client = db.get(Client, client_id)
+    if not client:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+    
+    # Actualizamos solo los campos que vienen en el body
+    for key, value in client_data.items():
+        # Evitamos actualizar el ID por accidente
+        if key != "id":
+            setattr(client, key, value)
+
+    db.add(client)
+    db.commit()
+    db.refresh(client)
+    return client
