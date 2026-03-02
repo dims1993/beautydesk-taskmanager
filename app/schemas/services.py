@@ -8,7 +8,7 @@ class ServiceCreate(BaseModel):
     name: str
     description: Optional[str] = None
     price: float
-    duration_minutes: int
+    duration: int
 
 
 class ServiceOut(BaseModel):
@@ -16,7 +16,7 @@ class ServiceOut(BaseModel):
     name: str
     description: Optional[str]
     price: float
-    duration_minutes: int
+    duration: int
 
     class Config:
         from_attributes = True

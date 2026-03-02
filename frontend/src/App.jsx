@@ -70,6 +70,17 @@ function App() {
     }
   };
 
+  // FUNCIÓN UNIFICADA PARA BORRAR PERMANENTEMENTE LOS ARCHIVADOS
+  const handleDeletePermanent = async (id) => {
+    try {
+      // Usamos DELETE para borrar físicamente de la base de datos
+      await apiRequest(`/appointments/${id}`, "DELETE");
+      // No hace falta refrescar aquí si lo hace el fetchInitialData después
+    } catch (err) {
+      console.error("Error en borrado permanente:", err);
+    }
+  };
+
   useEffect(() => {
     if (isLoggedIn) fetchInitialData();
   }, [isLoggedIn]);
@@ -166,6 +177,7 @@ function App() {
                 <ArchivedList
                   appointments={appointments}
                   onRestore={handleUpdateStatus}
+                  onDeletePermanent={handleDeletePermanent}
                 />
 
                 {/* ... (tu resumen de actividad actual) ... */}

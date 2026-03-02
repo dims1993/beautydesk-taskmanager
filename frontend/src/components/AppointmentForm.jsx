@@ -91,7 +91,11 @@ const AppointmentForm = ({
           >
             {services.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.name} - {s.price}€
+                {s.name} (
+                {s.duration >= 60
+                  ? `${Math.floor(s.duration / 60)}h ${s.duration % 60 > 0 ? (s.duration % 60) + "min" : ""}`
+                  : `${s.duration} min`}
+                )
               </option>
             ))}
           </select>
