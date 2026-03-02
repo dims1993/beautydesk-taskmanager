@@ -5,12 +5,19 @@ from datetime import datetime
 if TYPE_CHECKING:
     from .user import User
     from .service import Service
+    from .client import Client
 
 class Appointment(SQLModel, table=True):
     __tablename__ = "appointment"
     __table_args__ = {"extend_existing": True}
     
     id: Optional[int] = Field(default=None, primary_key=True)
+
+    # RELACIÓN CON EL CLIENTE FIDELIZADO
+    client_id: Optional[int] = Field(default=None, foreign_key="client.id")
+    client: Optional["Client"] = Relationship(back_populates="appointments")
+
+    
     client_name: str
     client_phone: Optional[str] = None
     client_email: Optional[str] = None

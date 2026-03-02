@@ -6,18 +6,24 @@ from typing import List, Optional
 from contextlib import asynccontextmanager
 from sqlalchemy import or_
 from datetime import timedelta, datetime
-from jose import JWTError, jwt
 from pydantic import BaseModel
 
 # Importaciones internas de schemas
 from app import (
     User, Service, Appointment,
     UserCreate, UserOut, AppointmentCreate, AppointmentOut, Token,
+    ClientCreate, ClientOut,
     get_session, init_db, seed_services,
     verify_password, create_access_token, get_password_hash,
     send_appointment_confirmation
 )
 from app.core.security import SECRET_KEY, ALGORITHM
+
+
+# 1. Importa el router de clientes
+from app.routers import clients
+
+from app.dependencies import get_current_user
 
 # --- ESQUEMAS PARA RECEPCIÓN DE DATOS ---
 class StatusUpdate(BaseModel):
@@ -48,27 +54,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+# Registrar el router de clientes
+app.include_router(clients.router)
 
 # Reconstrucción de modelos para evitar errores de forward-reference
 AppointmentCreate.model_rebuild()
 AppointmentOut.model_rebuild()
+ClientOut.model_rebuild()
 
-# --- DEPENDENCIAS DE SEGURIDAD ---
-
-def get_current_user(db: Session = Depends(get_session), token: str = Depends(oauth2_scheme)):
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
-            raise HTTPException(status_code=401, detail="Token inválido")
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Error al validar credenciales")
-
-    user = db.query(User).filter(User.email == email).first()
-    if user is None:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
-    return user
 
 # --- ENDPOINTS DE AUTENTICACIÓN ---
 

@@ -29,14 +29,20 @@ function App() {
 
   const fetchInitialData = async () => {
     try {
-      const [user, svcs, apps] = await Promise.all([
+      // 1. Añade 'clientsFromDB' aquí para capturar el resultado de la 4ª petición
+      const [user, svcs, apps, clientsFromDB] = await Promise.all([
         apiRequest("/users/me"),
         apiRequest("/services/"),
         apiRequest("/appointments/"),
+        apiRequest("/clients/"), // Asegúrate de que termine en /
       ]);
 
       if (user) setCurrentUser(user);
       if (svcs) setServices(svcs);
+
+      // 2. Ahora sí, clientsFromDB existe y se guarda en el estado
+      if (clientsFromDB) setClients(clientsFromDB);
+
       if (apps) {
         const sortedApps = apps.sort(
           (a, b) => new Date(b.start_time) - new Date(a.start_time),
@@ -114,6 +120,7 @@ function App() {
           {currentUser && (
             <AppointmentForm
               services={services}
+              clients={clients}
               currentUser={currentUser}
               onSuccess={fetchInitialData}
               initialDate={preselectedDate}
@@ -190,10 +197,17 @@ function App() {
             {activeTab === "clientes" && (
               <ClientsView
                 clients={clients}
-                onAddClient={(newClient) => {
-                  // Aquí podrías hacer un apiRequest para guardarlo en la DB
-                  setClients([...clients, newClient]);
-                  // Opcional: mostrar mensaje de éxito
+                onAddClient={async (newClient) => {
+                  try {
+                    // 1. Lo guardamos en la Base de Datos
+                    await apiRequest("/clients/", "POST", newClient);
+                    // 2. Refrescamos todo para tener los IDs correctos y la lista al día
+                    fetchInitialData();
+                  } catch (err) {
+                    setErrorMessage(
+                      "Ese teléfono ya está registrado o hay un error.",
+                    );
+                  }
                 }}
               />
             )}

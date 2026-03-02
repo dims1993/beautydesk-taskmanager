@@ -6,12 +6,15 @@ from .db.session import engine, get_session, init_db
 from .models.user import User
 from .models.service import Service
 from .models.appointment import Appointment
+from .models.client import Client
 
 # 3. Esquemas (Los objetos que viajan por la API)
 # Importamos directamente desde los archivos dentro de la carpeta schemas
 from .schemas.user import UserCreate, UserOut
 from .schemas.appointment import AppointmentCreate, AppointmentOut
 from .schemas.token import Token
+from .schemas.client import ClientCreate, ClientOut
+from .models.client import Client as ClientSchema
 
 # 4. Seguridad
 from .core.security import (
@@ -29,6 +32,7 @@ __all__ = [
     "engine", "get_session", "init_db",
     "User", "Service", "Appointment",
     "UserCreate", "UserOut", "AppointmentCreate", "AppointmentOut", "Token",
+    "ClientCreate", "ClientOut", "ClientSchema",
     "get_password_hash", "verify_password", "create_access_token",
     "send_appointment_confirmation", "seed_services"
 ]
