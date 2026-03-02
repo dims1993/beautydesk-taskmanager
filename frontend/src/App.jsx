@@ -11,6 +11,7 @@ import MobileNavbar from "./components/MobileNavbar";
 import StatsCharts from "./components/StatsCharts";
 import PaymentModal from "./components/PaymentModal"; // Importado
 import ArchivedList from "./components/ArchivedList";
+import ClientsView from "./components/ClientsView";
 
 function App() {
   const { apiRequest } = useApi();
@@ -21,6 +22,7 @@ function App() {
   const [services, setServices] = useState([]);
   const [errorMessage, setErrorMessage] = useState("");
   const [preselectedDate, setPreselectedDate] = useState("");
+  const [clients, setClients] = useState([]);
 
   // ESTADO PARA EL MODAL DE PAGO
   const [confirmingAppo, setConfirmingAppo] = useState(null);
@@ -122,17 +124,19 @@ function App() {
 
         <main className="lg:col-span-7 space-y-10">
           <nav className="hidden md:flex bg-[#e8ddd0]/50 backdrop-blur-sm p-2 rounded-4xl border border-[#e5e0d8]">
-            {["agenda", "calendario", "stats", "equipo"].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`flex-1 py-3 text-[10px] font-black uppercase rounded-3xl transition-all ${
-                  activeTab === tab ? "bg-white shadow-md" : "opacity-40"
-                }`}
-              >
-                {tab === "stats" ? "Caja 📊" : tab}
-              </button>
-            ))}
+            {["agenda", "calendario", "stats", "equipo", "clientes"].map(
+              (tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`flex-1 py-3 text-[10px] font-black uppercase rounded-3xl transition-all ${
+                    activeTab === tab ? "bg-white shadow-md" : "opacity-40"
+                  }`}
+                >
+                  {tab === "stats" ? "Caja 📊" : tab}
+                </button>
+              ),
+            )}
           </nav>
 
           <section className="space-y-5">
@@ -183,7 +187,16 @@ function App() {
                 {/* ... (tu resumen de actividad actual) ... */}
               </div>
             )}
-
+            {activeTab === "clientes" && (
+              <ClientsView
+                clients={clients}
+                onAddClient={(newClient) => {
+                  // Aquí podrías hacer un apiRequest para guardarlo en la DB
+                  setClients([...clients, newClient]);
+                  // Opcional: mostrar mensaje de éxito
+                }}
+              />
+            )}
             <button
               onClick={handleLogout}
               className="hidden md:block w-full text-[10px] font-black text-red-400 uppercase border border-red-100 py-4 rounded-2xl mt-8"

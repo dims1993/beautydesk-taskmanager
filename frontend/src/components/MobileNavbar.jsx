@@ -4,6 +4,7 @@ const MobileNavbar = ({ activeTab, setActiveTab, onLogout }) => {
     { id: "calendario", label: "Citas", icon: "📅" },
     { id: "stats", label: "Caja", icon: "📊" }, // <-- ¡Añadido!
     { id: "equipo", label: "Equipo", icon: "👥" },
+    { id: "clientes", label: "Clientes", icon: "👥" },
   ];
 
   return (
