@@ -11,11 +11,12 @@ const AppointmentForm = ({
 }) => {
   const { apiRequest } = useApi();
   const [loading, setLoading] = useState(false);
+  const [lastCreated, setLastCreated] = useState(null); // Para el botón de WhatsApp
 
   const [formData, setFormData] = useState({
     client_name: "",
     client_email: "",
-    client_phone: "", // <-- NUEVO: Obligatorio para clientes nuevos
+    client_phone: "",
     service_id: services[0]?.id || "",
     start_time: initialDate || "",
     staff_id: currentUser?.id || "",
@@ -24,7 +25,6 @@ const AppointmentForm = ({
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
-  // Lógica de búsqueda
   useEffect(() => {
     if (formData.client_name.length > 1) {
       const filtered = clients.filter((c) =>
@@ -44,7 +44,7 @@ const AppointmentForm = ({
       ...formData,
       client_name: `${client.nombre} ${client.apellidos || ""}`.trim(),
       client_email: client.email || "",
-      client_phone: client.telefono || "", // Rellenamos el teléfono si ya existe
+      client_phone: client.telefono || "",
     });
     setShowSuggestions(false);
   };
@@ -52,9 +52,9 @@ const AppointmentForm = ({
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setLastCreated(null); // Resetear aviso previo
 
     try {
-      // 1. ¿Existe el cliente en la lista?
       const existingClient = clients.find(
         (c) =>
           `${c.nombre} ${c.apellidos || ""}`.trim().toLowerCase() ===
@@ -63,13 +63,10 @@ const AppointmentForm = ({
 
       let finalClientId = existingClient?.id || null;
 
-      // 2. Si es cliente nuevo (no está en la lista), lo creamos primero
       if (!existingClient) {
         if (!formData.client_phone) {
           throw { detail: "El teléfono es obligatorio para clientes nuevos" };
         }
-
-        // Dividimos nombre y apellidos si se puede (opcional, si no, todo al nombre)
         const nameParts = formData.client_name.split(" ");
         const nombre = nameParts[0];
         const apellidos = nameParts.slice(1).join(" ");
@@ -84,7 +81,6 @@ const AppointmentForm = ({
         finalClientId = newClient.id;
       }
 
-      // 3. Crear la cita vinculada al ID
       const payload = {
         ...formData,
         client_id: finalClientId,
@@ -94,6 +90,24 @@ const AppointmentForm = ({
 
       await apiRequest("/appointments/", "POST", payload);
 
+      // Guardamos datos para el link de WhatsApp antes de limpiar
+      const formattedDate = new Date(formData.start_time).toLocaleString(
+        "es-ES",
+        {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          hour: "2-digit",
+          minute: "2-digit",
+        },
+      );
+
+      setLastCreated({
+        name: formData.client_name,
+        phone: formData.client_phone,
+        date: formattedDate,
+      });
+
       setFormData({
         client_name: "",
         client_email: "",
@@ -102,7 +116,7 @@ const AppointmentForm = ({
         start_time: "",
       });
 
-      onSuccess(); // Esto refresca la lista global y añade el nuevo cliente a la lista de búsqueda
+      onSuccess();
     } catch (err) {
       onError(err.detail || "Error al procesar la cita");
     } finally {
@@ -127,7 +141,37 @@ const AppointmentForm = ({
       </div>
 
       <form onSubmit={handleSubmit} className="p-8 space-y-5">
-        {/* NOMBRE DEL CLIENTE */}
+        {/* AVISO DE WHATSAPP POST-CITA */}
+        {lastCreated && (
+          <div className="mb-4 p-5 bg-green-50 border border-green-200 rounded-3xl animate-fadeIn">
+            <p className="text-[9px] font-black text-green-700 uppercase tracking-widest text-center mb-3">
+              ✅ Cita guardada correctamente
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                const msg = `Hola ${lastCreated.name}, te confirmo tu cita en BeautyTask 💇‍♀️ para el ${lastCreated.date}. ¡Te esperamos!`;
+                const cleanPhone = lastCreated.phone.replace(/\s+/g, "");
+                window.open(
+                  `https://wa.me/34${cleanPhone}?text=${encodeURIComponent(msg)}`,
+                  "_blank",
+                );
+                setLastCreated(null);
+              }}
+              className="w-full py-3 bg-[#25D366] text-white rounded-xl font-bold uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 shadow-md hover:scale-[1.02] transition-transform"
+            >
+              Enviar WhatsApp 💬
+            </button>
+            <button
+              type="button"
+              onClick={() => setLastCreated(null)}
+              className="w-full mt-2 text-[8px] text-gray-400 uppercase font-bold text-center"
+            >
+              Cerrar aviso
+            </button>
+          </div>
+        )}
+
         <div className="space-y-2 relative">
           <label className="text-[10px] font-black text-[#a39485] uppercase tracking-widest ml-2">
             Cliente{" "}
@@ -168,12 +212,11 @@ const AppointmentForm = ({
           )}
         </div>
 
-        {/* TELÉFONO - Aparece resaltado si es cliente nuevo */}
         <div className="space-y-2">
           <label
             className={`text-[10px] font-black uppercase tracking-widest ml-2 ${isNewClient ? "text-amber-600" : "text-[#a39485]"}`}
           >
-            Teléfono {isNewClient && "* (Obligatorio para nuevos)"}
+            Teléfono {isNewClient && "* (Obligatorio)"}
           </label>
           <input
             required={isNewClient}
@@ -186,23 +229,6 @@ const AppointmentForm = ({
           />
         </div>
 
-        {/* EMAIL (Opcional) */}
-        <div className="space-y-2 opacity-80">
-          <label className="text-[10px] font-black text-[#a39485] uppercase tracking-widest ml-2">
-            Email (Opcional)
-          </label>
-          <input
-            type="email"
-            className="w-full px-6 py-4 bg-[#fcfaf8] border border-[#eee8e2] rounded-2xl outline-none"
-            placeholder="correo@ejemplo.com"
-            value={formData.client_email}
-            onChange={(e) =>
-              setFormData({ ...formData, client_email: e.target.value })
-            }
-          />
-        </div>
-
-        {/* SERVICIO */}
         <div className="space-y-2">
           <label className="text-[10px] font-black text-[#a39485] uppercase tracking-widest ml-2">
             Servicio
@@ -222,7 +248,6 @@ const AppointmentForm = ({
           </select>
         </div>
 
-        {/* FECHA */}
         <div className="space-y-2">
           <label className="text-[10px] font-black text-[#a39485] uppercase tracking-widest ml-2">
             Fecha y Hora
@@ -241,7 +266,7 @@ const AppointmentForm = ({
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-5 bg-[#5d5045] text-[#f5f5f1] rounded-2xl font-bold uppercase text-[11px] tracking-[0.3em] shadow-lg disabled:opacity-50"
+          className="w-full py-5 bg-[#5d5045] text-[#f5f5f1] rounded-2xl font-bold uppercase text-[11px] tracking-[0.3em] shadow-lg disabled:opacity-50 transition-all hover:bg-[#4a3f35]"
         >
           {loading ? "Registrando..." : "Confirmar Cita"}
         </button>
