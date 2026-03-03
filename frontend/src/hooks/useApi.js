@@ -1,7 +1,9 @@
-const BASE_URL = "http://localhost:8000";
+// La variable de entorno para Vercel/Render, o localhost para tu PC
+const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 export const useApi = () => {
   const apiRequest = async (endpoint, method = "GET", body = null) => {
+    // ... resto del código igual
     const token = localStorage.getItem("token");
 
     const options = {
