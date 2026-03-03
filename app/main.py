@@ -36,6 +36,24 @@ class StatusUpdate(BaseModel):
 async def lifespan(app: FastAPI):
     print("🚀 Iniciando BeautyTask API...")
     init_db()
+    
+    # --- LÓGICA PARA USUARIO DEMO ---
+    with Session(get_session().__next__()) as db: # Obtenemos sesión manualmente para el startup
+        # Buscamos si ya existe
+        demo_exists = db.query(User).filter(User.username == "demo").first()
+        if not demo_exists:
+            print("👤 Creando usuario demo...")
+            new_demo = User(
+                username="demo",
+                email="demo@beautytask.com",
+                role="admin",
+                password_hash=get_password_hash("demo123") # Asegúrate de que esta función esté disponible
+            )
+            db.add(new_demo)
+            db.commit()
+            print("✅ Usuario demo creado: demo / demo123")
+    # --------------------------------
+
     try:
         seed_services()
         print("✅ Servicios base verificados.")
