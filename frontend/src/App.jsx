@@ -9,13 +9,17 @@ import CalendarView from "./components/CalendarView";
 import TeamView from "./components/TeamView";
 import MobileNavbar from "./components/MobileNavbar";
 import StatsCharts from "./components/StatsCharts";
-import PaymentModal from "./components/PaymentModal"; // Importado
+import PaymentModal from "./components/PaymentModal";
 import ArchivedList from "./components/ArchivedList";
 import ClientsView from "./components/ClientsView";
+import Landing from "./components/Landing";
 
 function App() {
   const { apiRequest } = useApi();
   const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem("token"));
+  const [showLanding, setShowLanding] = useState(
+    !localStorage.getItem("token"),
+  );
   const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState("agenda");
   const [appointments, setAppointments] = useState([]);
@@ -23,26 +27,20 @@ function App() {
   const [errorMessage, setErrorMessage] = useState("");
   const [preselectedDate, setPreselectedDate] = useState("");
   const [clients, setClients] = useState([]);
-
-  // ESTADO PARA EL MODAL DE PAGO
   const [confirmingAppo, setConfirmingAppo] = useState(null);
 
   const fetchInitialData = async () => {
     try {
-      // 1. Añade 'clientsFromDB' aquí para capturar el resultado de la 4ª petición
       const [user, svcs, apps, clientsFromDB] = await Promise.all([
         apiRequest("/users/me"),
         apiRequest("/services/"),
         apiRequest("/appointments/"),
-        apiRequest("/clients/"), // Asegúrate de que termine en /
+        apiRequest("/clients/"),
       ]);
 
       if (user) setCurrentUser(user);
       if (svcs) setServices(svcs);
-
-      // 2. Ahora sí, clientsFromDB existe y se guarda en el estado
       if (clientsFromDB) setClients(clientsFromDB);
-
       if (apps) {
         const sortedApps = apps.sort(
           (a, b) => new Date(b.start_time) - new Date(a.start_time),
@@ -54,23 +52,19 @@ function App() {
     }
   };
 
-  // FUNCIÓN UNIFICADA PARA ACTUALIZAR ESTADOS
   const handleUpdateStatus = async (id, newStatus, extra = null) => {
-    // Si queremos completar pero no tenemos los datos del pago, abrimos modal
     if (newStatus === "completed" && !extra) {
       const appo = appointments.find((a) => a.id === id);
       setConfirmingAppo(appo);
       return;
     }
-
     try {
       await apiRequest(`/appointments/${id}/status`, "PATCH", {
         new_status: newStatus,
         final_price: extra?.price || 0,
         payment_method: extra?.method || "ninguno",
       });
-
-      setConfirmingAppo(null); // Cerramos el modal si estaba abierto
+      setConfirmingAppo(null);
       fetchInitialData();
     } catch (err) {
       console.error("Error al actualizar estado:", err);
@@ -78,12 +72,10 @@ function App() {
     }
   };
 
-  // FUNCIÓN UNIFICADA PARA BORRAR PERMANENTEMENTE LOS ARCHIVADOS
   const handleDeletePermanent = async (id) => {
     try {
-      // Usamos DELETE para borrar físicamente de la base de datos
       await apiRequest(`/appointments/${id}`, "DELETE");
-      // No hace falta refrescar aquí si lo hace el fetchInitialData después
+      fetchInitialData();
     } catch (err) {
       console.error("Error en borrado permanente:", err);
     }
@@ -96,10 +88,30 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem("token");
     setIsLoggedIn(false);
+    setShowLanding(true); // Al cerrar sesión, volvemos a la landing
   };
 
-  if (!isLoggedIn) return <LoginView onLogin={() => setIsLoggedIn(true)} />;
+  // --- LÓGICA DE NAVEGACIÓN (FLUJO DE ENTREVISTA) ---
 
+  if (!isLoggedIn && showLanding) {
+    return <Landing onEnterLogin={() => setShowLanding(false)} />;
+  }
+
+  if (!isLoggedIn && !showLanding) {
+    return (
+      <div className="relative">
+        <button
+          onClick={() => setShowLanding(true)}
+          className="absolute top-8 left-8 text-[#5d5045] font-black text-[10px] uppercase tracking-widest z-50 bg-white/50 px-4 py-2 rounded-full border border-[#5d5045]/10"
+        >
+          ← Volver
+        </button>
+        <LoginView onLogin={() => setIsLoggedIn(true)} />
+      </div>
+    );
+  }
+
+  // --- RENDER DE LA APLICACIÓN (CUANDO ESTÁ LOGUEADO) ---
   return (
     <div className="min-h-screen bg-[#f8f5f2] pb-24 md:pb-12 pt-6 md:pt-12 px-4 md:px-6 font-sans text-[#5d5045]">
       {errorMessage && (
@@ -119,8 +131,6 @@ function App() {
         >
           {currentUser && (
             <div className="space-y-4">
-              {" "}
-              {/* Contenedor para agrupar Form + Botón */}
               <AppointmentForm
                 services={services}
                 clients={clients}
@@ -129,7 +139,6 @@ function App() {
                 initialDate={preselectedDate}
                 onError={(msg) => setErrorMessage(msg)}
               />
-              {/* BOTÓN DE LOGOUT PARA MÓVIL (Visible solo en pantallas pequeñas) */}
               <button
                 onClick={handleLogout}
                 className="md:hidden w-full bg-white/50 text-[10px] font-black text-red-400 uppercase border border-red-100 py-4 rounded-2xl shadow-sm active:bg-red-50 transition-all"
@@ -164,7 +173,7 @@ function App() {
                   (a) => a.status === "scheduled",
                 )}
                 services={services}
-                onUpdateStatus={handleUpdateStatus} // Cambiado para usar la unificada
+                onUpdateStatus={handleUpdateStatus}
               />
             )}
 
@@ -201,10 +210,9 @@ function App() {
                   onRestore={handleUpdateStatus}
                   onDeletePermanent={handleDeletePermanent}
                 />
-
-                {/* ... (tu resumen de actividad actual) ... */}
               </div>
             )}
+
             {activeTab === "clientes" && (
               <ClientsView
                 clients={clients}
@@ -212,9 +220,7 @@ function App() {
                 onError={(msg) => setErrorMessage(msg)}
                 onAddClient={async (newClient) => {
                   try {
-                    // 1. Lo guardamos en la Base de Datos
                     await apiRequest("/clients/", "POST", newClient);
-                    // 2. Refrescamos todo para tener los IDs correctos y la lista al día
                     fetchInitialData();
                   } catch (err) {
                     setErrorMessage(
@@ -224,6 +230,7 @@ function App() {
                 }}
               />
             )}
+
             <button
               onClick={handleLogout}
               className="hidden md:block w-full text-[10px] font-black text-red-400 uppercase border border-red-100 py-4 rounded-2xl mt-8"
@@ -240,7 +247,6 @@ function App() {
         onLogout={handleLogout}
       />
 
-      {/* MODAL DE PAGO ÚNICO */}
       {confirmingAppo && (
         <PaymentModal
           appointment={confirmingAppo}
