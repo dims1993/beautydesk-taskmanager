@@ -37,9 +37,12 @@ async def lifespan(app: FastAPI):
     print("🚀 Iniciando BeautyTask API...")
     init_db()
     
-    # --- LÓGICA PARA USUARIO DEMO ---
-    with Session(get_session().__next__()) as db: # Obtenemos sesión manualmente para el startup
-        # Buscamos si ya existe
+    # IMPORTANTE: Importa Session y engine aquí si no están
+    from sqlmodel import Session
+    from app.db.session import engine # Asegúrate de que la ruta sea correcta
+
+    # --- LÓGICA PARA USUARIO DEMO CORREGIDA ---
+    with Session(engine) as db: 
         demo_exists = db.query(User).filter(User.username == "demo").first()
         if not demo_exists:
             print("👤 Creando usuario demo...")
@@ -47,12 +50,12 @@ async def lifespan(app: FastAPI):
                 username="demo",
                 email="demo@beautytask.com",
                 role="admin",
-                password_hash=get_password_hash("demo123") # Asegúrate de que esta función esté disponible
+                password_hash=get_password_hash("demo123")
             )
             db.add(new_demo)
             db.commit()
             print("✅ Usuario demo creado: demo / demo123")
-    # --------------------------------
+    # ------------------------------------------
 
     try:
         seed_services()
