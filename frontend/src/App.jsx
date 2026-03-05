@@ -16,7 +16,11 @@ import Landing from "./components/Landing";
 
 function App() {
   const { apiRequest } = useApi();
-  const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem("token"));
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    const token = localStorage.getItem("token");
+    // Solo consideramos que está logueado si el token existe y no es una cadena de error
+    return !!token && token !== "undefined" && token !== "null";
+  });
   const [showLanding, setShowLanding] = useState(
     !localStorage.getItem("token"),
   );
@@ -48,7 +52,9 @@ function App() {
         setAppointments(sortedApps);
       }
     } catch (err) {
-      console.error("Error cargando datos:", err);
+      console.error("Token inválido o expirado:", err);
+      // SI FALLA EL FETCH INICIAL, EL TOKEN ES FALSO -> LOGOUT
+      handleLogout();
     }
   };
 
@@ -106,7 +112,14 @@ function App() {
         >
           ← Volver
         </button>
-        <LoginView onLogin={() => setIsLoggedIn(true)} />
+        <LoginView
+          onLogin={() => {
+            const token = localStorage.getItem("token");
+            if (token && token !== "undefined") {
+              setIsLoggedIn(true);
+            }
+          }}
+        />
       </div>
     );
   }
