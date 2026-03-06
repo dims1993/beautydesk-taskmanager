@@ -13,6 +13,7 @@ import PaymentModal from "./components/PaymentModal";
 import ArchivedList from "./components/ArchivedList";
 import ClientsView from "./components/ClientsView";
 import Landing from "./components/Landing";
+import RegisterView from "./components/RegisterView";
 
 function App() {
   const { apiRequest } = useApi();
@@ -32,6 +33,8 @@ function App() {
   const [preselectedDate, setPreselectedDate] = useState("");
   const [clients, setClients] = useState([]);
   const [confirmingAppo, setConfirmingAppo] = useState(null);
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
 
   const fetchInitialData = async () => {
     try {
@@ -106,20 +109,37 @@ function App() {
   if (!isLoggedIn && !showLanding) {
     return (
       <div className="relative">
+        {/* Botón de volver a la Landing */}
         <button
-          onClick={() => setShowLanding(true)}
-          className="absolute top-8 left-8 text-[#5d5045] font-black text-[10px] uppercase tracking-widest z-50 bg-white/50 px-4 py-2 rounded-full border border-[#5d5045]/10"
-        >
-          ← Volver
-        </button>
-        <LoginView
-          onLogin={() => {
-            const token = localStorage.getItem("token");
-            if (token && token !== "undefined") {
-              setIsLoggedIn(true);
-            }
+          onClick={() => {
+            setShowLanding(true);
+            setIsRegistering(false); // Reseteamos por si acaso
           }}
-        />
+          className="absolute top-8 left-8 text-[#5d5045] font-black text-[10px] uppercase tracking-widest z-50 bg-white/50 px-4 py-2 rounded-full border border-[#5d5045]/10 hover:bg-white transition-colors"
+        >
+          ← Back to Home
+        </button>
+
+        {/* Alternamos entre Registro y Login */}
+        {isRegistering ? (
+          <RegisterView
+            onBack={() => setIsRegistering(false)}
+            onSuccess={() => {
+              setIsRegistering(false);
+              // Opcional: Podrías poner un mensaje de "Account Created" aquí
+            }}
+          />
+        ) : (
+          <LoginView
+            onLogin={() => {
+              const token = localStorage.getItem("token");
+              if (token && token !== "undefined") {
+                setIsLoggedIn(true);
+              }
+            }}
+            onGoToRegister={() => setIsRegistering(true)} // Nueva prop
+          />
+        )}
       </div>
     );
   }

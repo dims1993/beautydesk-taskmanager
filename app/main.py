@@ -21,7 +21,7 @@ from app.core.security import SECRET_KEY, ALGORITHM
 
 
 # 1. Importa el router de clientes
-from app.routers import clients
+from app.routers import clients, users
 
 from app.dependencies import get_current_user
 
@@ -77,6 +77,7 @@ app.add_middleware(
 
 # Registrar el router de clientes
 app.include_router(clients.router)
+app.include_router(users.router)
 
 # Reconstrucción de modelos para evitar errores de forward-reference
 AppointmentCreate.model_rebuild()
@@ -105,7 +106,7 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
 def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
 
-@app.post("/users/", response_model=UserOut)
+@app.post("/users/register", response_model=UserOut)
 def create_user(user_data: UserCreate, db: Session = Depends(get_session)):
     existing_user = db.query(User).filter(
         or_(User.email == user_data.email, User.username == user_data.username)

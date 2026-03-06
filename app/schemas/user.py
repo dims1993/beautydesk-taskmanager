@@ -8,7 +8,6 @@ from typing import Optional
 class UserCreate(BaseModel):
     username: str
     email: EmailStr
-    role: str  # "admin" o "staff"
     password: str
     role: str = "user"  # Valor por defecto si no se proporciona
 
