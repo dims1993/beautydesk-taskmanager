@@ -30,22 +30,6 @@ async def lifespan(app: FastAPI):
     from sqlmodel import Session
     from app.db.session import engine # Asegúrate de que la ruta sea correcta
 
-    # --- LÓGICA PARA USUARIO DEMO CORREGIDA ---
-    with Session(engine) as db: 
-        demo_exists = db.query(User).filter(User.username == "demo").first()
-        if not demo_exists:
-            print("👤 Creando usuario demo...")
-            new_demo = User(
-                username="demo",
-                email="demo@beautytask.com",
-                role="admin",
-                password_hash=get_password_hash("demo123")
-            )
-            db.add(new_demo)
-            db.commit()
-            print("✅ Usuario demo creado: demo / demo123")
-    # ------------------------------------------
-
     try:
         seed_services()
         print("✅ Servicios base verificados.")

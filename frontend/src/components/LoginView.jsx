@@ -1,152 +1,118 @@
-import { useState } from "react";
+import React, { useState } from "react";
+import { useApi } from "../hooks/useApi";
+import { Sparkles, Lock, User, ArrowRight } from "lucide-react";
 
-const LoginView = ({ onLogin, onGoToRegister, message }) => {
-  const [loginData, setLoginData] = useState({ username: "", password: "" });
+export default function LoginView({ onLogin, onGoToRegister }) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const { apiRequest } = useApi();
 
-  // Usamos la URL de producción o localhost
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
-
-  const handleLogin = async (e, demoCredentials = null) => {
-    if (e) e.preventDefault();
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setError("");
     setIsLoading(true);
 
-    // Si pulsamos el botón mágico, usamos las credenciales demo, si no, las del estado
-    const username = demoCredentials
-      ? demoCredentials.username
-      : loginData.username;
-    const password = demoCredentials
-      ? demoCredentials.password
-      : loginData.password;
-
-    const params = new URLSearchParams();
-    params.append("username", username.trim().toLowerCase());
-    params.append("password", password.trim());
-
     try {
-      const response = await fetch(`${API_URL}/token`, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: params,
-      });
+      const formData = new FormData();
+      formData.append("username", username);
+      formData.append("password", password);
 
-      const data = await response.json();
+      const data = await apiRequest("/login", "POST", formData, true);
 
-      if (response.ok) {
+      if (data && data.access_token) {
         localStorage.setItem("token", data.access_token);
         onLogin();
       } else {
-        setError(data.detail || "Credenciales incorrectas");
+        setError("Credenciales incorrectas");
       }
     } catch (err) {
-      setError("Servidor fuera de servicio");
+      setError("Error al conectar con el servidor");
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#f8f5f2] flex items-center justify-center p-6">
-      <div className="max-w-md w-full bg-white/80 backdrop-blur-xl rounded-[3rem] shadow-2xl border border-white/20 overflow-hidden">
-        {/* Header */}
-        <div className="bg-[#e8ddd0] p-12 text-center">
-          <span className="text-4xl mb-4 block">🌿</span>
-          <h2 className="text-2xl font-black text-[#5d5045] uppercase tracking-[0.3em]">
-            BeautyTask
-          </h2>
+    <div className="min-h-screen bg-[#FAF9F6] flex items-center justify-center p-6 font-sans selection:bg-[#f5ebe0]">
+      <div className="w-full max-w-[400px] space-y-10">
+        {/* Encabezado */}
+        <div className="text-center space-y-4">
+          <div className="flex justify-center">
+            <div className="p-4 bg-[#f5ebe0] rounded-full border border-[#eaddcf] shadow-sm">
+              <Sparkles className="w-6 h-6 text-[#5d5045]" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-4xl font-serif text-[#5d5045] tracking-tight">
+              Bienvenido
+            </h2>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-[#8c857d] font-bold">
+              Gestión Profesional de Salón
+            </p>
+          </div>
         </div>
 
-        <form onSubmit={handleLogin} className="p-10 space-y-6">
-          {/* Success message from registration */}
-          {message && (
-            <p className="bg-green-50 text-green-600 p-3 rounded-xl text-[10px] font-bold text-center uppercase tracking-widest border border-green-100">
-              {message}
-            </p>
-          )}
-
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-[#a39485] uppercase tracking-widest ml-2">
-              Usuario
-            </label>
-            <input
-              required
-              className="w-full px-6 py-4 bg-[#fcfaf8] border border-[#eee8e2] rounded-2xl outline-none focus:border-[#5d5045] transition-colors"
-              placeholder="your_username"
-              value={loginData.username}
-              onChange={(e) =>
-                setLoginData({ ...loginData, username: e.target.value })
-              }
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-[#a39485] uppercase tracking-widest ml-2">
-              Contraseña
-            </label>
-            <input
-              required
-              type="password"
-              className="w-full px-6 py-4 bg-[#fcfaf8] border border-[#eee8e2] rounded-2xl outline-none focus:border-[#5d5045] transition-colors"
-              placeholder="••••••••"
-              value={loginData.password}
-              onChange={(e) =>
-                setLoginData({ ...loginData, password: e.target.value })
-              }
-            />
-          </div>
-
+        <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <p className="text-red-400 text-[10px] font-bold text-center uppercase tracking-wider">
+            <div className="bg-red-50 text-red-600 text-[10px] font-black uppercase tracking-widest p-4 rounded-2xl text-center border border-red-100 animate-pulse">
               {error}
-            </p>
+            </div>
           )}
 
-          <div className="space-y-4">
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full py-5 bg-[#5d5045] text-white rounded-2xl font-bold uppercase text-[11px] tracking-[0.3em] hover:bg-[#4a3f35] active:scale-[0.98] transition-all disabled:opacity-50"
-            >
-              {isLoading ? "Authenticating..." : "Acceder al Salon"}
-            </button>
-
-            {/* Registration Link */}
-            <p className="text-center text-[10px] text-[#a39485] font-bold uppercase tracking-widest pt-2">
-              Nuevo/a en este salon?{" "}
-              <button
-                type="button"
-                onClick={onGoToRegister}
-                className="text-[#5d5045] border-b border-[#5d5045] hover:opacity-70 transition-opacity"
-              >
-                Crear una cuenta
-              </button>
-            </p>
-
-            <div className="relative py-4">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-[#eee8e2]"></span>
-              </div>
-              <div className="relative flex justify-center text-[10px] uppercase">
-                <span className="bg-white px-2 text-[#a39485]">Or</span>
-              </div>
+          <div className="space-y-3">
+            {/* Input Usuario */}
+            <div className="relative group">
+              <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8c857d] group-focus-within:text-[#5d5045] transition-colors" />
+              <input
+                type="text"
+                placeholder="NOMBRE DE USUARIO"
+                className="w-full bg-white border border-[#eaddcf] py-5 pl-12 pr-4 rounded-2xl text-[11px] font-black tracking-widest focus:outline-none focus:border-[#5d5045] transition-all placeholder:text-[#c4bdb5] text-[#5d5045]"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+              />
             </div>
 
-            <button
-              type="button"
-              onClick={() =>
-                handleLogin(null, { username: "demo", password: "demo123" })
-              }
-              className="w-full py-3 border-2 border-dashed border-[#5d5045]/20 text-[#5d5045]/50 rounded-2xl font-bold uppercase text-[9px] tracking-[0.2em] hover:bg-[#5d5045]/5 hover:text-[#5d5045] transition-all"
-            >
-              ✨ Quick Demo Access ✨
-            </button>
+            {/* Input Password */}
+            <div className="relative group">
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8c857d] group-focus-within:text-[#5d5045] transition-colors" />
+              <input
+                type="password"
+                placeholder="CONTRASEÑA"
+                className="w-full bg-white border border-[#eaddcf] py-5 pl-12 pr-4 rounded-2xl text-[11px] font-black tracking-widest focus:outline-none focus:border-[#5d5045] transition-all placeholder:text-[#c4bdb5] text-[#5d5045]"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
           </div>
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full bg-[#5d5045] text-[#f5ebe0] py-5 rounded-full text-[11px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 hover:bg-[#4a3f36] transition-all shadow-xl shadow-[#5d5045]/20 active:scale-[0.96] disabled:opacity-50"
+          >
+            {isLoading ? "AUTENTICANDO..." : "Entrar al Estudio"}
+            {!isLoading && <ArrowRight className="w-4 h-4" />}
+          </button>
         </form>
+
+        <div className="text-center space-y-6 pt-4">
+          <div className="h-px bg-gradient-to-r from-transparent via-[#eaddcf] to-transparent w-full"></div>
+
+          <p className="text-[11px] text-[#8c857d] font-medium tracking-wide">
+            ¿Nuevo en BeautyTask?{" "}
+            <button
+              onClick={onGoToRegister}
+              className="text-[#5d5045] font-black uppercase tracking-widest hover:text-[#4a3f36] transition-colors underline decoration-1 underline-offset-8 ml-1"
+            >
+              Crear cuenta de estudio
+            </button>
+          </p>
+        </div>
       </div>
     </div>
   );
-};
-
-export default LoginView;
+}
