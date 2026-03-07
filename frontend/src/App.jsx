@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useApi } from "./hooks/useApi";
-// Importamos las piezas necesarias de react-router-dom
 import {
   BrowserRouter as Router,
   Routes,
@@ -21,6 +20,7 @@ import ArchivedList from "./components/ArchivedList";
 import ClientsView from "./components/ClientsView";
 import Landing from "./components/Landing";
 import RegisterView from "./components/RegisterView";
+import ContactoView from "./components/ContactoView";
 
 function App() {
   const { apiRequest } = useApi();
@@ -29,7 +29,6 @@ function App() {
     return !!token && token !== "undefined" && token !== "null";
   });
 
-  // Eliminamos showLanding ya que ahora usaremos rutas de URL
   const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState("agenda");
   const [appointments, setAppointments] = useState([]);
@@ -101,13 +100,10 @@ function App() {
   return (
     <Router>
       <Routes>
-        {/* RUTA 1: LANDING (Pública) */}
-        <Route
-          path="/"
-          element={!isLoggedIn ? <Landing /> : <Navigate to="/app" />}
-        />
+        {/* --- RUTAS PÚBLICAS --- */}
+        <Route path="/" element={<Landing />} />
+        <Route path="/contacto" element={<ContactoView />} />
 
-        {/* RUTA 2: LOGIN / REGISTRO */}
         <Route
           path="/login"
           element={
@@ -117,7 +113,7 @@ function App() {
                   href="/"
                   className="absolute top-8 left-8 text-[#5d5045] font-black text-[10px] uppercase tracking-widest z-50 bg-white/50 px-4 py-2 rounded-full border border-[#5d5045]/10 hover:bg-white transition-colors"
                 >
-                  ← Back to Home
+                  ← Inicio
                 </a>
                 {isRegistering ? (
                   <RegisterView
@@ -137,7 +133,7 @@ function App() {
           }
         />
 
-        {/* RUTA 3: LA APLICACIÓN (Privada) */}
+        {/* --- RUTA PRIVADA (LA APP) --- */}
         <Route
           path="/app"
           element={
@@ -263,12 +259,6 @@ function App() {
                           }}
                         />
                       )}
-                      <button
-                        onClick={handleLogout}
-                        className="hidden md:block w-full text-[10px] font-black text-red-400 uppercase border border-red-100 py-4 rounded-2xl mt-8"
-                      >
-                        Cerrar Sesión del Salón
-                      </button>
                     </section>
                   </main>
                 </div>

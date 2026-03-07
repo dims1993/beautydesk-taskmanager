@@ -1,27 +1,34 @@
-// La variable de entorno para Vercel/Render, o localhost para tu PC
 const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 export const useApi = () => {
   const apiRequest = async (endpoint, method = "GET", body = null) => {
-    // ... resto del código igual
     const token = localStorage.getItem("token");
 
-    const options = {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+    // Configuramos los headers básicos
+    const headers = {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     };
 
-    if (body) options.body = JSON.stringify(body);
+    let options = { method, headers };
+
+    if (body) {
+      // SI EL BODY ES FORMDATA (Para el Login)
+      if (body instanceof FormData) {
+        options.body = body;
+        // IMPORTANTE: No ponemos Content-Type, el navegador lo hará solo
+      } else {
+        // SI EL BODY ES JSON (Para el resto de la app)
+        headers["Content-Type"] = "application/json";
+        options.body = JSON.stringify(body);
+      }
+    }
 
     try {
       const response = await fetch(`${BASE_URL}${endpoint}`, options);
 
       if (response.status === 401) {
         localStorage.removeItem("token");
-        window.location.reload(); // Fuerza el logout si el token expira
+        window.location.href = "/login";
         return null;
       }
 

@@ -62,68 +62,70 @@ export default function Landing() {
             Iniciar Sesión
           </Link>
           <Link
-            to="/login"
+            to="/contacto"
             className="bg-[#5d5045] text-[#f5ebe0] px-6 md:px-8 py-3 rounded-full hover:bg-[#4a3f36] transition shadow-md active:scale-95"
           >
-            Comenzar
+            Contacta
           </Link>
         </div>
       </nav>
 
       {/* Hero */}
-      {/* Hero */}
-      <header className="max-w-7xl mx-auto mt-12 md:mt-24 px-6 md:px-16 pb-20 md:pb-32 border-b border-[#eaddcf]">
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-10 md:gap-16 items-center">
-          {/* Texto */}
-          <div className="md:col-span-7 space-y-6 md:space-y-8 text-center md:text-left">
-            <h2 className="text-5xl md:text-8xl font-serif leading-[1.1] md:leading-[0.95] tracking-tight text-[#5d5045]">
-              Eleva el <br className="hidden md:block" />
-              flujo diario <br />
-              <span className="italic opacity-80">de tu salón.</span>
-            </h2>
-            <p className="text-base md:text-lg text-[#8c857d] max-w-lg mx-auto md:mx-0 font-light leading-relaxed">
+      <header className="max-w-7xl mx-auto mt-0 md:mt-24 px-0 md:px-16 pb-20 md:pb-32 border-b border-[#eaddcf]">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-0 md:gap-20">
+          {/* 1. CONTENEDOR DE IMAGEN (Unificado) */}
+          {/* order-first md:order-last: Arriba en móvil, Derecha en escritorio */}
+          <div className="relative h-[45vh] md:h-[600px] w-full md:w-[45%] flex-shrink-0 overflow-hidden md:rounded-3xl shadow-sm order-first md:order-last">
+            <img
+              src="/model1.webp"
+              alt="Atmósfera del estudio"
+              className="absolute inset-0 w-full h-full object-cover object-center"
+            />
+            {/* Degradado inferior solo para móvil para suavizar la transición al texto */}
+            <div className="absolute inset-0 bg-gradient-to-t from-[#FAF9F6] via-transparent to-transparent md:hidden" />
+
+            {/* Badge con Z-INDEX corregido para que siempre se vea */}
+            <div className="absolute bottom-10 left-8 md:bottom-12 md:left-12 z-50">
+              <span className="bg-white/95 backdrop-blur-sm px-5 py-2.5 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-[#5d5045] shadow-md border border-[#eaddcf]/30">
+                Estilo Sofisticado
+              </span>
+            </div>
+          </div>
+
+          {/* 2. BLOQUE DE TEXTO (Izquierda) */}
+          {/* md:flex-1 hace que tome el espacio restante sin apretar la imagen */}
+          <div className="flex-1 w-full space-y-6 md:space-y-10 p-8 md:p-0 text-left -mt-8 md:mt-0 relative z-30 bg-[#FAF9F6] md:bg-transparent rounded-t-[3rem] md:rounded-none">
+            <div className="space-y-4">
+              <p className="text-[10px] md:text-[11px] uppercase tracking-[0.5em] text-[#8c857d] font-black">
+                The New Standard of Beauty
+              </p>
+              <h2 className="text-5xl md:text-[6.5rem] lg:text-[7.5rem] font-serif leading-[1.1] md:leading-[0.85] tracking-tighter text-[#5d5045]">
+                Eleva el <br className="hidden md:block" />
+                flujo diario <br />
+                <span className="italic opacity-80 underline decoration-[#eaddcf] decoration-1 underline-offset-[12px]">
+                  de tu salón.
+                </span>
+              </h2>
+            </div>
+
+            <p className="text-base md:text-xl text-[#8c857d] max-w-xl font-light leading-relaxed">
               Una plataforma de gestión sofisticada diseñada exclusivamente para
-              la industria de la belleza y el bienestar.
+              la industria de la belleza y el bienestar. Control total, estética
+              impecable.
             </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center md:justify-start gap-4 pt-4">
+
+            <div className="flex flex-col sm:flex-row items-center justify-start gap-6 pt-6">
               <Link
-                to="/login"
-                className="w-full sm:w-auto bg-[#5d5045] text-[#f5ebe0] px-10 py-5 rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-[#4a3f36] transition shadow-xl shadow-[#5d5045]/10 flex items-center justify-center gap-2 active:scale-95"
+                to="/contacto"
+                className="w-full sm:w-auto bg-[#5d5045] text-[#f5ebe0] px-12 py-6 rounded-full text-[11px] font-black uppercase tracking-widest hover:bg-[#4a3f36] transition shadow-2xl shadow-[#5d5045]/20 flex items-center justify-center gap-3 active:scale-95"
               >
-                Explorar el flujo
+                Contactar ahora
                 <ChevronRight className="w-4 h-4" />
               </Link>
             </div>
           </div>
-
-          {/* Ventana con imagen (Contenedor con 'group' para la animación) */}
-          <div className="hidden md:block md:col-span-5 relative group">
-            <div className="relative w-full h-[550px] rounded-t-full overflow-hidden border border-[#f5ebe0] shadow-2xl transform rotate-2 transition-transform duration-700 group-hover:rotate-0">
-              {/* La Imagen */}
-              <img
-                src="/model1.webp"
-                alt="Atmósfera del estudio"
-                className="absolute inset-0 w-full h-full object-cover scale-110 group-hover:scale-100 transition-transform duration-1000"
-              />
-
-              {/* Overlay degradado */}
-              <div className="absolute inset-0 bg-gradient-to-t from-[#5d5045]/60 via-transparent to-transparent" />
-
-              {/* Texto superpuesto */}
-              <div className="absolute bottom-12 left-0 right-0 text-center">
-                <p className="font-serif italic text-4xl text-white drop-shadow-md tracking-wide">
-                  "Sofisticado"
-                </p>
-                <div className="mt-3 mx-auto w-12 h-[1px] bg-white/60"></div>
-              </div>
-            </div>
-
-            {/* Elemento decorativo detrás */}
-            <div className="absolute -bottom-4 -right-4 w-24 h-24 bg-[#f5ebe0] rounded-full -z-10 border border-[#eaddcf]"></div>
-          </div>
         </div>
       </header>
-
       {/* Bento Grid Section */}
       <section className="max-w-7xl mx-auto px-6 md:px-16 py-24 md:py-40">
         <div className="mb-12 md:mb-20 text-center md:text-left">
@@ -197,7 +199,55 @@ export default function Landing() {
           })}
         </div>
       </section>
+      {/* Sección de Contacto */}
+      <section id="contacto" className="max-w-4xl mx-auto px-6 py-24 md:py-40">
+        <div className="bg-white rounded-[3rem] border border-[#eaddcf] p-8 md:p-16 shadow-2xl shadow-[#5d5045]/5">
+          <div className="text-center space-y-4 mb-12">
+            <p className="text-[10px] uppercase tracking-[0.4em] text-[#8c857d] font-black">
+              Contacto Directo
+            </p>
+            <h3 className="text-4xl md:text-5xl font-serif text-[#5d5045]">
+              Hablemos de tu <span className="italic">estudio.</span>
+            </h3>
+          </div>
 
+          <form className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-[#8c857d] ml-4">
+                Nombre
+              </label>
+              <input
+                type="text"
+                placeholder="TU NOMBRE"
+                className="w-full bg-[#FAF9F6] border border-[#eaddcf] py-4 px-6 rounded-2xl text-[11px] focus:outline-none focus:border-[#5d5045] transition-all"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-[#8c857d] ml-4">
+                Email
+              </label>
+              <input
+                type="email"
+                placeholder="hola@tuestudio.com"
+                className="w-full bg-[#FAF9F6] border border-[#eaddcf] py-4 px-6 rounded-2xl text-[11px] focus:outline-none focus:border-[#5d5045] transition-all"
+              />
+            </div>
+            <div className="md:col-span-2 space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-[#8c857d] ml-4">
+                Mensaje
+              </label>
+              <textarea
+                rows="4"
+                placeholder="¿CÓMO PODEMOS AYUDARTE?"
+                className="w-full bg-[#FAF9F6] border border-[#eaddcf] py-4 px-6 rounded-2xl text-[11px] focus:outline-none focus:border-[#5d5045] transition-all resize-none"
+              ></textarea>
+            </div>
+            <button className="md:col-span-2 bg-[#5d5045] text-[#f5ebe0] py-5 rounded-full text-[11px] font-black uppercase tracking-[0.2em] hover:bg-[#4a3f36] transition shadow-lg active:scale-95">
+              Enviar Mensaje
+            </button>
+          </form>
+        </div>
+      </section>
       <footer className="text-center py-10 border-t border-[#f5ebe0] text-[9px] text-[#8c857d] uppercase tracking-[0.4em] font-bold">
         BeautyTask © 2026 • Gestión Profesional de Salones
       </footer>
