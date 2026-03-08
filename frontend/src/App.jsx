@@ -15,7 +15,6 @@ import CalendarView from "./components/CalendarView";
 import TeamView from "./components/TeamView";
 import MobileNavbar from "./components/MobileNavbar";
 import StatsCharts from "./components/StatsCharts";
-import PaymentModal from "./components/PaymentModal";
 import ArchivedList from "./components/ArchivedList";
 import ClientsView from "./components/ClientsView";
 import Landing from "./components/Landing";
@@ -70,18 +69,13 @@ function App() {
   };
 
   const handleUpdateStatus = async (id, newStatus, extra = null) => {
-    if (newStatus === "completed" && !extra) {
-      const appo = appointments.find((a) => a.id === id);
-      setConfirmingAppo(appo);
-      return;
-    }
     try {
       await apiRequest(`/appointments/${id}/status`, "PATCH", {
         new_status: newStatus,
         final_price: extra?.price || 0,
         payment_method: extra?.method || "ninguno",
       });
-      setConfirmingAppo(null);
+      // Ya no necesitamos setConfirmingAppo(null) aquí porque el modal se cierra solo
       fetchInitialData();
     } catch (err) {
       setErrorMessage("No se pudo actualizar la cita");
@@ -167,33 +161,60 @@ function App() {
                           initialDate={preselectedDate}
                           onError={(msg) => setErrorMessage(msg)}
                         />
-                        <button
-                          onClick={handleLogout}
-                          className="md:hidden w-full bg-white/50 text-[10px] font-black text-red-400 uppercase border border-red-100 py-4 rounded-2xl shadow-sm active:bg-red-50 transition-all"
-                        >
-                          Cerrar Sesión del Salón
-                        </button>
                       </div>
                     )}
                   </aside>
 
                   <main className="lg:col-span-7 space-y-10">
-                    <nav className="hidden md:flex bg-[#e8ddd0]/50 backdrop-blur-sm p-2 rounded-4xl border border-[#e5e0d8]">
-                      {[
-                        "agenda",
-                        "calendario",
-                        "stats",
-                        "equipo",
-                        "clientes",
-                      ].map((tab) => (
-                        <button
-                          key={tab}
-                          onClick={() => setActiveTab(tab)}
-                          className={`flex-1 py-3 text-[10px] font-black uppercase rounded-3xl transition-all ${activeTab === tab ? "bg-white shadow-md" : "opacity-40"}`}
-                        >
-                          {tab === "stats" ? "Caja 📊" : tab}
-                        </button>
-                      ))}
+                    <nav className="hidden md:flex bg-[#e8ddd0]/50 backdrop-blur-sm p-1.5 rounded-full border border-[#e5e0d8] items-center">
+                      {/* Botones de Pestañas */}
+                      <div className="flex flex-1 gap-1">
+                        {[
+                          "agenda",
+                          "calendario",
+                          "stats",
+                          "equipo",
+                          "clientes",
+                        ].map((tab) => (
+                          <button
+                            key={tab}
+                            onClick={() => setActiveTab(tab)}
+                            className={`flex-1 py-3 text-[10px] font-black uppercase rounded-full transition-all ${
+                              activeTab === tab
+                                ? "bg-white shadow-sm text-[#5d5045]"
+                                : "opacity-40 hover:opacity-60"
+                            }`}
+                          >
+                            {tab === "stats" ? "Caja 📊" : tab}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Separador sutil */}
+                      <div className="w-[1px] h-4 bg-[#dcc7b1] mx-4" />
+
+                      {/* Botón de Salida Minimalista */}
+                      <button
+                        onClick={handleLogout}
+                        className="pr-4 pl-2 group flex items-center gap-2 transition-all"
+                        title="Cerrar Sesión"
+                      >
+                        <span className="text-[9px] font-black uppercase tracking-widest text-[#8c857d] group-hover:text-red-400 transition-colors">
+                          Salir
+                        </span>
+                        <div className="w-7 h-7 rounded-full bg-white/50 flex items-center justify-center group-hover:bg-red-50 transition-colors">
+                          <svg
+                            size={14}
+                            className="w-3.5 h-3.5 text-[#8c857d] group-hover:text-red-400"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={3}
+                          >
+                            <path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                          </svg>
+                        </div>
+                      </button>
                     </nav>
 
                     <section className="space-y-5">
@@ -268,18 +289,6 @@ function App() {
                   setActiveTab={setActiveTab}
                   onLogout={handleLogout}
                 />
-                {confirmingAppo && (
-                  <PaymentModal
-                    appointment={confirmingAppo}
-                    onClose={() => setConfirmingAppo(null)}
-                    onConfirm={(id, p, m) =>
-                      handleUpdateStatus(id, "completed", {
-                        price: p,
-                        method: m,
-                      })
-                    }
-                  />
-                )}
               </div>
             ) : (
               <Navigate to="/login" />

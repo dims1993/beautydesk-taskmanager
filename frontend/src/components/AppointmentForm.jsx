@@ -1,5 +1,14 @@
 import { useState, useEffect } from "react";
 import { useApi } from "../hooks/useApi";
+import {
+  Sparkles,
+  MessageCircle,
+  Calendar,
+  User,
+  Phone,
+  CheckCircle2,
+  X,
+} from "lucide-react";
 
 const AppointmentForm = ({
   services,
@@ -11,7 +20,7 @@ const AppointmentForm = ({
 }) => {
   const { apiRequest } = useApi();
   const [loading, setLoading] = useState(false);
-  const [lastCreated, setLastCreated] = useState(null); // Para el botón de WhatsApp
+  const [lastCreated, setLastCreated] = useState(null);
 
   const [formData, setFormData] = useState({
     client_name: "",
@@ -52,7 +61,7 @@ const AppointmentForm = ({
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setLastCreated(null); // Resetear aviso previo
+    setLastCreated(null);
 
     try {
       const existingClient = clients.find(
@@ -72,8 +81,8 @@ const AppointmentForm = ({
         const apellidos = nameParts.slice(1).join(" ");
 
         const newClient = await apiRequest("/clients/", "POST", {
-          nombre: nombre,
-          apellidos: apellidos,
+          nombre,
+          apellidos,
           telefono: formData.client_phone,
           email: formData.client_email || null,
         });
@@ -90,7 +99,6 @@ const AppointmentForm = ({
 
       await apiRequest("/appointments/", "POST", payload);
 
-      // Guardamos datos para el link de WhatsApp antes de limpiar
       const formattedDate = new Date(formData.start_time).toLocaleString(
         "es-ES",
         {
@@ -133,142 +141,163 @@ const AppointmentForm = ({
     );
 
   return (
-    <div className="bg-white/80 backdrop-blur-md rounded-[3rem] shadow-xl border border-white/20 sticky top-8 z-50">
-      <div className="bg-[#e8ddd0] p-8 text-center rounded-t-[3rem]">
-        <h2 className="text-xl font-bold tracking-[0.25em] uppercase text-[#5d5045]">
-          Nueva Cita
+    <div className="bg-white rounded-[3rem] shadow-2xl shadow-[#5d5045]/10 border border-[#eaddcf] overflow-hidden sticky top-8 z-40 transition-all duration-500">
+      {/* Cabecera Editorial */}
+      <div className="bg-[#FAF9F6] p-10 border-b border-[#eaddcf] text-center space-y-2">
+        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#8c857d]">
+          Concierge
+        </p>
+        <h2 className="text-3xl font-serif text-[#5d5045]">
+          Reserva de <span className="italic opacity-80">Experiencias</span>
         </h2>
       </div>
 
-      <form onSubmit={handleSubmit} className="p-8 space-y-5">
-        {/* AVISO DE WHATSAPP POST-CITA */}
+      <form onSubmit={handleSubmit} className="p-8 md:p-10 space-y-6">
+        {/* AVISO DE WHATSAPP (Rediseñado) */}
         {lastCreated && (
-          <div className="mb-4 p-5 bg-green-50 border border-green-200 rounded-3xl animate-fadeIn">
-            <p className="text-[9px] font-black text-green-700 uppercase tracking-widest text-center mb-3">
-              ✅ Cita guardada correctamente
-            </p>
+          <div className="p-6 bg-[#f5f1ed] rounded-3xl border border-[#eaddcf] animate-in fade-in slide-in-from-top-4 duration-500 relative">
+            <button
+              onClick={() => setLastCreated(null)}
+              className="absolute top-4 right-4 text-[#8c857d] hover:text-[#5d5045]"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <div className="flex items-center gap-3 mb-4">
+              <CheckCircle2 className="w-5 h-5 text-[#5d5045]" />
+              <p className="text-[10px] font-black uppercase tracking-widest text-[#5d5045]">
+                Confirmación Lista
+              </p>
+            </div>
             <button
               type="button"
               onClick={() => {
                 const msg = `Hola ${lastCreated.name}, te confirmo tu cita en BeautyTask 💇‍♀️ para el ${lastCreated.date}. ¡Te esperamos!`;
-                const cleanPhone = lastCreated.phone.replace(/\s+/g, "");
                 window.open(
-                  `https://wa.me/34${cleanPhone}?text=${encodeURIComponent(msg)}`,
+                  `https://wa.me/34${lastCreated.phone.replace(/\s+/g, "")}?text=${encodeURIComponent(msg)}`,
                   "_blank",
                 );
                 setLastCreated(null);
               }}
-              className="w-full py-3 bg-[#25D366] text-white rounded-xl font-bold uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 shadow-md hover:scale-[1.02] transition-transform"
+              className="w-full py-4 bg-[#5d5045] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-3 hover:bg-[#4a3f36] transition-all"
             >
-              Enviar WhatsApp 💬
-            </button>
-            <button
-              type="button"
-              onClick={() => setLastCreated(null)}
-              className="w-full mt-2 text-[8px] text-gray-400 uppercase font-bold text-center"
-            >
-              Cerrar aviso
+              <MessageCircle className="w-4 h-4" /> Enviar WhatsApp
             </button>
           </div>
         )}
 
-        <div className="space-y-2 relative">
-          <label className="text-[10px] font-black text-[#a39485] uppercase tracking-widest ml-2">
-            Cliente{" "}
+        {/* Campo: Cliente */}
+        <div className="space-y-3 relative">
+          <label className="flex justify-between items-center px-2 text-[10px] font-black text-[#8c857d] uppercase tracking-[0.2em]">
+            <span>Cliente</span>
             {isNewClient && (
-              <span className="text-amber-500 ml-2">✨ Nuevo</span>
+              <span className="text-[#c4a484] flex items-center gap-1 font-black">
+                <Sparkles className="w-3 h-3" /> Nuevo Cliente
+              </span>
             )}
           </label>
-          <input
-            required
-            className="w-full px-6 py-4 bg-[#fcfaf8] border border-[#eee8e2] rounded-2xl outline-none focus:border-[#dcc7b1]"
-            placeholder="Nombre completo"
-            value={formData.client_name}
-            onChange={(e) =>
-              setFormData({ ...formData, client_name: e.target.value })
-            }
-            onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-          />
+          <div className="relative">
+            <User className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#c4bdb5]" />
+            <input
+              required
+              className="w-full pl-14 pr-6 py-5 bg-[#FAF9F6] border border-[#eaddcf] rounded-2xl outline-none focus:border-[#5d5045] focus:bg-white transition-all text-xs font-bold tracking-wider text-[#5d5045] placeholder:text-[#c4bdb5]"
+              placeholder="NOMBRE COMPLETO"
+              value={formData.client_name}
+              onChange={(e) =>
+                setFormData({ ...formData, client_name: e.target.value })
+              }
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+            />
+          </div>
 
           {showSuggestions && suggestions.length > 0 && (
-            <div className="absolute z-[60] w-full mt-1 bg-white border border-[#eee8e2] rounded-2xl shadow-2xl overflow-hidden">
+            <div className="absolute z-[60] w-full mt-2 bg-white border border-[#eaddcf] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
               {suggestions.map((c, i) => (
                 <div
                   key={i}
                   onClick={() => selectClientFromList(c)}
-                  className="px-6 py-4 hover:bg-[#f8f5f2] cursor-pointer border-b border-[#fcfaf8] flex justify-between items-center"
+                  className="px-6 py-4 hover:bg-[#FAF9F6] cursor-pointer border-b border-[#f5f1ed] last:border-0 flex justify-between items-center transition-colors"
                 >
-                  <div>
-                    <p className="text-sm font-bold text-[#5d5045]">
+                  <div className="flex flex-col">
+                    <span className="text-xs font-black text-[#5d5045] uppercase tracking-wider">
                       {c.nombre} {c.apellidos}
-                    </p>
-                    <p className="text-[9px] font-black text-[#dcc7b1] uppercase tracking-widest">
+                    </span>
+                    <span className="text-[9px] text-[#8c857d] font-medium tracking-[0.1em]">
                       {c.telefono}
-                    </p>
+                    </span>
                   </div>
+                  <ChevronRight className="w-4 h-4 text-[#eaddcf]" />
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        <div className="space-y-2">
-          <label
-            className={`text-[10px] font-black uppercase tracking-widest ml-2 ${isNewClient ? "text-amber-600" : "text-[#a39485]"}`}
-          >
-            Teléfono {isNewClient && "* (Obligatorio)"}
+        {/* Campo: Teléfono */}
+        <div className="space-y-3">
+          <label className="px-2 text-[10px] font-black text-[#8c857d] uppercase tracking-[0.2em]">
+            Teléfono {isNewClient && "*"}
           </label>
-          <input
-            required={isNewClient}
-            className={`w-full px-6 py-4 border rounded-2xl outline-none transition-all ${isNewClient ? "bg-amber-50 border-amber-200" : "bg-[#fcfaf8] border-[#eee8e2]"}`}
-            placeholder="600 000 000"
-            value={formData.client_phone}
-            onChange={(e) =>
-              setFormData({ ...formData, client_phone: e.target.value })
-            }
-          />
+          <div className="relative">
+            <Phone className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#c4bdb5]" />
+            <input
+              required={isNewClient}
+              className={`w-full pl-14 pr-6 py-5 border rounded-2xl outline-none transition-all text-xs font-bold tracking-wider ${isNewClient ? "bg-[#fdf8f3] border-[#c4a484]/30" : "bg-[#FAF9F6] border-[#eaddcf]"} focus:border-[#5d5045]`}
+              placeholder="600 000 000"
+              value={formData.client_phone}
+              onChange={(e) =>
+                setFormData({ ...formData, client_phone: e.target.value })
+              }
+            />
+          </div>
         </div>
 
-        <div className="space-y-2">
-          <label className="text-[10px] font-black text-[#a39485] uppercase tracking-widest ml-2">
-            Servicio
-          </label>
-          <select
-            className="w-full px-6 py-4 bg-[#fcfaf8] border border-[#eee8e2] rounded-2xl outline-none cursor-pointer"
-            value={formData.service_id}
-            onChange={(e) =>
-              setFormData({ ...formData, service_id: e.target.value })
-            }
-          >
-            {services.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name} ({s.duration} min)
-              </option>
-            ))}
-          </select>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {/* Campo: Servicio */}
+          <div className="space-y-3">
+            <label className="px-2 text-[10px] font-black text-[#8c857d] uppercase tracking-[0.2em]">
+              Servicio
+            </label>
+            <select
+              className="w-full px-6 py-5 bg-[#FAF9F6] border border-[#eaddcf] rounded-2xl outline-none cursor-pointer text-xs font-bold tracking-wider text-[#5d5045] appearance-none focus:border-[#5d5045] transition-all"
+              value={formData.service_id}
+              onChange={(e) =>
+                setFormData({ ...formData, service_id: e.target.value })
+              }
+            >
+              {services.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name.toUpperCase()}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Campo: Fecha y Hora */}
+          <div className="space-y-3">
+            <label className="px-2 text-[10px] font-black text-[#8c857d] uppercase tracking-[0.2em]">
+              Horario
+            </label>
+            <div className="relative">
+              <input
+                required
+                type="datetime-local"
+                className="w-full px-6 py-5 bg-[#FAF9F6] border border-[#eaddcf] rounded-2xl outline-none text-xs font-bold tracking-wider text-[#5d5045] focus:border-[#5d5045] transition-all"
+                value={formData.start_time}
+                onChange={(e) =>
+                  setFormData({ ...formData, start_time: e.target.value })
+                }
+              />
+            </div>
+          </div>
         </div>
 
-        <div className="space-y-2">
-          <label className="text-[10px] font-black text-[#a39485] uppercase tracking-widest ml-2">
-            Fecha y Hora
-          </label>
-          <input
-            required
-            type="datetime-local"
-            className="w-full px-6 py-4 bg-[#fcfaf8] border border-[#eee8e2] rounded-2xl outline-none"
-            value={formData.start_time}
-            onChange={(e) =>
-              setFormData({ ...formData, start_time: e.target.value })
-            }
-          />
-        </div>
-
+        {/* Botón de Acción Principal */}
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-5 bg-[#5d5045] text-[#f5f5f1] rounded-2xl font-bold uppercase text-[11px] tracking-[0.3em] shadow-lg disabled:opacity-50 transition-all hover:bg-[#4a3f35]"
+          className="w-full py-6 mt-4 bg-[#5d5045] text-[#f5ebe0] rounded-2xl font-black uppercase text-[11px] tracking-[0.4em] shadow-xl shadow-[#5d5045]/20 disabled:opacity-50 transition-all hover:bg-[#4a3f36] active:scale-[0.98]"
         >
-          {loading ? "Registrando..." : "Confirmar Cita"}
+          {loading ? "PROCESANDO..." : "CONFIRMAR CITA"}
         </button>
       </form>
     </div>

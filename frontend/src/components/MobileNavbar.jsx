@@ -1,34 +1,62 @@
+import React from "react";
+import {
+  Clock,
+  Calendar,
+  BarChart3,
+  Users,
+  UserSquare2,
+  LogOut,
+} from "lucide-react";
+
 const MobileNavbar = ({ activeTab, setActiveTab, onLogout }) => {
-  const navItems = [
-    { id: "agenda", label: "Inicio", icon: "🏠" },
-    { id: "calendario", label: "Citas", icon: "📅" },
-    { id: "stats", label: "Caja", icon: "📊" }, // <-- ¡Añadido!
-    { id: "equipo", label: "Equipo", icon: "👥" },
-    { id: "clientes", label: "Clientes", icon: "👥" },
+  const tabs = [
+    { id: "agenda", icon: Clock },
+    { id: "calendario", icon: Calendar },
+    { id: "stats", icon: BarChart3 },
+    { id: "equipo", icon: Users },
+    { id: "clientes", icon: UserSquare2 },
   ];
 
   return (
-    <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-[#eee8e2] px-4 py-4 flex justify-between items-center z-[90] shadow-[0_-10px_40px_rgba(93,80,69,0.08)]">
-      {navItems.map((item) => (
+    <nav className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 md:hidden w-auto">
+      {/* Contenedor ultra-compacto y translúcido */}
+      <div className="flex items-center gap-2 px-3 py-2 bg-white/40 backdrop-blur-md rounded-full border border-white/40 shadow-[0_8px_32px_rgba(93,80,69,0.1)]">
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`relative flex items-center justify-center w-10 h-10 rounded-full transition-all duration-500 ${
+                isActive
+                  ? "bg-[#5d5045] text-white shadow-md"
+                  : "text-[#5d5045] opacity-40"
+              }`}
+            >
+              <Icon size={16} strokeWidth={isActive ? 2.5 : 1.5} />
+
+              {/* Punto indicador para el estado activo */}
+              {isActive && (
+                <span className="absolute -bottom-1 w-1 h-1 bg-[#5d5045] rounded-full animate-pulse" />
+              )}
+            </button>
+          );
+        })}
+
+        {/* Separador tipo hilo */}
+        <div className="w-[1px] h-4 bg-[#5d5045]/10 mx-1" />
+
+        {/* Botón Salir más discreto */}
         <button
-          key={item.id}
-          onClick={() => setActiveTab(item.id)}
-          className={`flex flex-col items-center transition-all duration-300 flex-1 ${
-            activeTab === item.id
-              ? "text-[#5d5045] scale-110"
-              : "opacity-30 grayscale"
-          }`}
+          onClick={onLogout}
+          className="flex items-center justify-center w-10 h-10 rounded-full text-[#8c857d] opacity-40 hover:opacity-100 transition-opacity"
         >
-          <span className="text-xl">{item.icon}</span>
-          <span className="text-[8px] font-black uppercase mt-1 tracking-tighter text-center">
-            {item.label}
-          </span>
-          {activeTab === item.id && (
-            <div className="w-1 h-1 bg-[#5d5045] rounded-full mt-1"></div>
-          )}
+          <LogOut size={16} strokeWidth={1.5} />
         </button>
-      ))}
-    </div>
+      </div>
+    </nav>
   );
 };
 

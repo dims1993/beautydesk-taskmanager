@@ -1,96 +1,172 @@
-import { useApi } from "../hooks/useApi";
+import { useState } from "react";
+import {
+  Check,
+  X,
+  Clock,
+  Calendar as CalendarIcon,
+  MoreHorizontal,
+  Archive,
+  Edit3,
+} from "lucide-react";
+// Importamos los modales desde tu nuevo archivo
+import {
+  PaymentModal,
+  EditAppointmentModal,
+  ArchiveAppointmentModal,
+} from "./modals/AppointmentModals.jsx";
 
 const AppointmentList = ({ appointments, services, onUpdateStatus }) => {
-  // Función para calcular y formatear el rango: "14:00 - 14:45"
+  // Estados para controlar qué modal está abierto y con qué cita
+  const [selectedAppo, setSelectedAppo] = useState(null);
+  const [modalType, setModalType] = useState(null); // 'edit', 'payment', 'archive'
+
   const formatTimeRange = (startTime, durationMinutes = 30) => {
     const start = new Date(startTime);
     const end = new Date(start.getTime() + durationMinutes * 60000);
-
     const options = { hour: "2-digit", minute: "2-digit" };
-    return `${start.toLocaleTimeString("es-ES", options)} - ${end.toLocaleTimeString("es-ES", options)}`;
+    return `${start.toLocaleTimeString("es-ES", options)} — ${end.toLocaleTimeString("es-ES", options)}`;
   };
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString("es-ES", {
-      weekday: "short",
-      day: "numeric",
-      month: "short",
-    });
+    return new Date(dateString)
+      .toLocaleDateString("es-ES", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+      })
+      .toUpperCase();
+  };
+
+  // Handlers para abrir modales
+  const openModal = (type, appo) => {
+    setSelectedAppo(appo);
+    setModalType(type);
+  };
+
+  const closeModal = () => {
+    setSelectedAppo(null);
+    setModalType(null);
   };
 
   if (appointments.length === 0) {
     return (
-      <div className="text-center py-20 bg-white/40 rounded-[3rem] border-2 border-dashed border-[#e8ddd0]">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-[#a39485]">
-          No hay citas agendadas
+      <div className="flex flex-col items-center justify-center py-32 bg-[#FAF9F6] rounded-[3rem] border border-dashed border-[#eaddcf]">
+        <CalendarIcon className="w-8 h-8 text-[#c4bdb5] mb-4" />
+        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#8c857d]">
+          No hay experiencias programadas
         </p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      {appointments.map((appo) => {
-        const service = services.find((s) => s.id === appo.service_id);
-        // Suponiendo que tu objeto servicio tiene un campo 'duration'
-        const duration = service?.duration || 30;
+    <>
+      <div className="space-y-6">
+        {appointments.map((appo) => {
+          const service = services.find((s) => s.id === appo.service_id);
+          const duration = service?.duration || 30;
 
-        return (
-          <div
-            key={appo.id}
-            className="bg-white p-8 rounded-[2.5rem] border border-[#eee8e2] shadow-sm hover:border-[#dcc7b1] transition-all"
-          >
-            <div className="flex justify-between items-center">
-              <div className="space-y-1">
-                {/* ETIQUETA DE HORARIO DINÁMICO */}
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="bg-[#5d5045] text-white px-3 py-1 rounded-full text-[10px] font-black tracking-tighter">
-                    {formatTimeRange(appo.start_time, duration)}
-                  </span>
-                  <span className="text-[9px] font-black text-[#dcc7b1] uppercase tracking-widest">
-                    {duration} MIN
-                  </span>
+          return (
+            <div
+              key={appo.id}
+              className="group bg-white p-8 md:p-10 rounded-[3rem] border border-[#eaddcf] shadow-sm hover:shadow-2xl hover:shadow-[#5d5045]/5 transition-all duration-500"
+            >
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="bg-[#5d5045] text-[#f5ebe0] px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest">
+                      {formatTimeRange(appo.start_time, duration)}
+                    </span>
+                    <div className="flex items-center gap-1.5 text-[9px] font-black text-[#c4a484] uppercase tracking-widest">
+                      <Clock className="w-3 h-3" />
+                      {duration} MIN
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <h4 className="font-serif text-2xl md:text-3xl text-[#5d5045]">
+                      {appo.client_name}
+                    </h4>
+                    <div className="flex items-center gap-2">
+                      <p className="text-[10px] font-black text-[#8c857d] uppercase tracking-[0.2em]">
+                        {service?.name || "Servicio Premium"}
+                      </p>
+                      <span className="w-1 h-1 bg-[#eaddcf] rounded-full" />
+                      <p className="text-[10px] font-black text-[#5d5045] tracking-widest">
+                        {service?.price}€
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-2 border-t border-[#f5f1ed] w-fit">
+                    <CalendarIcon className="w-3.5 h-3.5 text-[#c4bdb5]" />
+                    <p className="text-[9px] text-[#8c857d] font-black tracking-[0.1em]">
+                      {formatDate(appo.start_time)}
+                    </p>
+                  </div>
                 </div>
 
-                <h4 className="font-bold text-[#5d5045] text-xl">
-                  {appo.client_name}
-                </h4>
+                {/* BOTONES DE ACCIÓN */}
+                <div className="flex items-center gap-3 self-end md:self-center">
+                  {/* Botón Editar */}
+                  <button
+                    onClick={() => openModal("edit", appo)}
+                    className="w-14 h-14 flex items-center justify-center bg-[#FAF9F6] text-[#c4bdb5] hover:text-[#5d5045] rounded-full border border-[#eaddcf] transition-all"
+                  >
+                    <Edit3 className="w-5 h-5" />
+                  </button>
 
-                <p className="text-[10px] font-black text-[#b5a798] uppercase tracking-widest mt-1">
-                  ✨ {service?.name || "Servicio"} • {service?.price}€
-                </p>
-
-                <p className="text-[11px] text-[#a39485] font-medium italic mt-2">
-                  📅 {formatDate(appo.start_time)}
-                </p>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={() => onUpdateStatus(appo.id, "completed")}
-                  className="w-12 h-12 flex items-center justify-center bg-[#f8f5f2] hover:bg-[#5d5045] hover:text-white rounded-2xl transition-all border border-[#eee8e2]"
-                  title="Completar"
-                >
-                  ✓
-                </button>
-
-                <button
-                  onClick={() => {
-                    if (window.confirm("¿Archivar esta cita?")) {
-                      onUpdateStatus(appo.id, "cancelled");
+                  {/* Botón Completar (Pago) */}
+                  <button
+                    onClick={() =>
+                      openModal("payment", { ...appo, price: service?.price })
                     }
-                  }}
-                  className="w-12 h-12 flex items-center justify-center bg-white hover:text-red-400 rounded-2xl border border-[#eee8e2] transition-all"
-                  title="Archivar"
-                >
-                  ×
-                </button>
+                    className="w-14 h-14 flex items-center justify-center bg-white text-[#8c857d] hover:bg-[#5d5045] hover:text-white rounded-full border border-[#eaddcf] transition-all shadow-sm"
+                  >
+                    <Check className="w-5 h-5" />
+                  </button>
+
+                  {/* Botón Archivar */}
+                  <button
+                    onClick={() => openModal("archive", appo)}
+                    className="w-14 h-14 flex items-center justify-center bg-white text-[#c4bdb5] hover:text-red-400 hover:border-red-100 rounded-full border border-[#eaddcf] transition-all"
+                  >
+                    <Archive className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        );
-      })}
-    </div>
+          );
+        })}
+      </div>
+
+      {/* RENDERIZADO DE MODALES */}
+      <EditAppointmentModal
+        isOpen={modalType === "edit"}
+        onClose={closeModal}
+        appointment={selectedAppo}
+        services={services}
+      />
+
+      <PaymentModal
+        isOpen={modalType === "payment"}
+        onClose={closeModal}
+        appointment={selectedAppo}
+        onConfirm={(id, price, method) => {
+          onUpdateStatus(id, "completed", { price, method });
+          closeModal();
+        }}
+      />
+
+      <ArchiveAppointmentModal
+        isOpen={modalType === "archive"}
+        onClose={closeModal}
+        onConfirm={() => {
+          onUpdateStatus(selectedAppo.id, "cancelled");
+          closeModal();
+        }}
+      />
+    </>
   );
 };
 
