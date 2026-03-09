@@ -3,7 +3,7 @@ from sqlmodel import Session, select
 from typing import List, Optional  # Añadimos Optional
 from datetime import timedelta
 from pydantic import BaseModel      # Añadimos BaseModel
-from app.db.session import get_session
+from app.core.db.session import get_session
 from app.models.appointment import Appointment
 from app.models.user import User
 from app.models.service import Service

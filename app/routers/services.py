@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlmodel import Session, select
 from typing import List
-from app.db.session import get_session
+from app.core.db.session import get_session
 from app.models import Service, User
 from app.dependencies import get_current_user
 

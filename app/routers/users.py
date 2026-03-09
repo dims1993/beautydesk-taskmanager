@@ -3,7 +3,7 @@ from sqlmodel import Session, select
 from typing import List
 from sqlalchemy import or_
 
-from app.db.session import get_session
+from app.core.db.session import get_session
 from app.models.user import User
 from app.schemas.user import UserCreate, UserOut
 from app.dependencies import get_current_user

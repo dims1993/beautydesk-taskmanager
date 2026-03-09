@@ -1,5 +1,5 @@
 # 1. Base de datos y Sesión
-from .db.session import engine, get_session, init_db
+from .core.db.session import engine, get_session, init_db
 
 # 2. Modelos (Tablas SQLModel)
 from .models.user import User

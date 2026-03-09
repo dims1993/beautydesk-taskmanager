@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
     
     # IMPORTANTE: Importa Session y engine aquí si no están
     from sqlmodel import Session
-    from app.db.session import engine # Asegúrate de que la ruta sea correcta
+    from app.core.db.session import engine # Asegúrate de que la ruta sea correcta
 
     try:
         seed_services()
