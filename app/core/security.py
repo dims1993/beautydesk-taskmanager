@@ -1,31 +1,24 @@
-from datetime import datetime, timedelta
+import os
+from datetime import datetime, timedelta, timezone
 from jose import jwt
 from passlib.context import CryptContext
 
-# Configuración
-SECRET_KEY = "tu_clave_secreta_super_segura"
+# Usa una variable de entorno o una clave por defecto (¡Cámbiala en Render!)
+SECRET_KEY = os.getenv("SECRET_KEY", "dev_secret_key_123")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # 24 horas para que no se cierre la sesión tan rápido
 
-# Configuración de Passlib para Argon2
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
-# --- LAS FUNCIONES QUE NECESITAS ---
-
-
 def get_password_hash(password: str):
-    """Encripta la contraseña plana (Usada en el registro)"""
     return pwd_context.hash(password)
 
-
 def verify_password(plain_password, hashed_password):
-    """Verifica si la contraseña coincide (Usada en el login)"""
     return pwd_context.verify(plain_password, hashed_password)
 
-
 def create_access_token(data: dict):
-    """Genera el token JWT"""
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    # Usamos timezone.utc para evitar el aviso de "obsoleto" de utcnow()
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)

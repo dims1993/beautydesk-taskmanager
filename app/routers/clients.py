@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlmodel import Session, select
 from typing import List
-from app.db.session import get_session
+from app.core.db.session import get_session
 from app.models.client import Client
 from app.schemas.client import ClientCreate, ClientOut
 from app.models.user import User
