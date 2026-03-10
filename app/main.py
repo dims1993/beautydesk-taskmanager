@@ -1,23 +1,20 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session
 from contextlib import asynccontextmanager
 from sqlalchemy import or_
 
+# Importacion interna de models
+from app.models import User, Organization, Service, Appointment
 # Importaciones internas de schemas
 from app import (
-    User, Token,
-    get_session, init_db, seed_services,
-    verify_password, create_access_token, get_password_hash,
+    Token, get_session, init_db, seed_services,
+    verify_password, create_access_token, 
 )
-from app.core.security import SECRET_KEY, ALGORITHM
 
-
-# 1. Importa el router
+# 1. Importación del router
 from app.routers import clients, users, appointments, services
-
-from app.dependencies import get_current_user
 
 # --- CONFIGURACIÓN Y CICLO DE VIDA LIFESPAN---
 
@@ -25,11 +22,6 @@ from app.dependencies import get_current_user
 async def lifespan(app: FastAPI):
     print("🚀 Iniciando BeautyTask API...")
     init_db()
-    
-    # IMPORTANTE: Importa Session y engine aquí si no están
-    from sqlmodel import Session
-    from app.core.db.session import engine # Asegúrate de que la ruta sea correcta
-
     try:
         seed_services()
         print("✅ Servicios base verificados.")
@@ -40,14 +32,23 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="BeautyTask API", version="0.1.0", lifespan=lifespan)
 
-# Middlewares
+# CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:5173"], # El puerto de tu Vite/React
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Middleware para Google (COOP)
+@app.middleware("http")
+async def add_coop_header(request: Request, call_next):
+    response = await call_next(request)
+    # Esto es lo que permite que el popup de Google hable con tu App
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin-allow-popups"
+    response.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
+    return response
 
 # Registrar los routers
 app.include_router(clients.router)
@@ -68,7 +69,12 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
 
     access_token = create_access_token(data={"sub": user.email})
-    return {"access_token": access_token, "token_type": "bearer"}
+
+    return {"access_token": access_token, 
+            "token_type": "bearer",
+            "role": user.role,
+            "organization_id": user.organization_id
+            }
 
 
 @app.get("/")
