@@ -14,7 +14,7 @@ from app import (
 )
 
 # 1. Importación del router
-from app.routers import clients, users, appointments, services
+from app.routers import clients, users, appointments, services, auth
 
 # --- CONFIGURACIÓN Y CICLO DE VIDA LIFESPAN---
 
@@ -31,6 +31,8 @@ async def lifespan(app: FastAPI):
     print("🛑 Cerrando recursos...")
 
 app = FastAPI(title="BeautyTask API", version="0.1.0", lifespan=lifespan)
+
+app.include_router(auth.router)
 
 # CORS
 app.add_middleware(

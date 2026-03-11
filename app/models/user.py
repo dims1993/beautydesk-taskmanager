@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 
 # 1. Definimos los roles de forma profesional
 class UserRole(str, Enum):
-    SUPER_ADMIN = "super_admin"  # Tú (control total, gestionas suscripciones)
+    SUPER_ADMIN = "super_admin"  # Yo (control total, gestion de suscripciones)
     OWNER = "owner"              # El dueño del salón (gestiona su equipo)
     STAFF = "staff"              # Los empleados (ven sus propias citas)
     CLIENT = "client"            # El cliente final (opcional, si permites autoregistro)
