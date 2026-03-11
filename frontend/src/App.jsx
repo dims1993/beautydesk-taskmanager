@@ -6,6 +6,7 @@ import {
   Routes,
   Route,
   Navigate,
+  Link,
 } from "react-router-dom";
 
 // Componentes
@@ -13,7 +14,6 @@ import LoginView from "./components/LoginView";
 import AppointmentForm from "./components/AppointmentForm";
 import AppointmentList from "./components/AppointmentList";
 import CalendarView from "./components/CalendarView";
-import TeamView from "./components/TeamView";
 import MobileNavbar from "./components/MobileNavbar";
 import StatsCharts from "./components/StatsCharts";
 import ArchivedList from "./components/ArchivedList";
@@ -21,6 +21,9 @@ import ClientsView from "./components/ClientsView";
 import Landing from "./components/Landing";
 import RegisterView from "./components/RegisterView";
 import ContactoView from "./components/ContactoView";
+import RoleGuard from "./components/RoleGuard";
+import SuperAdminPanel from "./components/SuperAdminPanel";
+import TeamView from "./components/TeamView";
 
 function App() {
   const { apiRequest } = useApi();
@@ -36,7 +39,6 @@ function App() {
   const [errorMessage, setErrorMessage] = useState("");
   const [preselectedDate, setPreselectedDate] = useState("");
   const [clients, setClients] = useState([]);
-  const [confirmingAppo, setConfirmingAppo] = useState(null);
   const [isRegistering, setIsRegistering] = useState(false);
 
   const fetchInitialData = async () => {
@@ -76,7 +78,6 @@ function App() {
         final_price: extra?.price || 0,
         payment_method: extra?.method || "ninguno",
       });
-      // Ya no necesitamos setConfirmingAppo(null) aquí porque el modal se cierra solo
       fetchInitialData();
     } catch (err) {
       setErrorMessage("No se pudo actualizar la cita");
@@ -154,22 +155,19 @@ function App() {
                       className={`lg:col-span-5 ${activeTab !== "agenda" ? "hidden lg:block" : "block"}`}
                     >
                       {currentUser && (
-                        <div className="space-y-4">
-                          <AppointmentForm
-                            services={services}
-                            clients={clients}
-                            currentUser={currentUser}
-                            onSuccess={fetchInitialData}
-                            initialDate={preselectedDate}
-                            onError={(msg) => setErrorMessage(msg)}
-                          />
-                        </div>
+                        <AppointmentForm
+                          services={services}
+                          clients={clients}
+                          currentUser={currentUser}
+                          onSuccess={fetchInitialData}
+                          initialDate={preselectedDate}
+                          onError={(msg) => setErrorMessage(msg)}
+                        />
                       )}
                     </aside>
 
                     <main className="lg:col-span-7 space-y-10">
                       <nav className="hidden md:flex bg-[#e8ddd0]/50 backdrop-blur-sm p-1.5 rounded-full border border-[#e5e0d8] items-center">
-                        {/* Botones de Pestañas */}
                         <div className="flex flex-1 gap-1">
                           {[
                             "agenda",
@@ -192,22 +190,29 @@ function App() {
                           ))}
                         </div>
 
-                        {/* Separador sutil */}
                         <div className="w-[1px] h-4 bg-[#dcc7b1] mx-4" />
 
-                        {/* Botón de Salida Minimalista */}
+                        {/* BOTÓN SECRETO PANEL MAESTRO (Solo Super Admin) */}
+                        {currentUser?.role === "super_admin" && (
+                          <Link
+                            to="/master-panel"
+                            className="mr-2 p-2 hover:bg-white rounded-full transition-all"
+                            title="Panel Maestro"
+                          >
+                            👑
+                          </Link>
+                        )}
+
                         <button
                           onClick={handleLogout}
                           className="pr-4 pl-2 group flex items-center gap-2 transition-all"
-                          title="Cerrar Sesión"
                         >
-                          <span className="text-[9px] font-black uppercase tracking-widest text-[#8c857d] group-hover:text-red-400 transition-colors">
+                          <span className="text-[9px] font-black uppercase tracking-widest text-[#8c857d] group-hover:text-red-400">
                             Salir
                           </span>
-                          <div className="w-7 h-7 rounded-full bg-white/50 flex items-center justify-center group-hover:bg-red-50 transition-colors">
+                          <div className="w-7 h-7 rounded-full bg-white/50 flex items-center justify-center group-hover:bg-red-50">
                             <svg
-                              size={14}
-                              className="w-3.5 h-3.5 text-[#8c857d] group-hover:text-red-400"
+                              className="w-3.5 h-3.5"
                               fill="none"
                               viewBox="0 0 24 24"
                               stroke="currentColor"
@@ -247,12 +252,7 @@ function App() {
                             }}
                           />
                         )}
-                        {activeTab === "equipo" && (
-                          <TeamView
-                            allAppointments={appointments}
-                            services={services}
-                          />
-                        )}
+                        {activeTab === "equipo" && <TeamView />}
                         {activeTab === "stats" && (
                           <div className="animate-fadeIn space-y-6">
                             <StatsCharts
@@ -271,7 +271,7 @@ function App() {
                           <ClientsView
                             clients={clients}
                             onRefresh={fetchInitialData}
-                            onError={(msg) => setErrorMessage(msg)}
+                            onError={setErrorMessage}
                             onAddClient={async (nc) => {
                               try {
                                 await apiRequest("/clients/", "POST", nc);
@@ -285,7 +285,6 @@ function App() {
                       </section>
                     </main>
                   </div>
-
                   <MobileNavbar
                     activeTab={activeTab}
                     setActiveTab={setActiveTab}
@@ -297,6 +296,21 @@ function App() {
               )
             }
           />
+
+          <Route
+            path="/master-panel"
+            element={
+              <RoleGuard
+                allowedRoles={["super_admin"]}
+                user={currentUser}
+                isLoggedIn={isLoggedIn}
+              >
+                <SuperAdminPanel />
+              </RoleGuard>
+            }
+          />
+
+          <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </Router>
     </GoogleOAuthProvider>

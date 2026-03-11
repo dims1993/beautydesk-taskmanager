@@ -48,3 +48,39 @@ def delete_user(user_id: int, db: Session = Depends(get_session)):
         raise HTTPException(status_code=404, detail="User not found")
     db.delete(user)
     db.commit()
+
+
+@router.get("/team", response_model=list[User])
+async def get_team(
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    # Solo devolvemos los usuarios que pertenecen a la misma organización
+    statement = select(User).where(User.organization_id == current_user.organization_id)
+    team = db.exec(statement).all()
+    return team
+
+@router.post("/team", response_model=User)
+async def add_team_member(
+    user_in: dict, 
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    # 1. Comprobar si el email ya existe
+    statement = select(User).where(User.email == user_in["email"])
+    if db.exec(statement).first():
+        raise HTTPException(status_code=400, detail="Este correo ya está registrado")
+
+    # 2. Crear el nuevo miembro vinculado a la misma organización
+    new_user = User(
+        email=user_in["email"],
+        username=user_in.get("username") or user_in["email"].split('@')[0],
+        role=user_in.get("role", "staff"),
+        organization_id=current_user.organization_id, # El "pegamento" que los une
+        password_hash="google_auth" # Placeholder para Google
+    )
+    
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
