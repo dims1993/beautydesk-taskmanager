@@ -54,4 +54,26 @@ async def create_new_salon_admin(
     except Exception as e:
         db.rollback() # Si algo falla, limpiamos la base de datos
         print(f"Error creando salón/admin: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        
+@router.get("/organizations", response_model=List[dict])
+async def get_all_organizations(
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    # Solo el Super Admin puede ver la lista global de salones
+    if current_user.role != "super_admin":
+        raise HTTPException(status_code=403, detail="No autorizado")
+
+    # Esta consulta trae el nombre de la organización y cuenta sus usuarios
+    # (Asegúrate de tener la relación 'users' en tu modelo Organization)
+    statement = select(Organization)
+    results = db.exec(statement).all()
+    
+    return [
+        {
+            "id": org.id,
+            "name": org.name,
+            "created_at": org.created_at if hasattr(org, 'created_at') else None,
+            "user_count": len(org.users) # Esto requiere relationship("User", back_populates="organization")
+        } for org in results
+    ]

@@ -24,6 +24,7 @@ import ContactoView from "./components/ContactoView";
 import RoleGuard from "./components/RoleGuard";
 import SuperAdminPanel from "./components/SuperAdminPanel";
 import TeamView from "./components/TeamView";
+import { LayoutDashboard } from "lucide-react";
 
 function App() {
   const { apiRequest } = useApi();
@@ -199,7 +200,11 @@ function App() {
                             className="mr-2 p-2 hover:bg-white rounded-full transition-all"
                             title="Panel Maestro"
                           >
-                            👑
+                            <LayoutDashboard
+                              size={18}
+                              className="text-[#a39485] group-hover:text-[#5d5045] transition-colors"
+                              strokeWidth={2.5}
+                            />
                           </Link>
                         )}
 

@@ -5,6 +5,7 @@ from sqlalchemy import or_
 
 from app.core.db.session import get_session
 from app.models.user import User
+from app.models.organization import Organization
 from app.schemas.user import UserCreate, UserOut
 from app.dependencies import get_current_user
 from app.core.security import get_password_hash
@@ -84,3 +85,22 @@ async def add_team_member(
     db.commit()
     db.refresh(new_user)
     return new_user
+
+@router.delete("/organizations/{org_id}")
+async def delete_organization(
+    org_id: str,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role != "super_admin":
+        raise HTTPException(status_code=403, detail="No autorizado")
+
+    statement = select(Organization).where(Organization.id == org_id)
+    org = db.exec(statement).first()
+    
+    if not org:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+        
+    db.delete(org)
+    db.commit()
+    return {"message": "Organización eliminada"}
