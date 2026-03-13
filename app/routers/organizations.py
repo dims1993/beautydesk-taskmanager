@@ -4,13 +4,13 @@ from typing import List
 
 # Importas la sesión y la seguridad
 from app.core.db.session import get_session
-from app.core.security import get_current_user 
+from app.dependencies import get_current_user 
 
 # Importas tus modelos
 from app.models import User, Organization
 
 # Ojo: si esto va en app/routers/users.py, el prefix suele ser "/users"
-router = APIRouter(prefix="/users", tags=["users"])
+router = APIRouter(tags=["organizations"])
 
 @router.post("/create-tenant")
 async def create_new_salon_admin(
@@ -60,20 +60,23 @@ async def get_all_organizations(
     db: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    # Solo el Super Admin puede ver la lista global de salones
     if current_user.role != "super_admin":
         raise HTTPException(status_code=403, detail="No autorizado")
 
-    # Esta consulta trae el nombre de la organización y cuenta sus usuarios
-    # (Asegúrate de tener la relación 'users' en tu modelo Organization)
     statement = select(Organization)
     results = db.exec(statement).all()
     
-    return [
-        {
+    org_list = []
+    for org in results:
+        # Hacemos una cuenta manual rápida para evitar el error de relación
+        # Si no tienes la relación configurada, esto no fallará
+        user_statement = select(User).where(User.organization_id == org.id)
+        users_in_org = db.exec(user_statement).all()
+        
+        org_list.append({
             "id": org.id,
             "name": org.name,
-            "created_at": org.created_at if hasattr(org, 'created_at') else None,
-            "user_count": len(org.users) # Esto requiere relationship("User", back_populates="organization")
-        } for org in results
-    ]
+            "user_count": len(users_in_org)
+        })
+    
+    return org_list

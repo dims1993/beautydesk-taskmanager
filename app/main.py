@@ -14,7 +14,7 @@ from app import (
 )
 
 # 1. Importación del router
-from app.routers import clients, users, appointments, services, auth
+from app.routers import clients, users, appointments, services, auth, organizations
 
 # --- CONFIGURACIÓN Y CICLO DE VIDA LIFESPAN---
 
@@ -32,7 +32,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="BeautyTask API", version="0.1.0", lifespan=lifespan)
 
-app.include_router(auth.router)
 
 # CORS
 app.add_middleware(
@@ -47,8 +46,9 @@ app.add_middleware(
 @app.middleware("http")
 async def add_coop_header(request: Request, call_next):
     response = await call_next(request)
-    # Esto es lo que permite que el popup de Google hable con tu App
+    # Estos tres son el "trío dinámico" para que Google Auth no falle
     response.headers["Cross-Origin-Opener-Policy"] = "same-origin-allow-popups"
+    response.headers["Cross-Origin-Embedder-Policy"] = "require-corp" # Opcional, pruébalo si sigue fallando
     response.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
     return response
 
@@ -57,6 +57,8 @@ app.include_router(clients.router)
 app.include_router(users.router)
 app.include_router(appointments.router)
 app.include_router(services.router)
+app.include_router(organizations.router, prefix="/users")
+app.include_router(auth.router)
 
 # --- ENDPOINTS DE AUTENTICACIÓN ---
 
