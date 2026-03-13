@@ -7,7 +7,7 @@ from app.core.db.session import get_session
 from app.dependencies import get_current_user 
 
 # Importas tus modelos
-from app.models import User, Organization
+from app.models import User, Organization, UserRole
 
 # Ojo: si esto va en app/routers/users.py, el prefix suele ser "/users"
 router = APIRouter(tags=["organizations"])
@@ -29,14 +29,14 @@ async def create_new_salon_admin(
         # 2. Crear la Organización
         new_org = Organization(name=data["salon_name"])
         db.add(new_org)
-        db.commit()
-        db.refresh(new_org)
+        db.add(new_org)
+        db.flush() #Usamos flush para tener el ID sin cerrar la transacción aún
 
         # 3. Crear el Usuario Admin vinculado a esa Org
         new_admin = User(
             email=data["email"],
             username=data.get("username") or data["email"].split('@')[0],
-            role="admin",
+            role=UserRole.OWNER,
             organization_id=new_org.id,
             password_hash="google_auth"
         )
@@ -54,6 +54,7 @@ async def create_new_salon_admin(
     except Exception as e:
         db.rollback() # Si algo falla, limpiamos la base de datos
         print(f"Error creando salón/admin: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
         
 @router.get("/organizations", response_model=List[dict])
 async def get_all_organizations(

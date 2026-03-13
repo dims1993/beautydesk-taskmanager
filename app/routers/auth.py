@@ -1,10 +1,10 @@
 import os
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel import Session, select # Añadimos select
+from sqlmodel import Session, select
 from google.oauth2 import id_token
 from google.auth.transport import requests
 from app.core.db.session import get_session
-from app.models import User # Importación limpia desde el __init__ de ayer
+from app.models import User 
 from app.schemas.token import Token 
 from app.core.security import create_access_token 
 
@@ -15,26 +15,32 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 @router.post("/google", response_model=Token)
 async def auth_google(data: dict, db: Session = Depends(get_session)):
     token = data.get("token")
+    
     if not token:
         raise HTTPException(status_code=400, detail="Token no proporcionado")
         
     try:
-        # 1. Validar con Google
+        # 1. Validar el token con los servidores de Google
         idinfo = id_token.verify_oauth2_token(token, requests.Request(), GOOGLE_CLIENT_ID)
         email = idinfo['email']
         
-        # 2. Buscar usuario (Sintaxis SQLModel)
+        # 2. Buscar si el usuario existe en nuestra base de datos
+        # (Ya sea porque lo creaste como SuperAdmin o como Admin de salón)
         statement = select(User).where(User.email == email)
         user = db.exec(statement).first()
         
-      # 3. CAMBIO CLAVE: Si no existe, lanzamos error en lugar de crear
+        # 3. CONTROL DE ACCESO: Si no está en la DB, no entra.
         if not user:
+            print(f"🚫 Intento de acceso denegado para: {email}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Acceso denegado. Este correo no está registrado como profesional en BeautyTask."
             )
-        # 4. Generar el JWT (usando el email como 'sub')
+
+        # 4. Generar el JWT de nuestra propia App
         access_token = create_access_token(data={"sub": user.email})
+        
+        print(f"✅ Login exitoso: {user.email} (Rol: {user.role})")
         
         return {
             "access_token": access_token,
@@ -42,12 +48,12 @@ async def auth_google(data: dict, db: Session = Depends(get_session)):
             "role": user.role,
             "organization_id": user.organization_id
         }
+
     except ValueError:
         raise HTTPException(status_code=400, detail="Token de Google inválido")
     except HTTPException as e:
-        # Si ya es una HTTPException (como nuestro 403), la lanzamos tal cual
+        # Re-lanzamos el 403 para que el frontend lo reciba bien
         raise e
     except Exception as e:
-        # Solo lo que sea realmente un error inesperado (fallo de DB, etc.) cae aquí
-        print(f"Error inesperado en Auth: {e}")
+        print(f"❌ Error inesperado en Auth: {str(e)}")
         raise HTTPException(status_code=500, detail="Error interno del servidor")

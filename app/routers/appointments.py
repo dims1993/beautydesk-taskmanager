@@ -22,17 +22,29 @@ class StatusUpdate(BaseModel):
 
 # --- ENDPOINTS ---
 
-@router.get("/", response_model=List[AppointmentOut])
-def get_appointments(
-    db: Session = Depends(get_session), 
+@router.get("/")
+async def get_appointments(
+    db: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    statement = select(Appointment).where(
-        Appointment.staff_id == current_user.id,
-        Appointment.status != "deleted"
-    )
-    return db.exec(statement).all()
-
+    try:
+        statement = select(Appointment)
+        
+        # Filtro multi-tenant
+        if current_user.role != "super_admin":
+            # Si el admin no tiene org_id, no devolvemos error, devolvemos vacío
+            if not current_user.organization_id:
+                return []
+            statement = statement.where(Appointment.organization_id == current_user.organization_id)
+        
+        results = db.exec(statement).all()
+        return results
+        
+    except Exception as e:
+        print(f"❌ Error en GET appointments: {e}")
+        # Devolvemos una lista vacía en lugar de un 500 para no romper el CORS
+        return []
+    
 @router.post("/", response_model=AppointmentOut)
 async def create_appointment(
     data: AppointmentCreate, 

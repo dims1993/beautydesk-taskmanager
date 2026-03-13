@@ -104,3 +104,32 @@ async def delete_organization(
     db.delete(org)
     db.commit()
     return {"message": "Organización eliminada"}
+
+@router.delete("/team/{user_id}")
+async def delete_team_member(
+    user_id: int,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    # 1. Buscamos al usuario que queremos eliminar
+    statement = select(User).where(User.id == user_id)
+    user_to_delete = db.exec(statement).first()
+
+    if not user_to_delete:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    # 2. SEGURIDAD: Un admin de salón solo puede borrar a gente DE SU salón
+    # (A menos que seas Super Admin, que puedes borrar a cualquiera)
+    if current_user.role != "super_admin":
+        if user_to_delete.organization_id != current_user.organization_id:
+            raise HTTPException(status_code=403, detail="No tienes permiso para eliminar a este usuario")
+        
+        # Evitar que se borre a sí mismo
+        if user_to_delete.id == current_user.id:
+            raise HTTPException(status_code=400, detail="No puedes eliminarte a ti mismo")
+
+    # 3. Borramos
+    db.delete(user_to_delete)
+    db.commit()
+    
+    return {"detail": "Acceso revocado correctamente"}

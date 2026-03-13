@@ -71,38 +71,94 @@ export default function Landing() {
       </nav>
 
       {/* Hero */}
-      <header className="max-w-7xl mx-auto mt-0 md:mt-24 px-0 md:px-16 pb-20 md:pb-32 border-b border-[#eaddcf]">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-0 md:gap-20">
-          {/* 1. CONTENEDOR DE IMAGEN (Unificado) */}
+      <header className="max-w-7xl mx-auto mt-0 md:mt-16 px-0 md:px-16 pb-20 md:pb-32 border-b border-[#eaddcf]/50">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-12 md:gap-20">
+          {/* 1. COMPOSICIÓN ELEGANTE DE TRES IMÁGENES DE APP (MULTI-DEVICE SHOWCASE) */}
           {/* order-first md:order-last: Arriba en móvil, Derecha en escritorio */}
-          <div className="relative h-[45vh] md:h-[600px] w-full md:w-[45%] flex-shrink-0 overflow-hidden md:rounded-3xl shadow-sm order-first md:order-last">
-            <img
-              src="/model1.webp"
-              alt="Atmósfera del estudio"
-              className="absolute inset-0 w-full h-full object-cover object-center"
-            />
-            {/* Degradado inferior solo para móvil para suavizar la transición al texto */}
-            <div className="absolute inset-0 bg-gradient-to-t from-[#FAF9F6] via-transparent to-transparent md:hidden" />
+          <div className="relative h-[65vh] md:h-[700px] w-full md:w-[50%] flex items-center justify-center order-first md:order-last p-4 md:p-0 overflow-hidden md:overflow-visible">
+            {/* Resplandor de fondo sofisticado (Aura suave) */}
+            <div className="absolute w-[120%] h-[120%] bg-[#f5ebe0] rounded-full blur-[140px] opacity-40 translate-y-20 md:translate-y-0" />
 
-            {/* Badge con Z-INDEX corregido para que siempre se vea */}
-            <div className="absolute bottom-10 left-8 md:bottom-12 md:left-12 z-50">
-              <span className="bg-white/95 backdrop-blur-sm px-5 py-2.5 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-[#5d5045] shadow-md border border-[#eaddcf]/30">
-                Estilo Sofisticado
-              </span>
+            {/* --- IMAGEN 1: IZQUIERDA (CLIENTES - SECUNDARIA) --- */}
+            {/* He simplificado el código interno para que el 'border-box' sea la imagen completa */}
+            <div className="absolute left-[5%] md:left-[-10%] top-[25%] w-[160px] md:w-[220px] aspect-[9/18.5] bg-white rounded-[2rem] shadow-[0_15px_40px_-10px_rgba(93,80,69,0.15)] border border-[#eaddcf]/50 z-10 scale-90 md:scale-100 opacity-90 md:opacity-100 rotate-[-5deg] md:rotate-[-8deg] overflow-hidden p-1.5 hover:rotate-0 transition-transform duration-500">
+              {/* Imagen Real de tu Pantalla de Clientes */}
+              <img
+                src="/app-clients.webp"
+                alt="Gestión de Clientes en BeautyTask"
+                className="w-full h-full object-cover rounded-[1.8rem]"
+                // FALLBACK: Si no existe, muestra un patrón elegante que combina con la marca
+                onError={(e) =>
+                  (e.target.src =
+                    "https://images.unsplash.com/photo-1590439471364-192b10a27177?q=80&w=500")
+                }
+              />
+            </div>
+
+            {/* --- IMAGEN 2: CENTRO (DASHBOARD PRINCIPAL - DESTACADA) --- */}
+            {/* Este es el iPhone 15 Pro simulado con biseles ultra-finos */}
+            <div className="relative w-[240px] md:w-[280px] aspect-[9/19.5] bg-[#1a1a1a] rounded-[2.8rem] p-1.5 shadow-[0_40px_110px_-25px_rgba(93,80,69,0.35)] border-[4px] border-[#332d29] z-20 hover:scale-105 hover:border-[#4a3f36] transition-all duration-700 ease-out group">
+              {/* Notch Dinámico Ultra-fino */}
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-20 md:w-24 h-5 bg-[#332d29] rounded-b-2xl z-30 flex items-center justify-center">
+                <div className="w-1 h-1 bg-[#1a1a1a] rounded-full mr-1.5" />
+                <div className="w-8 h-1 bg-[#1a1a1a] rounded-full" />
+              </div>
+
+              {/* Pantalla Interna */}
+              <div className="w-full h-full bg-white rounded-[2.4rem] overflow-hidden relative flex flex-col p-0.5">
+                {/* Imagen Real de tu Dashboard Principal */}
+                <div className="flex-1 rounded-[2.2rem] overflow-hidden bg-gray-50 border border-[#eaddcf]/20 shadow-inner group-hover:rotate-1 transition-transform duration-1000">
+                  <img
+                    src="/main-dashboard.webp"
+                    alt="BeautyTask Analytics Dashboard"
+                    className="w-full h-full object-cover"
+                    // FALLBACK: Una imagen de ejemplo de analíticas nítida
+                    onError={(e) =>
+                      (e.target.src =
+                        "https://images.unsplash.com/photo-1551288049-bbbda536339a?q=80&w=500")
+                    }
+                  />
+                </div>
+
+                {/* Overlay suave para integrar la imagen y dar espacio al texto */}
+                <div className="absolute inset-x-2 bottom-2 h-1/2 bg-gradient-to-t from-white via-white/50 to-transparent rounded-b-[2rem]" />
+
+                {/* Texto sobre la imagen (opcional para dar contexto) */}
+                <div className="absolute bottom-6 left-6 right-6 z-10 space-y-1">
+                  <div className="w-10 h-1 bg-[#5d5045]/40 rounded-full" />
+                  <p className="text-xl font-serif text-[#5d5045] leading-tight">
+                    Control Total.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* --- IMAGEN 3: DERECHA (CALENDARIO - SECUNDARIA) --- */}
+            <div className="absolute right-[5%] md:right-[-8%] bottom-[20%] w-[160px] md:w-[220px] aspect-[9/18.5] bg-white rounded-[2rem] shadow-[0_15px_40px_-10px_rgba(93,80,69,0.15)] border border-[#eaddcf]/50 z-10 scale-90 md:scale-100 opacity-90 md:opacity-100 rotate-[5deg] md:rotate-[8deg] overflow-hidden p-1.5 hover:rotate-0 transition-transform duration-500">
+              {/* Imagen Real de tu Vista de Calendario */}
+              <img
+                src="/app-calendar.webp"
+                alt="Agenda Inteligente de BeautyTask"
+                className="w-full h-full object-cover rounded-[1.8rem]"
+                // FALLBACK: Un patrón minimalista crema que combina con la marca
+                onError={(e) =>
+                  (e.target.src =
+                    "https://images.unsplash.com/photo-1618005198919-d3d4b5a92ead?q=80&w=500")
+                }
+              />
             </div>
           </div>
 
-          {/* 2. BLOQUE DE TEXTO (Izquierda) */}
-          {/* md:flex-1 hace que tome el espacio restante sin apretar la imagen */}
-          <div className="flex-1 w-full space-y-6 md:space-y-10 p-8 md:p-0 text-left -mt-8 md:mt-0 relative z-30 bg-[#FAF9F6] md:bg-transparent rounded-t-[3rem] md:rounded-none">
+          {/* 2. BLOQUE DE TEXTO (Adaptado ligeramente para la nueva composición) */}
+          <div className="flex-1 w-full space-y-6 md:space-y-10 p-8 md:p-0 text-left -mt-20 md:mt-0 relative z-30 bg-[#FAF9F6] md:bg-transparent rounded-t-[3.5rem] md:rounded-none">
             <div className="space-y-4">
-              <p className="text-[10px] md:text-[11px] uppercase tracking-[0.5em] text-[#8c857d] font-black">
+              <p className="text-[10px] md:text-[11px] uppercase tracking-[0.6em] text-[#8c857d] font-black opacity-80">
                 The New Standard of Beauty
               </p>
-              <h2 className="text-5xl md:text-[6.5rem] lg:text-[7.5rem] font-serif leading-[1.1] md:leading-[0.85] tracking-tighter text-[#5d5045]">
+              <h2 className="text-5xl md:text-[6.5rem] lg:text-[7.5rem] font-serif leading-[1.05] md:leading-[0.88] tracking-tighter text-[#5d5045]">
                 Eleva el <br className="hidden md:block" />
                 flujo diario <br />
-                <span className="italic opacity-80 underline decoration-[#eaddcf] decoration-1 underline-offset-[12px]">
+                <span className="italic opacity-80 underline decoration-[#eaddcf]/70 decoration-1 underline-offset-[14px]">
                   de tu salón.
                 </span>
               </h2>
@@ -117,7 +173,7 @@ export default function Landing() {
             <div className="flex flex-col sm:flex-row items-center justify-start gap-6 pt-6">
               <Link
                 to="/contacto"
-                className="w-full sm:w-auto bg-[#5d5045] text-[#f5ebe0] px-12 py-6 rounded-full text-[11px] font-black uppercase tracking-widest hover:bg-[#4a3f36] transition shadow-2xl shadow-[#5d5045]/20 flex items-center justify-center gap-3 active:scale-95"
+                className="w-full sm:w-auto bg-[#5d5045] text-[#f5ebe0] px-12 py-6 rounded-full text-[11px] font-black uppercase tracking-[0.2em] hover:bg-[#4a3f36] transition shadow-2xl shadow-[#5d5045]/20 flex items-center justify-center gap-3 active:scale-95"
               >
                 Contactar ahora
                 <ChevronRight className="w-4 h-4" />

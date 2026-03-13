@@ -176,7 +176,7 @@ export default function LoginView({ onLogin, onGoToRegister }) {
                 theme="outline"
                 shape="pill"
                 size="large"
-                width="100%"
+                width="300"
               />
             </div>
           </form>
