@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlmodel import Session, select
 from typing import List, Optional  # Añadimos Optional
-from datetime import timedelta
+from datetime import timedelta, datetime
 from pydantic import BaseModel      # Añadimos BaseModel
 from app.core.db.session import get_session
 from app.models.appointment import Appointment
@@ -29,7 +29,7 @@ async def get_appointments(
     current_user: User = Depends(get_current_user)
 ):
     try:
-        statement = select(Appointment)
+        statement = select(Appointment).order_by(Appointment.start_time.asc())
         
         # Filtro multi-tenant
         if current_user.role != "super_admin":
@@ -45,7 +45,33 @@ async def get_appointments(
         print(f"❌ Error en GET appointments: {e}")
         # Devolvemos una lista vacía en lugar de un 500 para no romper el CORS
         return []
-    
+
+@router.get("/upcoming")
+async def get_upcoming(
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        today = datetime.now().date()
+        statement = select(Appointment).where(
+            Appointment.start_time >= datetime.combine(today, datetime.min.time())
+        ).order_by(Appointment.start_time.asc())
+        
+        # Filtro multi-tenant
+        if current_user.role != "super_admin":
+            # Si el admin no tiene org_id, no devolvemos error, devolvemos vacío
+            if not current_user.organization_id:
+                return []
+            statement = statement.where(Appointment.organization_id == current_user.organization_id)
+        
+        results = db.exec(statement).all()
+        return results
+        
+    except Exception as e:
+        print(f"❌ Error en GET upcoming appointments: {e}")
+        # Devolvemos una lista vacía en lugar de un 500 para no romper el CORS
+        return []
+
 @router.post("/", response_model=AppointmentOut)
 async def create_appointment(
     data: AppointmentCreate, 
