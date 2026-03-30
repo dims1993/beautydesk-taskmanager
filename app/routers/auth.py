@@ -11,6 +11,7 @@ from app.core.security import create_access_token
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+ALLOWED_EMAILS = os.getenv("ALLOWED_EMAILS").split(',')
 
 @router.post("/google", response_model=Token)
 async def auth_google(data: dict, db: Session = Depends(get_session)):
@@ -37,7 +38,15 @@ async def auth_google(data: dict, db: Session = Depends(get_session)):
                 detail="Acceso denegado. Este correo no está registrado como profesional en BeautyTask."
             )
 
-        # 4. Generar el JWT de nuestra propia App
+        # 4. CONTROL DE ACCESO: Verificar si el email está en la lista blanca
+        if email not in ALLOWED_EMAILS:
+            print(f"🚫 Intento de acceso denegado para: {email}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acceso denegado. Este correo no está en la lista blanca."
+            )
+
+        # 5. Generar el JWT de nuestra propia App
         access_token = create_access_token(data={"sub": user.email})
         
         print(f"✅ Login exitoso: {user.email} (Rol: {user.role})")
