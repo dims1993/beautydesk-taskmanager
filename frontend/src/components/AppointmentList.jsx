@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Check,
   X,
@@ -15,10 +15,29 @@ import {
   ArchiveAppointmentModal,
 } from "./modals/AppointmentModals.jsx";
 
-const AppointmentList = ({ appointments, services, onUpdateStatus }) => {
+const AppointmentList = ({ services, onUpdateStatus }) => {
   // Estados para controlar qué modal está abierto y con qué cita
   const [selectedAppo, setSelectedAppo] = useState(null);
   const [modalType, setModalType] = useState(null); // 'edit', 'payment', 'archive'
+  const [appointments, setAppointments] = useState([]);
+
+  useEffect(() => {
+    const fetchUpcomingAppointments = async () => {
+      try {
+        const response = await fetch("/api/appointments/upcoming");
+        if (!response.ok) {
+          throw new Error("No se pudo cargar las citas próximas.");
+        }
+        const data = await response.json();
+        setAppointments(data);
+      } catch (error) {
+        console.error(error);
+        setAppointments([]);
+      }
+    };
+
+    fetchUpcomingAppointments();
+  }, []);
 
   const formatTimeRange = (startTime, durationMinutes = 30) => {
     const start = new Date(startTime);
@@ -53,7 +72,7 @@ const AppointmentList = ({ appointments, services, onUpdateStatus }) => {
       <div className="flex flex-col items-center justify-center py-32 bg-[#FAF9F6] rounded-[3rem] border border-dashed border-[#eaddcf]">
         <CalendarIcon className="w-8 h-8 text-[#c4bdb5] mb-4" />
         <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#8c857d]">
-          No hay experiencias programadas
+          No hay citas próximas programadas
         </p>
       </div>
     );
