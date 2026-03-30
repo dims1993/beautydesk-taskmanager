@@ -7,7 +7,7 @@ from app.core.db.session import get_session
 from app.dependencies import get_current_user 
 
 # Importas tus modelos
-from app.models import User, Organization, UserRole
+from app.models import User, Organization, UserRole, BusinessType
 
 # Ojo: si esto va en app/routers/users.py, el prefix suele ser "/users"
 router = APIRouter(tags=["organizations"])
@@ -27,8 +27,7 @@ async def create_new_salon_admin(
 
     try:
         # 2. Crear la Organización
-        new_org = Organization(name=data["salon_name"])
-        db.add(new_org)
+        new_org = Organization(name=data["salon_name"], business_type=BusinessType[data.get("business_type", "SALON").upper()])
         db.add(new_org)
         db.flush() #Usamos flush para tener el ID sin cerrar la transacción aún
 
@@ -77,7 +76,8 @@ async def get_all_organizations(
         org_list.append({
             "id": org.id,
             "name": org.name,
-            "user_count": len(users_in_org)
+            "user_count": len(users_in_org),
+            "business_type": org.business_type.value
         })
     
     return org_list
