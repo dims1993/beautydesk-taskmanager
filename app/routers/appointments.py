@@ -11,6 +11,7 @@ from app.schemas.appointment import AppointmentCreate, AppointmentOut
 # Eliminamos la importación de schemas.misc si vas a definir StatusUpdate aquí abajo
 from app.dependencies import get_current_user
 from app.core.notifications import send_appointment_confirmation 
+from app.core.google_calendar import sync_with_google_calendar  # Importamos la nueva función
 
 router = APIRouter(prefix="/appointments", tags=["appointments"])
 
@@ -73,6 +74,9 @@ async def create_appointment(
     db.add(new_appo)
     db.commit()
     db.refresh(new_appo)
+
+    # Llamamos a la función para sincronizar con Google Calendar
+    sync_with_google_calendar(new_appo, current_user)
 
     background_tasks.add_task(
         send_appointment_confirmation, 
