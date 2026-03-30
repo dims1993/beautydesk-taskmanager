@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   # Servicio de Base de Datos
   db:
@@ -33,7 +31,6 @@ services:
       - db # Espera a que la DB arranque antes de iniciar (básico)
 
   # Servicio de Frontend (Vite + React)
-
   frontend:
     build: ./frontend
     ports:
