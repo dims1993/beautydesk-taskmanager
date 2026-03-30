@@ -27,3 +27,7 @@ class User(SQLModel, table=True):
 
     # Relaciones
     appointments: List["Appointment"] = Relationship(back_populates="staff")
+    
+    # Nuevos campos para almacenar los tokens de Google
+    google_access_token: str | None = Field(default=None)
+    google_refresh_token: str | None = Field(default=None)
