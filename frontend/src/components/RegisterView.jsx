@@ -16,6 +16,7 @@ const RegisterView = ({ onBack, onSuccess }) => {
     email: "",
     password: "",
     role: "client",
+    business_type: "SALON", // New state for business_type
   });
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -128,6 +129,24 @@ const RegisterView = ({ onBack, onSuccess }) => {
                     setFormData({ ...formData, password: e.target.value })
                   }
                 />
+              </div>
+
+              {/* New select for business_type */}
+              <div className="relative group">
+                <select
+                  value={formData.business_type}
+                  onChange={(e) =>
+                    setFormData({ ...formData, business_type: e.target.value })
+                  }
+                  required
+                  className="w-full bg-[#FAF9F6] border border-[#eaddcf] py-4 md:py-5 pl-12 pr-4 rounded-2xl text-[10px] md:text-[11px] font-black tracking-widest focus:outline-none focus:border-[#5d5045] transition-all"
+                >
+                  <option value="SALON">Salón</option>
+                  <option value="LAWYER">Abogado</option>
+                  <option value="MECHANIC">Mecánico</option>
+                  <option value="GYM">Gimnasio</option>
+                  <option value="OTHER">Otro</option>
+                </select>
               </div>
             </div>
 
