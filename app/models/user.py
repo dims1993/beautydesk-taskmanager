@@ -7,10 +7,10 @@ if TYPE_CHECKING:
 
 # 1. Definimos los roles de forma profesional
 class UserRole(str, Enum):
-    SUPER_ADMIN = "super_admin"  # Yo (control total, gestion de suscripciones)
-    OWNER = "owner"              # El dueño del salón (gestiona su equipo)
-    STAFF = "staff"              # Los empleados (ven sus propias citas)
-    CLIENT = "client"            # El cliente final (opcional, si permites autoregistro)
+    SUPER_ADMIN = "SUPER_ADMIN"  # Yo (control total, gestion de suscripciones)
+    OWNER = "OWNER"              # El dueño del salón (gestiona su equipo)
+    STAFF = "STAFF"              # Los empleados (ven sus propias citas)
+    CLIENT = "CLIENT"            # El cliente final (opcional, si permites autoregistro)
 
 class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
