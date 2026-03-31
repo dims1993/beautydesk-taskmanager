@@ -32,8 +32,24 @@ export const useApi = () => {
         return null;
       }
 
-      const data = await response.json();
-      return response.ok ? data : Promise.reject(data);
+      const contentType = response.headers.get("content-type") || "";
+      const isJson = contentType.includes("application/json");
+
+      const payload = isJson ? await response.json() : await response.text();
+
+      if (!response.ok) {
+        return Promise.reject(payload);
+      }
+
+      if (!isJson) {
+        return Promise.reject(
+          new Error(
+            `Expected JSON but received ${contentType || "unknown content-type"}`,
+          ),
+        );
+      }
+
+      return payload;
     } catch (error) {
       console.error("API Error:", error);
       throw error;

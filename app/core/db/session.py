@@ -1,6 +1,7 @@
 # app/db/session.py
 import os
 from sqlmodel import create_engine, SQLModel, Session
+from sqlalchemy import text
 from dotenv import load_dotenv
 
 # Forzamos la carga del archivo .env
@@ -26,13 +27,31 @@ print(f"DEBUG: Conectando a {DATABASE_URL}")
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-engine = create_engine(DATABASE_URL, echo=True)
+engine = create_engine(DATABASE_URL, echo=False)
 
 
 def init_db():
     # Importante: Importar modelos aquí para que SQLModel los reconozca
     from app import models
     SQLModel.metadata.create_all(engine)
+
+    # Best-effort schema patching for legacy DBs (no Alembic here).
+    # Ensures Google token columns exist even if the table was created before
+    # the fields were added to the SQLModel.
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS google_access_token TEXT'
+                )
+            )
+            conn.execute(
+                text(
+                    'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS google_refresh_token TEXT'
+                )
+            )
+    except Exception as e:
+        print(f"⚠️ init_db: could not ensure Google token columns: {e}")
 
 
 def get_session():

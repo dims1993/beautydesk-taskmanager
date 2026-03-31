@@ -15,6 +15,10 @@ conf = ConnectionConfig(
 
 
 async def send_appointment_confirmation(email: str, client_name: str, date: str, service_name: str = "Servicio"):
+    if not email or not str(email).strip():
+        print("📭 Skipping appointment confirmation email: client_email is empty.")
+        return
+
     html = f"""
     <p>Hola <b>{client_name}</b>,</p>
     <p>Tu cita para <b>{service_name}</b> ha sido confirmada para el día {date}.</p>

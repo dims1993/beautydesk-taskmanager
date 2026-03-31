@@ -1,13 +1,12 @@
 import { useState, useEffect } from "react";
 import {
   Check,
-  X,
   Clock,
   Calendar as CalendarIcon,
-  MoreHorizontal,
   Archive,
   Edit3,
 } from "lucide-react";
+import { useApi } from "../hooks/useApi";
 // Importamos los modales desde tu nuevo archivo
 import {
   PaymentModal,
@@ -16,6 +15,7 @@ import {
 } from "./modals/AppointmentModals.jsx";
 
 const AppointmentList = ({ services, onUpdateStatus }) => {
+  const { apiRequest } = useApi();
   // Estados para controlar qué modal está abierto y con qué cita
   const [selectedAppo, setSelectedAppo] = useState(null);
   const [modalType, setModalType] = useState(null); // 'edit', 'payment', 'archive'
@@ -24,12 +24,8 @@ const AppointmentList = ({ services, onUpdateStatus }) => {
   useEffect(() => {
     const fetchUpcomingAppointments = async () => {
       try {
-        const response = await fetch("/api/appointments/upcoming");
-        if (!response.ok) {
-          throw new Error("No se pudo cargar las citas próximas.");
-        }
-        const data = await response.json();
-        setAppointments(data);
+        const data = await apiRequest("/appointments/upcoming");
+        setAppointments(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error(error);
         setAppointments([]);
@@ -37,7 +33,7 @@ const AppointmentList = ({ services, onUpdateStatus }) => {
     };
 
     fetchUpcomingAppointments();
-  }, []);
+  }, [apiRequest]);
 
   const formatTimeRange = (startTime, durationMinutes = 30) => {
     const start = new Date(startTime);

@@ -3,11 +3,11 @@ import { useApi } from "../hooks/useApi";
 import {
   Sparkles,
   MessageCircle,
-  Calendar,
   User,
   Phone,
   CheckCircle2,
   X,
+  ChevronRight,
 } from "lucide-react";
 
 const AppointmentForm = ({

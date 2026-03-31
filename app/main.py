@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
@@ -33,23 +34,45 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="BeautyTask API", version="0.1.0", lifespan=lifespan)
 
 
-# CORS
+# CORS — With allow_credentials=True, origins must be explicit (never "*").
+# Set CORS_ORIGINS="http://localhost:5173,https://app.example.com" in production.
+_cors_raw = os.getenv(
+    "CORS_ORIGINS",
+    "http://localhost:5173,http://127.0.0.1:5173",
+)
+CORS_ALLOW_ORIGINS = [
+    o.strip().rstrip("/")
+    for o in _cors_raw.split(",")
+    if o.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"], # El puerto de tu Vite/React
+    allow_origins=CORS_ALLOW_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
-# Middleware para Google (COOP)
+# Optional security headers (see note in README / deployment docs).
+# COOP mainly affects HTML documents; for a JSON API it is usually redundant.
 @app.middleware("http")
-async def add_coop_header(request: Request, call_next):
+async def add_cross_origin_headers(request: Request, call_next):
     response = await call_next(request)
-    # Estos tres son el "trío dinámico" para que Google Auth no falle
-    response.headers["Cross-Origin-Opener-Policy"] = "same-origin-allow-popups"
-    response.headers["Cross-Origin-Embedder-Policy"] = "require-corp" # Opcional, pruébalo si sigue fallando
-    response.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
+    response.headers.setdefault(
+        "Cross-Origin-Opener-Policy",
+        "same-origin-allow-popups",
+    )
+    response.headers.setdefault(
+        "Cross-Origin-Resource-Policy",
+        "cross-origin",
+    )
+    # COEP require-corp breaks many third-party scripts; enable only if you need it.
+    if os.getenv("ENABLE_COEP_REQUIRE_CORP", "").lower() in ("1", "true", "yes"):
+        response.headers.setdefault(
+            "Cross-Origin-Embedder-Policy",
+            "require-corp",
+        )
     return response
 
 # Registrar los routers

@@ -44,3 +44,6 @@ watchfiles==1.1.1
 websockets==16.0
 google-auth
 requests
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib

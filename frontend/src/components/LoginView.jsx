@@ -1,8 +1,8 @@
-import React, { useState } from "react";
-import { GoogleLogin } from "@react-oauth/google";
+import React, { useCallback, useState } from "react";
 import { useApi } from "../hooks/useApi"; // Asegúrate de que la ruta sea correcta
 import { Link } from "react-router-dom";
 import { Sparkles, User, Lock, ArrowRight, Home } from "lucide-react"; // Importamos los iconos
+import GoogleLoginButton from "./GoogleLoginButton";
 
 export default function LoginView({ onLogin, onGoToRegister }) {
   const [username, setUsername] = useState("");
@@ -39,7 +39,7 @@ export default function LoginView({ onLogin, onGoToRegister }) {
   };
 
   // --- LÓGICA LOGIN GOOGLE ---
-  const handleGoogleSuccess = async (credentialResponse) => {
+  const handleGoogleSuccess = useCallback(async (credentialResponse) => {
     setIsLoading(true);
     setError("");
     try {
@@ -77,7 +77,11 @@ export default function LoginView({ onLogin, onGoToRegister }) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [apiRequest, onLogin]);
+
+  const handleGoogleError = useCallback(() => {
+    setError("Fallo al conectar con Google");
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#FAF9F6] flex items-center justify-center p-0 md:p-10 font-sans selection:bg-[#f5ebe0]">
@@ -170,13 +174,11 @@ export default function LoginView({ onLogin, onGoToRegister }) {
             </div>
 
             <div className="flex justify-center">
-              <GoogleLogin
+              <GoogleLoginButton
+                clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}
                 onSuccess={handleGoogleSuccess}
-                onError={() => setError("Fallo al conectar con Google")}
-                theme="outline"
-                shape="pill"
-                size="large"
-                width="300"
+                onError={handleGoogleError}
+                width={300}
               />
             </div>
           </form>

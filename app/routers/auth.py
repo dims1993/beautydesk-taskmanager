@@ -46,8 +46,14 @@ async def auth_google(data: dict, db: Session = Depends(get_session)):
                 detail="Acceso denegado. Este correo no está en la lista blanca."
             )
 
-        # 5. Guardar el access_token del usuario
-        user.google_access_token = data.get("access_token")
+        # 5. Guardar tokens de Google (si vienen en la petición)
+        google_access_token = data.get("access_token")
+        google_refresh_token = data.get("refresh_token")
+
+        if google_access_token:
+            user.google_access_token = google_access_token
+        if google_refresh_token:
+            user.google_refresh_token = google_refresh_token
         
         # 6. Generar el JWT de nuestra propia App
         access_token = create_access_token(data={"sub": user.email})
