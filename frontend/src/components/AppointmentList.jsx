@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   Check,
   Clock,
@@ -14,25 +14,23 @@ import {
   ArchiveAppointmentModal,
 } from "./modals/AppointmentModals.jsx";
 
-const AppointmentList = ({ services, onUpdateStatus }) => {
+const AppointmentList = ({ appointments = [], services, onUpdateStatus }) => {
   const { apiRequest } = useApi();
   // Estados para controlar qué modal está abierto y con qué cita
   const [selectedAppo, setSelectedAppo] = useState(null);
   const [modalType, setModalType] = useState(null); // 'edit', 'payment', 'archive'
-  const [appointments, setAppointments] = useState([]);
 
   useEffect(() => {
-    const fetchUpcomingAppointments = async () => {
+    const debugFetchAllAppointments = async () => {
       try {
-        const data = await apiRequest("/appointments/upcoming");
-        setAppointments(Array.isArray(data) ? data : []);
+        const data = await apiRequest("/appointments/");
+        console.log("Data from API:", data);
       } catch (error) {
-        console.error(error);
-        setAppointments([]);
+        console.error("Error fetching /appointments/ for debug:", error);
       }
     };
 
-    fetchUpcomingAppointments();
+    debugFetchAllAppointments();
   }, [apiRequest]);
 
   const formatTimeRange = (startTime, durationMinutes = 30) => {
@@ -63,12 +61,14 @@ const AppointmentList = ({ services, onUpdateStatus }) => {
     setModalType(null);
   };
 
-  if (appointments.length === 0) {
+  const safeAppointments = Array.isArray(appointments) ? appointments : [];
+
+  if (safeAppointments.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-32 bg-[#FAF9F6] rounded-[3rem] border border-dashed border-[#eaddcf]">
         <CalendarIcon className="w-8 h-8 text-[#c4bdb5] mb-4" />
         <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#8c857d]">
-          No hay citas próximas programadas
+          No hay citas programadas esta semana
         </p>
       </div>
     );
@@ -77,7 +77,7 @@ const AppointmentList = ({ services, onUpdateStatus }) => {
   return (
     <>
       <div className="space-y-6">
-        {appointments.map((appo) => {
+        {safeAppointments.map((appo) => {
           const service = services.find((s) => s.id === appo.service_id);
           const duration = service?.duration || 30;
 

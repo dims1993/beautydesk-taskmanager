@@ -34,6 +34,11 @@ class Appointment(SQLModel, table=True):
     staff_id: int = Field(foreign_key="user.id")
     service_id: int = Field(foreign_key="service.id")
 
+    # Multi-tenant
+    organization_id: Optional[int] = Field(
+        default=None, foreign_key="organization.id", index=True
+    )
+
     # RELACIONES (Esto es lo que faltaba y causaba el error)
     staff: Optional["User"] = Relationship(back_populates="appointments")
     service: Optional["Service"] = Relationship(back_populates="appointments")

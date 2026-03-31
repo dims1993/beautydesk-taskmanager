@@ -42,6 +42,23 @@ function App() {
   const [clients, setClients] = useState([]);
   const [isRegistering, setIsRegistering] = useState(false);
 
+  const agendaWeekAppointments = (apps) => {
+    const now = new Date();
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+
+    return (Array.isArray(apps) ? apps : [])
+      .filter((a) => a?.status === "scheduled")
+      .filter((a) => {
+        const d = new Date(a.start_time);
+        return !Number.isNaN(d.getTime()) && d >= start && d < end;
+      })
+      .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+  };
+
   const fetchInitialData = async () => {
     try {
       const [user, svcs, apps, clientsFromDB] = await Promise.all([
@@ -50,12 +67,13 @@ function App() {
         apiRequest("/appointments/"),
         apiRequest("/clients/"),
       ]);
+      console.log("Fetched appointments:", apps);
       if (user) setCurrentUser(user);
       if (svcs) setServices(svcs);
       if (clientsFromDB) setClients(clientsFromDB);
       if (apps) {
         setAppointments(
-          apps.sort((a, b) => new Date(b.start_time) - new Date(a.start_time)),
+          apps.sort((a, b) => new Date(a.start_time) - new Date(b.start_time)),
         );
       }
     } catch (err) {
@@ -232,9 +250,7 @@ function App() {
                       <section className="space-y-5">
                         {activeTab === "agenda" && (
                           <AppointmentList
-                            appointments={appointments.filter(
-                              (a) => a.status === "scheduled",
-                            )}
+                            appointments={agendaWeekAppointments(appointments)}
                             services={services}
                             onUpdateStatus={handleUpdateStatus}
                           />

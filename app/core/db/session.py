@@ -50,8 +50,13 @@ def init_db():
                     'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS google_refresh_token TEXT'
                 )
             )
+            conn.execute(
+                text(
+                    'ALTER TABLE "appointment" ADD COLUMN IF NOT EXISTS organization_id INTEGER'
+                )
+            )
     except Exception as e:
-        print(f"⚠️ init_db: could not ensure Google token columns: {e}")
+        print(f"⚠️ init_db: could not ensure legacy columns: {e}")
 
 
 def get_session():

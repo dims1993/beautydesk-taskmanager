@@ -29,16 +29,21 @@ async def get_appointments(
     current_user: User = Depends(get_current_user)
 ):
     try:
+        print(f"DEBUG: Current User ID: {current_user.id}")
         statement = select(Appointment).order_by(Appointment.start_time.asc())
         
         # Filtro multi-tenant
         if current_user.role != "super_admin":
-            # Si el admin no tiene org_id, no devolvemos error, devolvemos vacío
+            # TEMP: Si el usuario no tiene org_id, devolvemos todo para depurar conexión/datos
             if not current_user.organization_id:
-                return []
+                print("⚠️ DEBUG: current_user.organization_id is None; returning ALL appointments (temporary).")
+                results = db.exec(statement).all()
+                print(f"DEBUG: Appointments in DB: {len(results)}")
+                return results
             statement = statement.where(Appointment.organization_id == current_user.organization_id)
         
         results = db.exec(statement).all()
+        print(f"DEBUG: Appointments in DB: {len(results)}")
         return results
         
     except Exception as e:
@@ -72,7 +77,7 @@ async def get_upcoming(
         # Devolvemos una lista vacía en lugar de un 500 para no romper el CORS
         return []
 
-@router.post("/", response_model=AppointmentOut)
+@router.post("/", response_model=AppointmentOut, status_code=201)
 async def create_appointment(
     data: AppointmentCreate, 
     background_tasks: BackgroundTasks, 
@@ -82,6 +87,7 @@ async def create_appointment(
     appointment_data = data.model_dump()
     appointment_data["staff_id"] = current_user.id
     new_appo = Appointment(**appointment_data)
+    new_appo.organization_id = current_user.organization_id
 
     service = db.get(Service, data.service_id)
     duration = service.duration if service else 60
@@ -102,7 +108,10 @@ async def create_appointment(
     db.refresh(new_appo)
 
     # Llamamos a la función para sincronizar con Google Calendar
-    sync_with_google_calendar(new_appo, current_user)
+    try:
+        sync_with_google_calendar(new_appo, current_user)
+    except Exception as e:
+        print(f"⚠️ Google Calendar sync failed for appointment {new_appo.id}: {e}")
 
     background_tasks.add_task(
         send_appointment_confirmation, 
