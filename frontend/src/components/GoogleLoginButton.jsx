@@ -16,13 +16,21 @@ export default function GoogleLoginButton({
   useEffect(() => {
     if (initializedRef.current) return;
     if (!clientId) {
-      onError?.(new Error("Missing Google clientId"));
+      onError?.(
+        new Error(
+          "Missing VITE_GOOGLE_CLIENT_ID. Set it in frontend/.env and restart the Vite dev server.",
+        ),
+      );
       return;
     }
 
     const googleObj = window.google;
     if (!googleObj?.accounts?.id) {
-      onError?.(new Error("Google Identity Services not loaded"));
+      onError?.(
+        new Error(
+          "Google Identity Services not loaded. Check GoogleOAuthProvider clientId and that the script can load.",
+        ),
+      );
       return;
     }
 

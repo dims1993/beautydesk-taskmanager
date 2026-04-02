@@ -79,8 +79,11 @@ export default function LoginView({ onLogin, onGoToRegister }) {
     }
   }, [apiRequest, onLogin]);
 
-  const handleGoogleError = useCallback(() => {
-    setError("Fallo al conectar con Google");
+  const handleGoogleError = useCallback((err) => {
+    const msg =
+      (err && typeof err === "object" && "message" in err && err.message) ||
+      "Fallo al conectar con Google";
+    setError(String(msg));
   }, []);
 
   return (

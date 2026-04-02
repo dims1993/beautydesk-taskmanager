@@ -4,8 +4,9 @@ from zoneinfo import ZoneInfo
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
-SCOPES = ["https://www.googleapis.com/auth/calendar.events"]
+SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
 def sync_with_google_calendar(appointment, user):
     """
@@ -74,5 +75,12 @@ def sync_with_google_calendar(appointment, user):
         event = service.events().insert(calendarId="primary", body=event).execute()
         print(f"Event created: {event.get('htmlLink')}")
     
+    except HttpError as e:
+        print(f"Google Calendar HttpError: {e}")
+        try:
+            content = e.content.decode("utf-8") if hasattr(e.content, "decode") else str(e.content)
+            print(f"Google Calendar HttpError content: {content}")
+        except Exception:
+            pass
     except Exception as e:
         print(f"Error syncing with Google Calendar: {e}")

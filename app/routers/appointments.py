@@ -93,15 +93,41 @@ async def create_appointment(
     duration = service.duration if service else 60
     new_appo.end_time = new_appo.start_time + timedelta(minutes=duration)
 
-    collision = db.exec(select(Appointment).where(
+    collision_stmt = select(Appointment).where(
         Appointment.staff_id == current_user.id,
         Appointment.status == "scheduled",
         new_appo.start_time < Appointment.end_time,
-        new_appo.end_time > Appointment.start_time
-    )).first()
+        new_appo.end_time > Appointment.start_time,
+    )
+    # Avoid cross-tenant collisions
+    if current_user.organization_id is not None:
+        collision_stmt = collision_stmt.where(
+            Appointment.organization_id == current_user.organization_id
+        )
+
+    collision = db.exec(collision_stmt).first()
 
     if collision:
-        raise HTTPException(status_code=400, detail=f"Schedule occupied by {collision.client_name}")
+        print(
+            "⚠️ Collision detected:",
+            {
+                "staff_id": current_user.id,
+                "org_id": current_user.organization_id,
+                "requested_start": str(new_appo.start_time),
+                "requested_end": str(new_appo.end_time),
+                "existing_id": collision.id,
+                "existing_client": collision.client_name,
+                "existing_start": str(collision.start_time),
+                "existing_end": str(collision.end_time),
+            },
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Schedule occupied by {collision.client_name} "
+                f"({collision.start_time} - {collision.end_time})"
+            ),
+        )
 
     db.add(new_appo)
     db.commit()

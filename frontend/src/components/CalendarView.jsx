@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useApi } from "../hooks/useApi";
 
 const CalendarView = ({
   allAppointments = [],
@@ -6,8 +7,12 @@ const CalendarView = ({
   onUpdateStatus,
   onAddClick,
 }) => {
+  const { apiRequest } = useApi();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState(new Date().getDate());
+  const [googleConnected, setGoogleConnected] = useState(false);
+  const [googleHasRefreshToken, setGoogleHasRefreshToken] = useState(false);
+  const [googleStatusLoading, setGoogleStatusLoading] = useState(true);
 
   const safeAppointments = Array.isArray(allAppointments)
     ? allAppointments
@@ -56,6 +61,50 @@ const CalendarView = ({
   // Aquí filtramos para que en "Finalizadas" solo salgan las 'completed'
   const completedApps = dayApps.filter((a) => a.status === "completed");
 
+  const refreshGoogleCalendarStatus = async () => {
+    try {
+      const status = await apiRequest("/auth/google/calendar/status");
+      setGoogleConnected(!!status?.connected);
+      setGoogleHasRefreshToken(!!status?.has_refresh_token);
+    } catch (e) {
+      console.error("Failed to fetch Google Calendar status:", e);
+      setGoogleConnected(false);
+      setGoogleHasRefreshToken(false);
+    } finally {
+      setGoogleStatusLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    refreshGoogleCalendarStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleConnectGoogleCalendar = async () => {
+    try {
+      const res = await apiRequest("/auth/google/calendar/connect");
+      const url = res?.authorization_url;
+      if (!url) throw new Error("Missing authorization_url");
+      console.log("Google Calendar authorization_url:", url);
+      window.location.href = url;
+    } catch (e) {
+      console.error("Google Calendar connect failed:", e);
+      alert(
+        "Failed to connect Google Calendar. Check backend logs and Google OAuth redirect URI configuration.",
+      );
+    }
+  };
+
+  const handleDisconnectGoogleCalendar = async () => {
+    try {
+      await apiRequest("/auth/google/calendar/disconnect", "POST");
+      await refreshGoogleCalendarStatus();
+    } catch (e) {
+      console.error("Google Calendar disconnect failed:", e);
+      alert("Failed to disconnect Google Calendar.");
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fadeIn pb-16">
       {/* SECCIÓN CALENDARIO */}
@@ -64,7 +113,25 @@ const CalendarView = ({
           <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#5d5045]">
             {monthName} <span className="opacity-40">{year}</span>
           </h3>
-          <div className="flex gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={
+                googleConnected
+                  ? handleDisconnectGoogleCalendar
+                  : handleConnectGoogleCalendar
+              }
+              className="inline-flex items-center justify-center bg-white text-[#5d5045] border border-[#eee8e2] px-4 py-2 rounded-2xl hover:border-[#dcc7b1] transition-all text-[10px] font-black uppercase tracking-widest"
+              title="Connect Google Calendar"
+            >
+              {googleStatusLoading
+                ? "Google…"
+                : googleConnected
+                  ? googleHasRefreshToken
+                    ? "Google Connected"
+                    : "Google Connected*"
+                  : "Connect Google"}
+            </button>
             <button
               onClick={() =>
                 setCurrentDate(
