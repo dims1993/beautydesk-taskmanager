@@ -24,7 +24,8 @@ import ContactoView from "./components/ContactoView";
 import RoleGuard from "./components/RoleGuard";
 import SuperAdminPanel from "./components/SuperAdminPanel";
 import TeamView from "./components/TeamView";
-import { LayoutDashboard } from "lucide-react";
+import { LayoutDashboard, LogOut } from "lucide-react";
+import { APP_MAIN_NAV_TABS } from "./constants/appNavTabs";
 
 function App() {
   const { apiRequest } = useApi();
@@ -186,65 +187,55 @@ function App() {
                     </aside>
 
                     <main className="lg:col-span-7 space-y-10">
-                      <nav className="hidden md:flex bg-[#e8ddd0]/50 backdrop-blur-sm p-1.5 rounded-full border border-[#e5e0d8] items-center">
-                        <div className="flex flex-1 gap-1">
-                          {[
-                            "agenda",
-                            "calendario",
-                            "stats",
-                            "equipo",
-                            "clientes",
-                          ].map((tab) => (
-                            <button
-                              key={tab}
-                              onClick={() => setActiveTab(tab)}
-                              className={`flex-1 py-3 text-[10px] font-black uppercase rounded-full transition-all ${
-                                activeTab === tab
-                                  ? "bg-white shadow-sm text-[#5d5045]"
-                                  : "opacity-40 hover:opacity-60"
-                              }`}
+                      <nav className="hidden md:flex justify-center w-full">
+                        <div className="flex items-center gap-2 px-3 py-2 bg-white/40 backdrop-blur-md rounded-full border border-white/40 shadow-[0_8px_32px_rgba(93,80,69,0.1)]">
+                          {APP_MAIN_NAV_TABS.map((tab) => {
+                            const Icon = tab.icon;
+                            const isActive = activeTab === tab.id;
+                            return (
+                              <button
+                                key={tab.id}
+                                type="button"
+                                title={tab.title}
+                                onClick={() => setActiveTab(tab.id)}
+                                className={`relative flex items-center justify-center w-11 h-11 rounded-full transition-all duration-500 ${
+                                  isActive
+                                    ? "bg-[#5d5045] text-white shadow-md"
+                                    : "text-[#5d5045] opacity-40 hover:opacity-70"
+                                }`}
+                              >
+                                <Icon
+                                  size={18}
+                                  strokeWidth={isActive ? 2.5 : 1.5}
+                                />
+                                {isActive && (
+                                  <span className="absolute -bottom-0.5 w-1 h-1 bg-[#5d5045] rounded-full animate-pulse" />
+                                )}
+                              </button>
+                            );
+                          })}
+
+                          <div className="w-[1px] h-4 bg-[#5d5045]/10 mx-1" />
+
+                          {currentUser?.role === "super_admin" && (
+                            <Link
+                              to="/master-panel"
+                              className="flex items-center justify-center w-11 h-11 rounded-full text-[#5d5045] opacity-50 hover:opacity-100 hover:bg-white/60 transition-all"
+                              title="Panel Maestro"
                             >
-                              {tab === "stats" ? "Caja 📊" : tab}
-                            </button>
-                          ))}
-                        </div>
+                              <LayoutDashboard size={18} strokeWidth={2} />
+                            </Link>
+                          )}
 
-                        <div className="w-[1px] h-4 bg-[#dcc7b1] mx-4" />
-
-                        {/* BOTÓN SECRETO PANEL MAESTRO (Solo Super Admin) */}
-                        {currentUser?.role === "super_admin" && (
-                          <Link
-                            to="/master-panel"
-                            className="mr-2 p-2 hover:bg-white rounded-full transition-all"
-                            title="Panel Maestro"
+                          <button
+                            type="button"
+                            title="Salir"
+                            onClick={handleLogout}
+                            className="flex items-center justify-center w-11 h-11 rounded-full text-[#8c857d] opacity-40 hover:opacity-100 transition-opacity"
                           >
-                            <LayoutDashboard
-                              size={18}
-                              className="text-[#a39485] group-hover:text-[#5d5045] transition-colors"
-                              strokeWidth={2.5}
-                            />
-                          </Link>
-                        )}
-
-                        <button
-                          onClick={handleLogout}
-                          className="pr-4 pl-2 group flex items-center gap-2 transition-all"
-                        >
-                          <span className="text-[9px] font-black uppercase tracking-widest text-[#8c857d] group-hover:text-red-400">
-                            Salir
-                          </span>
-                          <div className="w-7 h-7 rounded-full bg-white/50 flex items-center justify-center group-hover:bg-red-50">
-                            <svg
-                              className="w-3.5 h-3.5"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                              strokeWidth={3}
-                            >
-                              <path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                            </svg>
-                          </div>
-                        </button>
+                            <LogOut size={18} strokeWidth={1.5} />
+                          </button>
+                        </div>
                       </nav>
 
                       <section className="space-y-5">
