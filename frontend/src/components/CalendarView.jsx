@@ -1,13 +1,18 @@
 import { useEffect, useState } from "react";
+import { Check, Archive, Edit3 } from "lucide-react";
 import { useApi } from "../hooks/useApi";
+import { useAppointmentActionModals } from "../hooks/useAppointmentActionModals";
 
 const CalendarView = ({
   allAppointments = [],
   services = [],
   onUpdateStatus,
+  onRefresh,
   onAddClick,
 }) => {
   const { apiRequest } = useApi();
+  const { openEdit, openPayment, openArchive, appointmentModals } =
+    useAppointmentActionModals(services, onUpdateStatus, onRefresh);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState(new Date().getDate());
   const [googleConnected, setGoogleConnected] = useState(false);
@@ -276,22 +281,29 @@ const CalendarView = ({
                         </div>
                       </div>
                       <div className="flex gap-2 justify-end">
-                        {/* BOTÓN COMPLETAR: Ahora llama al modal de App.jsx */}
                         <button
-                          onClick={() => onUpdateStatus(appo.id, "completed")}
-                          className="h-10 w-10 flex items-center justify-center bg-white/10 hover:bg-green-500/20 hover:text-green-300 rounded-xl transition-all border border-white/5"
+                          type="button"
+                          onClick={() => openEdit(appo)}
+                          className="h-10 w-10 flex items-center justify-center bg-white/10 hover:bg-white/20 text-white/80 hover:text-white rounded-xl transition-all border border-white/5"
+                          title="Editar cita"
                         >
-                          ✓
+                          <Edit3 className="w-4 h-4" />
                         </button>
-                        {/* BOTÓN ARCHIVAR */}
                         <button
-                          onClick={() => {
-                            if (window.confirm("¿Archivar cita?"))
-                              onUpdateStatus(appo.id, "cancelled");
-                          }}
-                          className="h-10 w-10 flex items-center justify-center bg-white/10 hover:bg-red-500/20 hover:text-red-300 rounded-xl transition-all border border-white/5"
+                          type="button"
+                          onClick={() => openPayment(appo)}
+                          className="h-10 w-10 flex items-center justify-center bg-white/10 hover:bg-green-500/20 hover:text-green-300 rounded-xl transition-all border border-white/5"
+                          title="Confirmar y cobrar"
                         >
-                          ×
+                          <Check className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openArchive(appo)}
+                          className="h-10 w-10 flex items-center justify-center bg-white/10 hover:bg-red-500/20 hover:text-red-300 rounded-xl transition-all border border-white/5"
+                          title="Archivar"
+                        >
+                          <Archive className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
@@ -339,18 +351,12 @@ const CalendarView = ({
                       </button>
                       {/* BOTÓN ARCHIVAR: Pasa a 'cancelled' */}
                       <button
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              "¿Mover esta cita al historial de archivadas?",
-                            )
-                          )
-                            onUpdateStatus(appo.id, "cancelled");
-                        }}
-                        className="h-9 w-9 flex items-center justify-center bg-white text-red-300 border border-red-100 rounded-xl hover:bg-red-500 hover:text-white transition-all text-sm"
+                        type="button"
+                        onClick={() => openArchive(appo)}
+                        className="h-9 w-9 flex items-center justify-center bg-white text-red-300 border border-red-100 rounded-xl hover:bg-red-500 hover:text-white transition-all"
                         title="Archivar"
                       >
-                        🗑️
+                        <Archive className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -360,6 +366,8 @@ const CalendarView = ({
           )}
         </div>
       )}
+
+      {appointmentModals}
     </div>
   );
 };

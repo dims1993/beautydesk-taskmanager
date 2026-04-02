@@ -6,11 +6,28 @@ import {
   Banknote,
   CheckCircle2,
   Archive,
-  Edit3,
   Timer,
   Layers,
-  Smartphone,
 } from "lucide-react";
+import { useApi } from "../../hooks/useApi";
+
+function toDatetimeLocalValue(isoOrString) {
+  if (!isoOrString) return "";
+  const d = new Date(isoOrString);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function formatApiError(err) {
+  if (!err || typeof err !== "object") return "No se pudo guardar.";
+  const { detail } = err;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail.map((x) => x.msg || JSON.stringify(x)).join(" ");
+  }
+  return err.message || "No se pudo guardar.";
+}
 
 // --- COMPONENTE BASE PARA EL BACKDROP Y CONTENEDOR ---
 const ModalWrapper = ({ isOpen, onClose, children, title, subtitle }) => {
@@ -137,10 +154,42 @@ export const EditAppointmentModal = ({
   isOpen,
   onClose,
   appointment,
-  services,
-  onSave,
+  services = [],
+  onSaved,
 }) => {
-  // Aquí puedes manejar el estado interno del form de edición
+  const { apiRequest } = useApi();
+  const [serviceId, setServiceId] = useState("");
+  const [startLocal, setStartLocal] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState(null);
+
+  useEffect(() => {
+    if (!isOpen || !appointment) return;
+    setServiceId(String(appointment.service_id ?? ""));
+    setStartLocal(toDatetimeLocalValue(appointment.start_time));
+    setFormError(null);
+  }, [isOpen, appointment?.id, appointment?.service_id, appointment?.start_time]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!appointment?.id || !startLocal) return;
+
+    setSaving(true);
+    setFormError(null);
+    try {
+      await apiRequest(`/appointments/${appointment.id}`, "PATCH", {
+        service_id: Number(serviceId),
+        start_time: startLocal,
+      });
+      onSaved?.();
+      onClose();
+    } catch (err) {
+      setFormError(formatApiError(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <ModalWrapper
       isOpen={isOpen}
@@ -148,16 +197,27 @@ export const EditAppointmentModal = ({
       title="Modificar Cita"
       subtitle="Ajustes"
     >
-      <form className="space-y-8">
+      <form className="space-y-8" onSubmit={handleSubmit}>
+        {appointment?.client_name && (
+          <p className="text-[11px] font-bold text-[#5d5045] px-1">
+            {appointment.client_name}
+          </p>
+        )}
+
         <div className="space-y-6">
           <div className="relative group">
             <label className="px-1 text-[9px] font-black text-[#8c857d] uppercase tracking-[0.3em] block mb-2">
-              Servicio Solicitado
+              Servicio
             </label>
             <div className="relative">
               <Layers className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 text-[#c4bdb5]" />
-              <select className="w-full pl-8 py-4 bg-transparent border-b border-[#eaddcf] outline-none text-[10px] font-black tracking-widest text-[#5d5045] appearance-none">
-                {services?.map((s) => (
+              <select
+                required
+                value={serviceId}
+                onChange={(e) => setServiceId(e.target.value)}
+                className="w-full pl-8 py-4 bg-transparent border-b border-[#eaddcf] outline-none text-[10px] font-black tracking-widest text-[#5d5045] appearance-none"
+              >
+                {services.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name.toUpperCase()}
                   </option>
@@ -168,23 +228,31 @@ export const EditAppointmentModal = ({
 
           <div className="relative group">
             <label className="px-1 text-[9px] font-black text-[#8c857d] uppercase tracking-[0.3em] block mb-2">
-              Nueva Agenda
+              Fecha y hora
             </label>
             <div className="relative">
               <Timer className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 text-[#c4bdb5]" />
               <input
                 type="datetime-local"
+                required
+                value={startLocal}
+                onChange={(e) => setStartLocal(e.target.value)}
                 className="w-full pl-8 py-4 bg-transparent border-b border-[#eaddcf] outline-none text-[10px] font-black tracking-widest text-[#5d5045]"
               />
             </div>
           </div>
         </div>
 
+        {formError && (
+          <p className="text-[11px] text-red-500 font-medium px-1">{formError}</p>
+        )}
+
         <button
-          type="button"
-          className="w-full py-6 bg-[#5d5045] text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.4em] shadow-xl transition-all"
+          type="submit"
+          disabled={saving || !appointment?.id}
+          className="w-full py-6 bg-[#5d5045] text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.4em] shadow-xl transition-all disabled:opacity-50"
         >
-          Guardar Cambios
+          {saving ? "Guardando…" : "Guardar Cambios"}
         </button>
       </form>
     </ModalWrapper>

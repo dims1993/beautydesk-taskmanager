@@ -7,7 +7,11 @@ from app.core.db.session import get_session
 from app.models.appointment import Appointment
 from app.models.user import User
 from app.models.service import Service
-from app.schemas.appointment import AppointmentCreate, AppointmentOut
+from app.schemas.appointment import (
+    AppointmentCreate,
+    AppointmentOut,
+    AppointmentUpdate,
+)
 # Eliminamos la importación de schemas.misc si vas a definir StatusUpdate aquí abajo
 from app.dependencies import get_current_user
 from app.core.notifications import send_appointment_confirmation 
@@ -146,6 +150,79 @@ async def create_appointment(
         date=new_appo.start_time.strftime("%d/%m/%Y %H:%M")
     )
     return new_appo
+
+
+def _user_can_access_appointment(user: User, appo: Appointment) -> bool:
+    if user.role == "super_admin":
+        return True
+    if not user.organization_id:
+        return True
+    return appo.organization_id == user.organization_id
+
+
+@router.patch("/{appointment_id}", response_model=AppointmentOut)
+def update_appointment(
+    appointment_id: int,
+    data: AppointmentUpdate,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    if data.service_id is None and data.start_time is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Envía al menos service_id o start_time para actualizar.",
+        )
+
+    appo = db.get(Appointment, appointment_id)
+    if not appo:
+        raise HTTPException(status_code=404, detail="Cita no encontrada")
+
+    if not _user_can_access_appointment(current_user, appo):
+        raise HTTPException(status_code=403, detail="Sin acceso a esta cita")
+
+    new_service_id = (
+        data.service_id if data.service_id is not None else appo.service_id
+    )
+    new_start = data.start_time if data.start_time is not None else appo.start_time
+
+    service = db.get(Service, new_service_id)
+    if not service:
+        raise HTTPException(status_code=400, detail="Servicio no válido")
+
+    duration = service.duration if service.duration else 60
+    new_end = new_start + timedelta(minutes=duration)
+
+    if appo.status == "scheduled":
+        collision_stmt = select(Appointment).where(
+            Appointment.staff_id == appo.staff_id,
+            Appointment.status == "scheduled",
+            Appointment.id != appointment_id,
+            new_start < Appointment.end_time,
+            new_end > Appointment.start_time,
+        )
+        if current_user.organization_id is not None:
+            collision_stmt = collision_stmt.where(
+                Appointment.organization_id == current_user.organization_id
+            )
+        collision = db.exec(collision_stmt).first()
+        if collision:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Horario ocupado por {collision.client_name} "
+                    f"({collision.start_time} - {collision.end_time})"
+                ),
+            )
+
+    appo.service_id = new_service_id
+    appo.start_time = new_start
+    appo.end_time = new_end
+
+    db.add(appo)
+    db.commit()
+    db.refresh(appo)
+    return appo
+
 
 @router.patch("/{appointment_id}/status", response_model=AppointmentOut)
 def update_status(

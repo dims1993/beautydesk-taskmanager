@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import {
   Check,
   Clock,
@@ -6,32 +5,16 @@ import {
   Archive,
   Edit3,
 } from "lucide-react";
-import { useApi } from "../hooks/useApi";
-// Importamos los modales desde tu nuevo archivo
-import {
-  PaymentModal,
-  EditAppointmentModal,
-  ArchiveAppointmentModal,
-} from "./modals/AppointmentModals.jsx";
+import { useAppointmentActionModals } from "../hooks/useAppointmentActionModals";
 
-const AppointmentList = ({ appointments = [], services, onUpdateStatus }) => {
-  const { apiRequest } = useApi();
-  // Estados para controlar qué modal está abierto y con qué cita
-  const [selectedAppo, setSelectedAppo] = useState(null);
-  const [modalType, setModalType] = useState(null); // 'edit', 'payment', 'archive'
-
-  useEffect(() => {
-    const debugFetchAllAppointments = async () => {
-      try {
-        const data = await apiRequest("/appointments/");
-        console.log("Data from API:", data);
-      } catch (error) {
-        console.error("Error fetching /appointments/ for debug:", error);
-      }
-    };
-
-    debugFetchAllAppointments();
-  }, [apiRequest]);
+const AppointmentList = ({
+  appointments = [],
+  services,
+  onUpdateStatus,
+  onRefresh,
+}) => {
+  const { openEdit, openPayment, openArchive, appointmentModals } =
+    useAppointmentActionModals(services, onUpdateStatus, onRefresh);
 
   const formatTimeRange = (startTime, durationMinutes = 30) => {
     const start = new Date(startTime);
@@ -48,17 +31,6 @@ const AppointmentList = ({ appointments = [], services, onUpdateStatus }) => {
         month: "long",
       })
       .toUpperCase();
-  };
-
-  // Handlers para abrir modales
-  const openModal = (type, appo) => {
-    setSelectedAppo(appo);
-    setModalType(type);
-  };
-
-  const closeModal = () => {
-    setSelectedAppo(null);
-    setModalType(null);
   };
 
   const safeAppointments = Array.isArray(appointments) ? appointments : [];
@@ -121,29 +93,23 @@ const AppointmentList = ({ appointments = [], services, onUpdateStatus }) => {
                   </div>
                 </div>
 
-                {/* BOTONES DE ACCIÓN */}
                 <div className="flex items-center gap-3 self-end md:self-center">
-                  {/* Botón Editar */}
                   <button
-                    onClick={() => openModal("edit", appo)}
+                    onClick={() => openEdit(appo)}
                     className="w-14 h-14 flex items-center justify-center bg-[#FAF9F6] text-[#c4bdb5] hover:text-[#5d5045] rounded-full border border-[#eaddcf] transition-all"
                   >
                     <Edit3 className="w-5 h-5" />
                   </button>
 
-                  {/* Botón Completar (Pago) */}
                   <button
-                    onClick={() =>
-                      openModal("payment", { ...appo, price: service?.price })
-                    }
+                    onClick={() => openPayment(appo)}
                     className="w-14 h-14 flex items-center justify-center bg-white text-[#8c857d] hover:bg-[#5d5045] hover:text-white rounded-full border border-[#eaddcf] transition-all shadow-sm"
                   >
                     <Check className="w-5 h-5" />
                   </button>
 
-                  {/* Botón Archivar */}
                   <button
-                    onClick={() => openModal("archive", appo)}
+                    onClick={() => openArchive(appo)}
                     className="w-14 h-14 flex items-center justify-center bg-white text-[#c4bdb5] hover:text-red-400 hover:border-red-100 rounded-full border border-[#eaddcf] transition-all"
                   >
                     <Archive className="w-5 h-5" />
@@ -155,32 +121,7 @@ const AppointmentList = ({ appointments = [], services, onUpdateStatus }) => {
         })}
       </div>
 
-      {/* RENDERIZADO DE MODALES */}
-      <EditAppointmentModal
-        isOpen={modalType === "edit"}
-        onClose={closeModal}
-        appointment={selectedAppo}
-        services={services}
-      />
-
-      <PaymentModal
-        isOpen={modalType === "payment"}
-        onClose={closeModal}
-        appointment={selectedAppo}
-        onConfirm={(id, price, method) => {
-          onUpdateStatus(id, "completed", { price, method });
-          closeModal();
-        }}
-      />
-
-      <ArchiveAppointmentModal
-        isOpen={modalType === "archive"}
-        onClose={closeModal}
-        onConfirm={() => {
-          onUpdateStatus(selectedAppo.id, "cancelled");
-          closeModal();
-        }}
-      />
+      {appointmentModals}
     </>
   );
 };

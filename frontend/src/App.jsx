@@ -253,6 +253,7 @@ function App() {
                             appointments={agendaWeekAppointments(appointments)}
                             services={services}
                             onUpdateStatus={handleUpdateStatus}
+                            onRefresh={fetchInitialData}
                           />
                         )}
                         {activeTab === "calendario" && (
@@ -260,6 +261,7 @@ function App() {
                             allAppointments={appointments}
                             services={services}
                             onUpdateStatus={handleUpdateStatus}
+                            onRefresh={fetchInitialData}
                             onAddClick={(date) => {
                               setPreselectedDate(
                                 new Date(

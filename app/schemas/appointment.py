@@ -12,6 +12,12 @@ class AppointmentCreate(BaseModel):
     service_id: int
     staff_id: Optional[int] = 1
 
+# Actualización parcial desde el modal de edición
+class AppointmentUpdate(BaseModel):
+    service_id: Optional[int] = None
+    start_time: Optional[datetime] = None
+
+
 # Lo que enviamos a React (incluyendo los nuevos campos para la gráfica)
 class AppointmentOut(BaseModel):
     id: int
