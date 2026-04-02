@@ -17,7 +17,7 @@ import CalendarView from "./components/CalendarView";
 import MobileNavbar from "./components/MobileNavbar";
 import StatsCharts from "./components/StatsCharts";
 import ArchivedList from "./components/ArchivedList";
-import ClientsView from "./components/ClientsView";
+import ClientDirectory from "./components/ClientDirectory";
 import Landing from "./components/Landing";
 import RegisterView from "./components/RegisterView";
 import ContactoView from "./components/ContactoView";
@@ -289,7 +289,7 @@ function App() {
                           </div>
                         )}
                         {activeTab === "clientes" && (
-                          <ClientsView
+                          <ClientDirectory
                             clients={clients}
                             onRefresh={fetchInitialData}
                             onError={setErrorMessage}

@@ -1,12 +1,71 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useApi } from "../hooks/useApi";
 
-const ClientsView = ({ clients = [], onAddClient, onRefresh }) => {
+/** Example contacts when the DB list is empty (demo / sales preview). */
+const SHOWCASE_CLIENTS = [
+  {
+    id: "showcase-1",
+    _isShowcase: true,
+    nombre: "María",
+    apellidos: "Fernández López",
+    telefono: "612 445 892",
+    email: "maria.fernandez@email.com",
+  },
+  {
+    id: "showcase-2",
+    _isShowcase: true,
+    nombre: "Cristina",
+    apellidos: "Jiménez Ruiz",
+    telefono: "634 221 018",
+    email: "cristina.j@email.com",
+  },
+  {
+    id: "showcase-3",
+    _isShowcase: true,
+    nombre: "Paula",
+    apellidos: "Moreno Sánchez",
+    telefono: "698 903 441",
+    email: "",
+  },
+  {
+    id: "showcase-4",
+    _isShowcase: true,
+    nombre: "Andrea",
+    apellidos: "Torres Vega",
+    telefono: "611 778 302",
+    email: "andrea.torres@email.com",
+  },
+  {
+    id: "showcase-5",
+    _isShowcase: true,
+    nombre: "Lucía",
+    apellidos: "Herrera Díaz",
+    telefono: "622 119 556",
+    email: "lucia.herrera@email.com",
+  },
+  {
+    id: "showcase-6",
+    _isShowcase: true,
+    nombre: "Elena",
+    apellidos: "Castro Mora",
+    telefono: "645 887 120",
+    email: "",
+  },
+];
+
+/**
+ * Salon client directory: search, add, and edit CRM-style contacts.
+ */
+const ClientDirectory = ({
+  clients = [],
+  onAddClient,
+  onRefresh,
+  onError,
+}) => {
   const { apiRequest } = useApi();
   const [searchTerm, setSearchTerm] = useState("");
   const [showForm, setShowForm] = useState(false);
 
-  // ESTADOS PARA EDICIÓN
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState(null);
 
@@ -17,7 +76,12 @@ const ClientsView = ({ clients = [], onAddClient, onRefresh }) => {
     email: "",
   });
 
-  const filteredClients = clients.filter(
+  const directoryRows = useMemo(
+    () => (clients.length > 0 ? clients : SHOWCASE_CLIENTS),
+    [clients],
+  );
+
+  const filteredClients = directoryRows.filter(
     (c) =>
       `${c.nombre || ""} ${c.apellidos || ""}`
         .toLowerCase()
@@ -45,21 +109,16 @@ const ClientsView = ({ clients = [], onAddClient, onRefresh }) => {
         email: editForm.email || "",
       };
 
-      // 1. Enviamos la actualización real
       await apiRequest(`/clients/${editingId}`, "PATCH", dataToUpdate);
 
-      // 2. Limpiar estados
       setEditingId(null);
       setEditForm(null);
 
-      // 3. ¡EL CAMBIO AQUÍ!
-      // Usamos onRefresh() (que es fetchInitialData) en lugar de onAddClient()
       if (onRefresh) {
         onRefresh();
       }
     } catch (err) {
       console.error("Error al actualizar:", err);
-      // 2. Usamos la prop onError en lugar de alert
       if (onError) {
         onError("No se pudo actualizar el cliente. Revisa los datos.");
       }
@@ -67,11 +126,10 @@ const ClientsView = ({ clients = [], onAddClient, onRefresh }) => {
   };
   return (
     <div className="space-y-6 animate-fadeIn">
-      {/* CABECERA Y BUSCADOR */}
       <div className="bg-white p-6 rounded-[2.5rem] border border-[#eee8e2] shadow-sm space-y-4">
         <div className="flex justify-between items-center">
           <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#a39485]">
-            Base de Datos Clientes
+            Directorio de clientes
           </h3>
           <button
             onClick={() => setShowForm(!showForm)}
@@ -80,6 +138,12 @@ const ClientsView = ({ clients = [], onAddClient, onRefresh }) => {
             {showForm ? "×" : "+"}
           </button>
         </div>
+        {clients.length === 0 && (
+          <p className="text-[10px] text-[#a39485] font-medium leading-relaxed">
+            Fichas de ejemplo. Añade tu primer cliente real con el botón + para
+            guardarlo en la base de datos.
+          </p>
+        )}
         <input
           type="text"
           placeholder="Buscar por nombre o teléfono..."
@@ -89,7 +153,6 @@ const ClientsView = ({ clients = [], onAddClient, onRefresh }) => {
         />
       </div>
 
-      {/* FORMULARIO NUEVO CLIENTE - CORREGIDO PARA EVITAR WARNINGS */}
       {showForm && (
         <form
           onSubmit={handleSubmit}
@@ -133,12 +196,11 @@ const ClientsView = ({ clients = [], onAddClient, onRefresh }) => {
             }
           />
           <button className="w-full bg-[#5d5045] text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-widest">
-            Guardar Cliente Fiel
+            Guardar cliente
           </button>
         </form>
       )}
 
-      {/* LISTADO DE CLIENTES */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {filteredClients.map((client) => (
           <div
@@ -149,14 +211,18 @@ const ClientsView = ({ clients = [], onAddClient, onRefresh }) => {
                 : "border-[#eee8e2]"
             } hover:border-[#dcc7b1] group relative`}
           >
+            {client._isShowcase && (
+              <span className="absolute top-4 right-4 text-[8px] font-black uppercase tracking-widest text-[#c4bdb5]">
+                Ejemplo
+              </span>
+            )}
             {editingId === client.id && editForm ? (
-              /* --- MODO EDICIÓN --- */
               <form
                 onSubmit={handleSaveEdit}
                 className="space-y-4 animate-fadeIn"
               >
                 <p className="text-[9px] font-black text-[#dcc7b1] uppercase tracking-[0.2em] mb-2">
-                  Editando Perfil
+                  Editando perfil
                 </p>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
@@ -225,26 +291,27 @@ const ClientsView = ({ clients = [], onAddClient, onRefresh }) => {
                 </div>
               </form>
             ) : (
-              /* --- MODO VISTA --- */
               <>
                 <div className="flex justify-between items-start">
                   <div>
                     <p className="text-[10px] font-black text-[#dcc7b1] uppercase tracking-tighter">
-                      Cliente v.i.p
+                      Cliente
                     </p>
                     <h4 className="font-bold text-[#5d5045] text-lg">
                       {client.nombre} {client.apellidos || ""}
                     </h4>
                   </div>
-                  <button
-                    onClick={() => {
-                      setEditingId(client.id);
-                      setEditForm({ ...client }); // Copia profunda para evitar mutaciones directas
-                    }}
-                    className="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 p-2.5 bg-[#f8f5f2] text-[#5d5045] rounded-full transition-all text-xs hover:bg-[#dcc7b1] hover:text-white"
-                  >
-                    ✏️
-                  </button>
+                  {!client._isShowcase && (
+                    <button
+                      onClick={() => {
+                        setEditingId(client.id);
+                        setEditForm({ ...client });
+                      }}
+                      className="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 p-2.5 bg-[#f8f5f2] text-[#5d5045] rounded-full transition-all text-xs hover:bg-[#dcc7b1] hover:text-white"
+                    >
+                      ✏️
+                    </button>
+                  )}
                 </div>
                 <div className="mt-4 space-y-1">
                   <p className="text-[11px] font-medium text-[#a39485] flex items-center gap-2">
@@ -265,4 +332,4 @@ const ClientsView = ({ clients = [], onAddClient, onRefresh }) => {
   );
 };
 
-export default ClientsView;
+export default ClientDirectory;

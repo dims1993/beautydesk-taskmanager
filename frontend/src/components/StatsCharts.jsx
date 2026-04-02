@@ -12,6 +12,18 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
   const currentStaffName =
     currentUser?.nombre || currentUser?.username || "Staff";
 
+  const staffBelongsToCurrentUser = (app) =>
+    currentStaffId != null &&
+    Number(app.staff_id) === Number(currentStaffId);
+
+  const isAppointmentCompleted = (app) => {
+    const s = String(app.status ?? "").toLowerCase();
+    return s === "completed" || s === "completada";
+  };
+
+  const findServiceById = (serviceId) =>
+    services.find((s) => Number(s.id) === Number(serviceId));
+
   // --- 1. LÓGICA DE FILTRADO (DÍA Y MES) ---
 
   // Filtramos las citas del día seleccionado para el total y para el Excel
@@ -21,10 +33,11 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
       appDate.getDate() === viewDate.getDate() &&
       appDate.getMonth() === viewDate.getMonth() &&
       appDate.getFullYear() === viewDate.getFullYear();
-    const isCompleted =
-      app.status === "completed" || app.status === "completada";
-    const belongsToMe = app.staff_id === currentStaffId;
-    return isSameDay && isCompleted && belongsToMe;
+    return (
+      isSameDay &&
+      isAppointmentCompleted(app) &&
+      staffBelongsToCurrentUser(app)
+    );
   });
 
   const statsHoy = appsDelDia.reduce(
@@ -46,13 +59,14 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
       const isSameMonth =
         appDate.getMonth() === viewDate.getMonth() &&
         appDate.getFullYear() === viewDate.getFullYear();
-      const isCompleted =
-        app.status === "completed" || app.status === "completada";
-      const belongsToMe = app.staff_id === currentStaffId;
 
-      if (isSameMonth && isCompleted && belongsToMe) {
+      if (
+        isSameMonth &&
+        isAppointmentCompleted(app) &&
+        staffBelongsToCurrentUser(app)
+      ) {
         const monto = parseFloat(app.final_price) || 0;
-        const servicioObj = services.find((s) => s.id === app.service_id);
+        const servicioObj = findServiceById(app.service_id);
         const nombreServicio = servicioObj ? servicioObj.name : "Otros";
         acc.servicios[nombreServicio] =
           (acc.servicios[nombreServicio] || 0) + monto;
@@ -74,11 +88,12 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
       const isSameMonth =
         appDate.getMonth() === viewDate.getMonth() &&
         appDate.getFullYear() === viewDate.getFullYear();
-      const isCompleted =
-        app.status === "completed" || app.status === "completada";
-      const belongsToMe = app.staff_id === currentStaffId;
 
-      return isSameMonth && isCompleted && belongsToMe;
+      return (
+        isSameMonth &&
+        isAppointmentCompleted(app) &&
+        staffBelongsToCurrentUser(app)
+      );
     });
 
     if (appsDelMes.length === 0) {
@@ -99,7 +114,7 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
         minute: "2-digit",
       }),
       Cliente: app.client_name || "N/A",
-      Servicio: services.find((s) => s.id === app.service_id)?.name || "Otro",
+      Servicio: findServiceById(app.service_id)?.name || "Otro",
       Método: (app.payment_method || "efectivo").toUpperCase(),
       "Total (€)": parseFloat(app.final_price || 0),
     }));
