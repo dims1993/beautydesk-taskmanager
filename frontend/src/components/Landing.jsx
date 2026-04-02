@@ -84,7 +84,7 @@ export default function Landing() {
             <div className="absolute left-[5%] md:left-[-10%] top-[25%] w-[160px] md:w-[220px] aspect-[9/18.5] bg-white rounded-[2rem] shadow-[0_15px_40px_-10px_rgba(93,80,69,0.15)] border border-[#eaddcf]/50 z-10 scale-90 md:scale-100 opacity-90 md:opacity-100 rotate-[-5deg] md:rotate-[-8deg] overflow-hidden p-1.5 hover:rotate-0 transition-transform duration-500">
               {/* Imagen Real de tu Pantalla de Clientes */}
               <img
-                src="./public/hero.png"
+                src="/hero.png"
                 alt="Gestión de Clientes en BeautyTask"
                 className="w-full h-full object-cover rounded-[1.8rem]"
                 // FALLBACK: Si no existe, muestra un patrón elegante que combina con la marca
@@ -109,7 +109,7 @@ export default function Landing() {
                 {/* Imagen Real de tu Dashboard Principal */}
                 <div className="flex-1 rounded-[2.2rem] overflow-hidden bg-gray-50 border border-[#eaddcf]/20 shadow-inner group-hover:rotate-1 transition-transform duration-1000">
                   <img
-                    src="/main-dashboard.webp"
+                    src="/hero2.png"
                     alt="BeautyTask Analytics Dashboard"
                     className="w-full h-full object-cover"
                     // FALLBACK: Una imagen de ejemplo de analíticas nítida
@@ -137,7 +137,7 @@ export default function Landing() {
             <div className="absolute right-[5%] md:right-[-8%] bottom-[20%] w-[160px] md:w-[220px] aspect-[9/18.5] bg-white rounded-[2rem] shadow-[0_15px_40px_-10px_rgba(93,80,69,0.15)] border border-[#eaddcf]/50 z-10 scale-90 md:scale-100 opacity-90 md:opacity-100 rotate-[5deg] md:rotate-[8deg] overflow-hidden p-1.5 hover:rotate-0 transition-transform duration-500">
               {/* Imagen Real de tu Vista de Calendario */}
               <img
-                src="/app-calendar.webp"
+                src="/hero3.jpeg"
                 alt="Agenda Inteligente de BeautyTask"
                 className="w-full h-full object-cover rounded-[1.8rem]"
                 // FALLBACK: Un patrón minimalista crema que combina con la marca
