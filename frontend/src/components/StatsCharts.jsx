@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Lock, Sparkles } from "lucide-react";
 import * as XLSX from "xlsx/xlsx.mjs";
 
 const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
@@ -197,7 +198,22 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
               {dayLabel}
             </p>
           </div>
-          <div className="text-4xl">{isLocked ? "🔒" : "💅"}</div>
+          <div
+            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/20 bg-white/10"
+            aria-hidden
+          >
+            {isLocked ? (
+              <Lock
+                className="h-7 w-7 text-[#f5ebe0]"
+                strokeWidth={1.5}
+              />
+            ) : (
+              <Sparkles
+                className="h-7 w-7 text-[#f5ebe0]"
+                strokeWidth={1.5}
+              />
+            )}
+          </div>
         </div>
       </div>
 
@@ -267,10 +283,12 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
 
         {!isLocked ? (
           <button
+            type="button"
             onClick={() => setShowPasswordModal(true)}
-            className="w-full py-3 bg-[#5d5045] text-white rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-black transition-all"
+            className="flex w-full items-center justify-center gap-2 py-3 bg-[#5d5045] text-white rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-black transition-all"
           >
-            🔒 Confirmar y Cerrar Caja
+            <Lock className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+            Confirmar y Cerrar Caja
           </button>
         ) : (
           <div className="w-full py-3 bg-green-50 text-green-600 rounded-2xl text-[9px] font-black uppercase text-center border border-green-100">
