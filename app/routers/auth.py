@@ -32,7 +32,15 @@ GOOGLE_CALENDAR_SCOPES = [
     "https://www.googleapis.com/auth/userinfo.profile",
     "https://www.googleapis.com/auth/calendar",
 ]
-ALLOWED_EMAILS = os.getenv("ALLOWED_EMAILS").split(',')
+
+
+def _parse_allowed_emails() -> list[str]:
+    """Comma-separated allowlist. Empty / unset = no extra check (only registered users in DB)."""
+    raw = os.getenv("ALLOWED_EMAILS") or ""
+    return [e.strip().lower() for e in raw.split(",") if e.strip()]
+
+
+ALLOWED_EMAILS = _parse_allowed_emails()
 
 def _google_oauth_client_config_web():
     return {
@@ -97,12 +105,12 @@ async def auth_google(data: dict, db: Session = Depends(get_session)):
                 detail="Acceso denegado. Este correo no está registrado como profesional en BeautyTask."
             )
 
-        # 4. CONTROL DE ACCESO: Verificar si el email está en la lista blanca
-        if email not in ALLOWED_EMAILS:
+        # 4. CONTROL DE ACCESO: Lista blanca opcional (ALLOWED_EMAILS en env)
+        if ALLOWED_EMAILS and email.lower() not in ALLOWED_EMAILS:
             print(f"🚫 Intento de acceso denegado para: {email}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Acceso denegado. Este correo no está en la lista blanca."
+                detail="Acceso denegado. Este correo no está en la lista blanca.",
             )
 
         # 5. Guardar tokens de Google (si vienen en la petición)
