@@ -33,3 +33,6 @@ node_modules/
 .env
 dist/
 .aider*
+
+# Local demo / video edits (too large for the remote)
+demo-video/
