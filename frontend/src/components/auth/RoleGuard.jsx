@@ -17,8 +17,9 @@ const RoleGuard = ({ children, allowedRoles, user, isLoggedIn }) => {
     );
   }
 
-  // 3. Si el rol no está permitido, lo mandamos a la app principal
-  if (!allowedRoles.includes(user?.role)) {
+  const userRole = String(user?.role || "").toUpperCase();
+  const allowed = allowedRoles.map((r) => String(r || "").toUpperCase());
+  if (!allowed.includes(userRole)) {
     return <Navigate to="/app" replace />;
   }
 

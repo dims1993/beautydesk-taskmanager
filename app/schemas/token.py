@@ -7,6 +7,8 @@ class Token(BaseModel):
     token_type: str
     role: str
     organization_id: Optional[int] = None
+    integrations_access: Optional[bool] = None
+    requires_billing_step: Optional[bool] = None
 
 
 class TokenData(BaseModel):

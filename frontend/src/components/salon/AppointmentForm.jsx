@@ -17,6 +17,7 @@ const AppointmentForm = ({
   onError,
   initialDate,
   clients = [],
+  disabledReason = null,
 }) => {
   const { apiRequest } = useApi();
   const [loading, setLoading] = useState(false);
@@ -33,6 +34,18 @@ const AppointmentForm = ({
 
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+
+  useEffect(() => {
+    if (services.length > 0) {
+      setFormData((f) => {
+        const valid = services.some(
+          (s) => String(s.id) === String(f.service_id),
+        );
+        if (valid && f.service_id) return f;
+        return { ...f, service_id: services[0].id };
+      });
+    }
+  }, [services]);
 
   useEffect(() => {
     if (formData.client_name.length > 1) {
@@ -60,6 +73,10 @@ const AppointmentForm = ({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (disabledReason) {
+      onError?.(disabledReason);
+      return;
+    }
     setLoading(true);
     setLastCreated(null);
 
@@ -152,7 +169,17 @@ const AppointmentForm = ({
         </h2>
       </div>
 
-      <form onSubmit={handleSubmit} className="p-8 md:p-10 space-y-6">
+      <form
+        onSubmit={handleSubmit}
+        className={`p-8 md:p-10 space-y-6 relative ${disabledReason ? "pointer-events-none opacity-50" : ""}`}
+      >
+        {disabledReason && (
+          <div className="pointer-events-auto absolute inset-0 z-50 flex items-start justify-center pt-8 px-4 bg-white/80 backdrop-blur-[2px] rounded-b-[3rem]">
+            <p className="text-center text-[10px] font-black uppercase tracking-widest text-[#5d5045] max-w-xs leading-relaxed border border-amber-200 bg-amber-50 rounded-2xl px-4 py-4">
+              {disabledReason}
+            </p>
+          </div>
+        )}
         {/* AVISO DE WHATSAPP (Rediseñado) */}
         {lastCreated && (
           <div className="p-6 bg-[#f5f1ed] rounded-3xl border border-[#eaddcf] animate-in fade-in slide-in-from-top-4 duration-500 relative">
@@ -263,12 +290,19 @@ const AppointmentForm = ({
               onChange={(e) =>
                 setFormData({ ...formData, service_id: e.target.value })
               }
+              required
             >
-              {services.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name.toUpperCase()}
+              {services.length === 0 ? (
+                <option value="">
+                  Sin servicios — añádelos en Ajustes
                 </option>
-              ))}
+              ) : (
+                services.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name.toUpperCase()}
+                  </option>
+                ))
+              )}
             </select>
           </div>
 
@@ -294,7 +328,12 @@ const AppointmentForm = ({
         {/* Botón de Acción Principal */}
         <button
           type="submit"
-          disabled={loading}
+          disabled={
+            loading ||
+            !!disabledReason ||
+            services.length === 0 ||
+            !formData.service_id
+          }
           className="w-full py-6 mt-4 bg-[#5d5045] text-[#f5ebe0] rounded-2xl font-black uppercase text-[11px] tracking-[0.4em] shadow-xl shadow-[#5d5045]/20 disabled:opacity-50 transition-all hover:bg-[#4a3f36] active:scale-[0.98]"
         >
           {loading ? "PROCESANDO..." : "CONFIRMAR CITA"}

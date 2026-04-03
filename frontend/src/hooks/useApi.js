@@ -1,39 +1,60 @@
 const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 export const useApi = () => {
-  const apiRequest = async (endpoint, method = "GET", body = null) => {
-    const token = localStorage.getItem("token");
+  /**
+   * @param {string} endpoint
+   * @param {string} method
+   * @param {object|FormData|null} body
+   * @param {{ tokenOverride?: string | null, skipAuthRedirect?: boolean }} [options]
+   */
+  const apiRequest = async (
+    endpoint,
+    method = "GET",
+    body = null,
+    requestOptions = {},
+  ) => {
+    const { tokenOverride = null, skipAuthRedirect = false } = requestOptions;
+    const token =
+      tokenOverride !== null && tokenOverride !== undefined
+        ? tokenOverride
+        : localStorage.getItem("token");
 
-    // Configuramos los headers básicos
     const headers = {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     };
 
-    let options = { method, headers };
+    const fetchOpts = { method, headers };
 
     if (body) {
-      // SI EL BODY ES FORMDATA (Para el Login)
       if (body instanceof FormData) {
-        options.body = body;
-        // IMPORTANTE: No ponemos Content-Type, el navegador lo hará solo
+        fetchOpts.body = body;
       } else {
-        // SI EL BODY ES JSON (Para el resto de la app)
         headers["Content-Type"] = "application/json";
-        options.body = JSON.stringify(body);
+        fetchOpts.body = JSON.stringify(body);
       }
     }
 
     try {
-      const response = await fetch(`${BASE_URL}${endpoint}`, options);
-
-      if (response.status === 401) {
-        localStorage.removeItem("token");
-        window.location.href = "/login";
-        return null;
-      }
+      const response = await fetch(`${BASE_URL}${endpoint}`, fetchOpts);
 
       const contentType = response.headers.get("content-type") || "";
       const isJson = contentType.includes("application/json");
+
+      if (response.status === 401) {
+        const payload401 = isJson
+          ? await response.json()
+          : await response.text();
+        if (!skipAuthRedirect) {
+          localStorage.removeItem("token");
+          window.location.href = "/login";
+          return null;
+        }
+        return Promise.reject(
+          typeof payload401 === "object"
+            ? payload401
+            : { detail: String(payload401) },
+        );
+      }
 
       const payload = isJson ? await response.json() : await response.text();
 

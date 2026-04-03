@@ -5,7 +5,7 @@ from datetime import timedelta, datetime
 from pydantic import BaseModel      # Añadimos BaseModel
 from app.core.db.session import get_session
 from app.models.appointment import Appointment
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.service import Service
 from app.schemas.appointment import (
     AppointmentCreate,
@@ -36,15 +36,12 @@ async def get_appointments(
         print(f"DEBUG: Current User ID: {current_user.id}")
         statement = select(Appointment).order_by(Appointment.start_time.asc())
         
-        # Filtro multi-tenant
-        if current_user.role != "super_admin":
-            # TEMP: Si el usuario no tiene org_id, devolvemos todo para depurar conexión/datos
+        if current_user.role != UserRole.SUPER_ADMIN:
             if not current_user.organization_id:
-                print("⚠️ DEBUG: current_user.organization_id is None; returning ALL appointments (temporary).")
-                results = db.exec(statement).all()
-                print(f"DEBUG: Appointments in DB: {len(results)}")
-                return results
-            statement = statement.where(Appointment.organization_id == current_user.organization_id)
+                return []
+            statement = statement.where(
+                Appointment.organization_id == current_user.organization_id
+            )
         
         results = db.exec(statement).all()
         print(f"DEBUG: Appointments in DB: {len(results)}")
@@ -67,7 +64,7 @@ async def get_upcoming(
         ).order_by(Appointment.start_time.asc())
         
         # Filtro multi-tenant
-        if current_user.role != "super_admin":
+        if current_user.role != UserRole.SUPER_ADMIN:
             # Si el admin no tiene org_id, no devolvemos error, devolvemos vacío
             if not current_user.organization_id:
                 return []
@@ -88,12 +85,37 @@ async def create_appointment(
     db: Session = Depends(get_session), 
     current_user: User = Depends(get_current_user)
 ):
+    if current_user.role != UserRole.SUPER_ADMIN and not current_user.organization_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Completa los datos fiscales de tu negocio en Ajustes antes de crear citas.",
+        )
+
+    service = db.get(Service, data.service_id)
+    if not service:
+        raise HTTPException(status_code=400, detail="Servicio no encontrado")
+
+    if current_user.role != UserRole.SUPER_ADMIN:
+        if service.organization_id != current_user.organization_id:
+            raise HTTPException(
+                status_code=400,
+                detail="El servicio no pertenece a tu organización.",
+            )
+
     appointment_data = data.model_dump()
     appointment_data["staff_id"] = current_user.id
     new_appo = Appointment(**appointment_data)
-    new_appo.organization_id = current_user.organization_id
+    new_appo.organization_id = (
+        current_user.organization_id
+        if current_user.organization_id is not None
+        else service.organization_id
+    )
+    if new_appo.organization_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail="No se puede determinar la organización de la cita.",
+        )
 
-    service = db.get(Service, data.service_id)
     duration = service.duration if service else 60
     new_appo.end_time = new_appo.start_time + timedelta(minutes=duration)
 
@@ -153,10 +175,10 @@ async def create_appointment(
 
 
 def _user_can_access_appointment(user: User, appo: Appointment) -> bool:
-    if user.role == "super_admin":
+    if user.role == UserRole.SUPER_ADMIN:
         return True
     if not user.organization_id:
-        return True
+        return False
     return appo.organization_id == user.organization_id
 
 

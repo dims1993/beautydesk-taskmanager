@@ -4,6 +4,7 @@ import { useApi } from "../../hooks/useApi";
 import { useAppointmentActionModals } from "../../hooks/useAppointmentActionModals";
 
 const CalendarView = ({
+  currentUser = null,
   allAppointments = [],
   services = [],
   onUpdateStatus,
@@ -18,6 +19,11 @@ const CalendarView = ({
   const [googleConnected, setGoogleConnected] = useState(false);
   const [googleHasRefreshToken, setGoogleHasRefreshToken] = useState(false);
   const [googleStatusLoading, setGoogleStatusLoading] = useState(true);
+  const [upgradeHint, setUpgradeHint] = useState("");
+
+  const integrationsLocked =
+    currentUser &&
+    currentUser.integrations_access === false;
 
   const safeAppointments = Array.isArray(allAppointments)
     ? allAppointments
@@ -69,6 +75,11 @@ const CalendarView = ({
   const refreshGoogleCalendarStatus = async () => {
     try {
       const status = await apiRequest("/auth/google/calendar/status");
+      if (status?.integrations_locked) {
+        setGoogleConnected(false);
+        setGoogleHasRefreshToken(false);
+        return;
+      }
       setGoogleConnected(!!status?.connected);
       setGoogleHasRefreshToken(!!status?.has_refresh_token);
     } catch (e) {
@@ -81,11 +92,32 @@ const CalendarView = ({
   };
 
   useEffect(() => {
-    refreshGoogleCalendarStatus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("google_calendar") === "locked") {
+      setUpgradeHint(
+        "Tu plan no incluye la conexión con Google Calendar. Actualiza integraciones o contacta con soporte.",
+      );
+      params.delete("google_calendar");
+      const next =
+        window.location.pathname +
+        (params.toString() ? `?${params}` : "") +
+        window.location.hash;
+      window.history.replaceState({}, "", next);
+    }
   }, []);
 
+  useEffect(() => {
+    refreshGoogleCalendarStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.integrations_access]);
+
   const handleConnectGoogleCalendar = async () => {
+    if (integrationsLocked) {
+      setUpgradeHint(
+        "La conexión con Google Calendar no está disponible en tu plan. Actualiza tu suscripción o pide a un administrador que active integraciones.",
+      );
+      return;
+    }
     try {
       const res = await apiRequest("/auth/google/calendar/connect");
       const url = res?.authorization_url;
@@ -94,13 +126,32 @@ const CalendarView = ({
       window.location.href = url;
     } catch (e) {
       console.error("Google Calendar connect failed:", e);
-      alert(
-        "Failed to connect Google Calendar. Check backend logs and Google OAuth redirect URI configuration.",
-      );
+      const detail =
+        typeof e?.detail === "string"
+          ? e.detail
+          : Array.isArray(e?.detail)
+            ? e.detail.map((d) => d.msg).join(" ")
+            : "";
+      if (
+        detail &&
+        (detail.includes("plan") || detail.includes("Integraciones"))
+      ) {
+        setUpgradeHint(detail);
+      } else {
+        alert(
+          "No se pudo conectar Google Calendar. Revisa la configuración OAuth en el servidor.",
+        );
+      }
     }
   };
 
   const handleDisconnectGoogleCalendar = async () => {
+    if (integrationsLocked) {
+      setUpgradeHint(
+        "No puedes gestionar Google Calendar con tu plan actual.",
+      );
+      return;
+    }
     try {
       await apiRequest("/auth/google/calendar/disconnect", "POST");
       await refreshGoogleCalendarStatus();
@@ -112,6 +163,18 @@ const CalendarView = ({
 
   return (
     <div className="space-y-6 animate-fadeIn pb-16">
+      {upgradeHint && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-[10px] font-bold text-amber-950 flex justify-between gap-4 items-start">
+          <span>{upgradeHint}</span>
+          <button
+            type="button"
+            className="shrink-0 text-[9px] font-black uppercase tracking-widest opacity-60 hover:opacity-100"
+            onClick={() => setUpgradeHint("")}
+          >
+            Cerrar
+          </button>
+        </div>
+      )}
       {/* SECCIÓN CALENDARIO */}
       <div className="bg-white/90 backdrop-blur-md rounded-[2.5rem] p-6 shadow-sm border border-[#e5e0d8]">
         <div className="flex justify-between items-center mb-6 px-2">
@@ -126,16 +189,26 @@ const CalendarView = ({
                   ? handleDisconnectGoogleCalendar
                   : handleConnectGoogleCalendar
               }
-              className="inline-flex items-center justify-center bg-white text-[#5d5045] border border-[#eee8e2] px-4 py-2 rounded-2xl hover:border-[#dcc7b1] transition-all text-[10px] font-black uppercase tracking-widest"
-              title="Connect Google Calendar"
+              className={`inline-flex items-center justify-center border px-4 py-2 rounded-2xl transition-all text-[10px] font-black uppercase tracking-widest ${
+                integrationsLocked
+                  ? "bg-[#f5f0eb] text-[#a39485] border-[#e8e0d8] cursor-not-allowed"
+                  : "bg-white text-[#5d5045] border-[#eee8e2] hover:border-[#dcc7b1]"
+              }`}
+              title={
+                integrationsLocked
+                  ? "Integración no disponible en tu plan"
+                  : "Conectar Google Calendar"
+              }
             >
               {googleStatusLoading
                 ? "Google…"
-                : googleConnected
-                  ? googleHasRefreshToken
-                    ? "Google Connected"
-                    : "Google Connected*"
-                  : "Connect Google"}
+                : integrationsLocked
+                  ? "Google (plan)"
+                  : googleConnected
+                    ? googleHasRefreshToken
+                      ? "Google conectado"
+                      : "Google conectado*"
+                    : "Conectar Google"}
             </button>
             <button
               onClick={() =>

@@ -4,6 +4,7 @@ import {
   BarChart3,
   Users,
   UserSquare2,
+  Settings,
 } from "lucide-react";
 
 /** Main app sections — shared by mobile and desktop nav. */
@@ -13,4 +14,5 @@ export const APP_MAIN_NAV_TABS = [
   { id: "stats", icon: BarChart3, title: "Estadísticas" },
   { id: "equipo", icon: Users, title: "Equipo" },
   { id: "clientes", icon: UserSquare2, title: "Clientes" },
+  { id: "ajustes", icon: Settings, title: "Ajustes" },
 ];

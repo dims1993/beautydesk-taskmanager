@@ -14,6 +14,8 @@ def sync_with_google_calendar(appointment, user):
     Never raises: appointment creation must not fail if Google API fails.
     """
     try:
+        if not getattr(user, "integrations_access", True):
+            return
         if not user.google_access_token:
             print("Google access token is missing.")
             return

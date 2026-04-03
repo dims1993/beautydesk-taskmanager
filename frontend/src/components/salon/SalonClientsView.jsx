@@ -1,59 +1,7 @@
-import React, { useState, useMemo, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import { Trash2, Pencil } from "lucide-react";
 import { useApi } from "../../hooks/useApi";
 import { DeleteClientConfirmModal } from "../modals/AppointmentModals.jsx";
-
-/** Example contacts when the DB list is empty (demo / sales preview). */
-const SHOWCASE_CLIENTS = [
-  {
-    id: "showcase-1",
-    _isShowcase: true,
-    nombre: "María",
-    apellidos: "Fernández López",
-    telefono: "612 445 892",
-    email: "maria.fernandez@email.com",
-  },
-  {
-    id: "showcase-2",
-    _isShowcase: true,
-    nombre: "Cristina",
-    apellidos: "Jiménez Ruiz",
-    telefono: "634 221 018",
-    email: "cristina.j@email.com",
-  },
-  {
-    id: "showcase-3",
-    _isShowcase: true,
-    nombre: "Paula",
-    apellidos: "Moreno Sánchez",
-    telefono: "698 903 441",
-    email: "",
-  },
-  {
-    id: "showcase-4",
-    _isShowcase: true,
-    nombre: "Andrea",
-    apellidos: "Torres Vega",
-    telefono: "611 778 302",
-    email: "andrea.torres@email.com",
-  },
-  {
-    id: "showcase-5",
-    _isShowcase: true,
-    nombre: "Lucía",
-    apellidos: "Herrera Díaz",
-    telefono: "622 119 556",
-    email: "lucia.herrera@email.com",
-  },
-  {
-    id: "showcase-6",
-    _isShowcase: true,
-    nombre: "Elena",
-    apellidos: "Castro Mora",
-    telefono: "645 887 120",
-    email: "",
-  },
-];
 
 /**
  * Directorio de clientes del salón (CRM): buscar, alta, edición y baja.
@@ -64,6 +12,7 @@ const SalonClientsView = ({
   onAddClient,
   onRefresh,
   onError,
+  blockedMessage = null,
 }) => {
   const { apiRequest } = useApi();
   const [searchTerm, setSearchTerm] = useState("");
@@ -83,12 +32,7 @@ const SalonClientsView = ({
     email: "",
   });
 
-  const directoryRows = useMemo(
-    () => (clients.length > 0 ? clients : SHOWCASE_CLIENTS),
-    [clients],
-  );
-
-  const filteredClients = directoryRows.filter(
+  const filteredClients = clients.filter(
     (c) =>
       `${c.nombre || ""} ${c.apellidos || ""}`
         .toLowerCase()
@@ -133,7 +77,6 @@ const SalonClientsView = ({
   };
 
   const openDeleteModal = (client) => {
-    if (client._isShowcase) return;
     setClientPendingDelete(client);
   };
 
@@ -145,7 +88,7 @@ const SalonClientsView = ({
   const confirmDeleteClient = async () => {
     if (deleteInFlightRef.current) return;
     const client = clientPendingDelete;
-    if (!client?.id || client._isShowcase) return;
+    if (!client?.id) return;
     const idToDelete = Number(client.id);
     if (!Number.isFinite(idToDelete)) return;
 
@@ -184,22 +127,28 @@ const SalonClientsView = ({
         isDeleting={deleteSubmitting}
       />
       <div className="bg-white p-6 rounded-[2.5rem] border border-[#eee8e2] shadow-sm space-y-4">
+        {blockedMessage && (
+          <p className="text-[10px] font-black uppercase tracking-widest text-amber-900 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
+            {blockedMessage}
+          </p>
+        )}
         <div className="flex justify-between items-center">
           <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#a39485]">
             Directorio de clientes
           </h3>
           <button
             type="button"
-            onClick={() => setShowForm(!showForm)}
-            className="bg-[#5d5045] text-white text-[18px] w-10 h-10 rounded-full hover:rotate-90 transition-all flex items-center justify-center"
+            disabled={!!blockedMessage}
+            onClick={() => !blockedMessage && setShowForm(!showForm)}
+            className="bg-[#5d5045] text-white text-[18px] w-10 h-10 rounded-full hover:rotate-90 transition-all flex items-center justify-center disabled:opacity-40 disabled:hover:rotate-0"
           >
             {showForm ? "×" : "+"}
           </button>
         </div>
-        {clients.length === 0 && (
+        {clients.length === 0 && !blockedMessage && (
           <p className="text-[10px] text-[#a39485] font-medium leading-relaxed">
-            Fichas de ejemplo. Añade tu primer cliente real con el botón + para
-            guardarlo en la base de datos.
+            Aún no hay clientes. Usa el botón + para dar de alta el primero en
+            tu espacio.
           </p>
         )}
         <input
@@ -211,7 +160,7 @@ const SalonClientsView = ({
         />
       </div>
 
-      {showForm && (
+      {showForm && !blockedMessage && (
         <form
           onSubmit={handleSubmit}
           className="bg-[#dcc7b1]/10 p-6 rounded-[2.5rem] border border-dashed border-[#dcc7b1] space-y-3 animate-slideDown"
@@ -272,11 +221,6 @@ const SalonClientsView = ({
                 : "border-[#eee8e2]"
             } hover:border-[#dcc7b1] group relative`}
           >
-            {client._isShowcase && (
-              <span className="absolute top-4 right-4 text-[8px] font-black uppercase tracking-widest text-[#c4bdb5]">
-                Ejemplo
-              </span>
-            )}
             {editingId === client.id && editForm ? (
               <form
                 onSubmit={handleSaveEdit}
@@ -362,30 +306,28 @@ const SalonClientsView = ({
                       {client.nombre} {client.apellidos || ""}
                     </h4>
                   </div>
-                  {!client._isShowcase && (
-                    <div className="flex shrink-0 gap-1.5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingId(client.id);
-                          setEditForm({ ...client });
-                        }}
-                        className="p-2.5 bg-[#f8f5f2] text-[#5d5045] rounded-full text-xs hover:bg-[#dcc7b1] hover:text-white transition-all"
-                        title="Editar"
-                      >
-                        <Pencil className="w-4 h-4" strokeWidth={2} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openDeleteModal(client)}
-                        disabled={deletingId === client.id}
-                        className="p-2.5 bg-[#f8f5f2] text-red-400 rounded-full hover:bg-red-50 hover:text-red-500 transition-all disabled:opacity-40"
-                        title="Eliminar ficha"
-                      >
-                        <Trash2 className="w-4 h-4" strokeWidth={2} />
-                      </button>
-                    </div>
-                  )}
+                  <div className="flex shrink-0 gap-1.5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingId(client.id);
+                        setEditForm({ ...client });
+                      }}
+                      className="p-2.5 bg-[#f8f5f2] text-[#5d5045] rounded-full text-xs hover:bg-[#dcc7b1] hover:text-white transition-all"
+                      title="Editar"
+                    >
+                      <Pencil className="w-4 h-4" strokeWidth={2} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openDeleteModal(client)}
+                      disabled={deletingId === client.id}
+                      className="p-2.5 bg-[#f8f5f2] text-red-400 rounded-full hover:bg-red-50 hover:text-red-500 transition-all disabled:opacity-40"
+                      title="Eliminar ficha"
+                    >
+                      <Trash2 className="w-4 h-4" strokeWidth={2} />
+                    </button>
+                  </div>
                 </div>
                 <div className="mt-4 space-y-1">
                   <p className="text-[11px] font-medium text-[#a39485] flex items-center gap-2">

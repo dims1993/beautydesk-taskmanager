@@ -11,6 +11,10 @@ export default function DesktopNavBar({
   currentUser,
   onLogout,
 }) {
+  const fiscalIncomplete =
+    String(currentUser?.role || "").toUpperCase() === "OWNER" &&
+    currentUser?.organization_id == null;
+
   return (
     <nav className="hidden md:flex justify-center w-full">
       <div className="flex items-center gap-2 px-3 py-2 bg-white/40 backdrop-blur-md rounded-full border border-white/40 shadow-[0_8px_32px_rgba(93,80,69,0.1)]">
@@ -21,12 +25,20 @@ export default function DesktopNavBar({
             <button
               key={tab.id}
               type="button"
-              title={tab.title}
+              title={
+                tab.id === "ajustes" && fiscalIncomplete
+                  ? "Ajustes — completa datos fiscales"
+                  : tab.title
+              }
               onClick={() => setActiveTab(tab.id)}
               className={`relative flex items-center justify-center w-11 h-11 rounded-full transition-all duration-500 ${
                 isActive
                   ? "bg-[#5d5045] text-white shadow-md"
                   : "text-[#5d5045] opacity-40 hover:opacity-70"
+              } ${
+                tab.id === "ajustes" && fiscalIncomplete && !isActive
+                  ? "ring-2 ring-amber-400/80 ring-offset-2 ring-offset-[#f8f5f2]"
+                  : ""
               }`}
             >
               <Icon size={18} strokeWidth={isActive ? 2.5 : 1.5} />
@@ -39,7 +51,7 @@ export default function DesktopNavBar({
 
         <div className="w-[1px] h-4 bg-[#5d5045]/10 mx-1" />
 
-        {currentUser?.role === "super_admin" && (
+        {String(currentUser?.role || "").toUpperCase() === "SUPER_ADMIN" && (
           <Link
             to="/master-panel"
             className="flex items-center justify-center w-11 h-11 rounded-full text-[#5d5045] opacity-50 hover:opacity-100 hover:bg-white/60 transition-all"

@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional, List, TYPE_CHECKING
 from enum import Enum
 from sqlmodel import SQLModel, Field, Relationship
@@ -31,3 +32,9 @@ class User(SQLModel, table=True):
     # Nuevos campos para almacenar los tokens de Google
     google_access_token: str | None = Field(default=None)
     google_refresh_token: str | None = Field(default=None)
+
+    # Calendar / WhatsApp y otras integraciones (planes superiores o SUPER_ADMIN)
+    integrations_access: bool = Field(default=True)
+
+    phone: Optional[str] = Field(default=None)
+    terms_accepted_at: Optional[datetime] = Field(default=None)

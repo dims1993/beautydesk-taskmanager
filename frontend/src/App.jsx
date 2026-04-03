@@ -7,6 +7,8 @@ import MobileNavbar from "./components/navigation/MobileNavbar";
 import DesktopNavBar from "./components/navigation/DesktopNavBar";
 import Landing from "./components/marketing/Landing";
 import ContactoView from "./components/marketing/ContactoView";
+import TermsView from "./components/marketing/TermsView";
+import PrivacyView from "./components/marketing/PrivacyView";
 import LoginView from "./components/auth/LoginView";
 import RegisterView from "./components/auth/RegisterView";
 import RoleGuard from "./components/auth/RoleGuard";
@@ -18,6 +20,7 @@ import ArchivedList from "./components/salon/ArchivedList";
 import SalonClientsView from "./components/salon/SalonClientsView";
 import TeamView from "./components/salon/TeamView";
 import SuperAdminPanel from "./components/salon/SuperAdminPanel";
+import SettingsView from "./components/salon/SettingsView";
 
 /** Google Sign-In only when VITE_GOOGLE_CLIENT_ID is set (e.g. Vercel env). */
 function GoogleAuthShell({ children }) {
@@ -123,6 +126,8 @@ function App() {
           {/* --- RUTAS PÚBLICAS --- */}
           <Route path="/" element={<Landing />} />
           <Route path="/contacto" element={<ContactoView />} />
+          <Route path="/legal/terms" element={<TermsView />} />
+          <Route path="/legal/privacy" element={<PrivacyView />} />
 
           <Route
             path="/login"
@@ -138,7 +143,7 @@ function App() {
                   {isRegistering ? (
                     <RegisterView
                       onBack={() => setIsRegistering(false)}
-                      onSuccess={() => setIsRegistering(false)}
+                      onCompleteRegistration={() => setIsRegistering(false)}
                     />
                   ) : (
                     <LoginView
@@ -173,6 +178,32 @@ function App() {
                     </div>
                   )}
 
+                  {currentUser?.needs_fiscal_completion && (
+                    <div className="max-w-6xl mx-auto mb-4 px-1">
+                      <div className="rounded-2xl border border-amber-300 bg-amber-50/95 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-[10px] font-bold text-amber-950">
+                        <span>
+                          Falta completar los datos fiscales de tu negocio. Ve a{" "}
+                          <button
+                            type="button"
+                            className="underline font-black"
+                            onClick={() => setActiveTab("ajustes")}
+                          >
+                            Ajustes
+                          </button>{" "}
+                          para activar tu agenda y que no veas datos de otras
+                          cuentas.
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab("ajustes")}
+                          className="shrink-0 bg-[#5d5045] text-[#f5ebe0] px-4 py-2 rounded-full uppercase tracking-widest text-[9px]"
+                        >
+                          Completar ahora
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-12">
                     <aside
                       className={`lg:col-span-5 ${activeTab !== "agenda" ? "hidden lg:block" : "block"}`}
@@ -185,6 +216,11 @@ function App() {
                           onSuccess={fetchInitialData}
                           initialDate={preselectedDate}
                           onError={(msg) => setErrorMessage(msg)}
+                          disabledReason={
+                            currentUser?.needs_fiscal_completion
+                              ? "Completa los datos fiscales en Ajustes para crear citas."
+                              : null
+                          }
                         />
                       )}
                     </aside>
@@ -208,6 +244,7 @@ function App() {
                         )}
                         {activeTab === "calendario" && (
                           <CalendarView
+                            currentUser={currentUser}
                             allAppointments={appointments}
                             services={services}
                             onUpdateStatus={handleUpdateStatus}
@@ -245,6 +282,11 @@ function App() {
                             clients={clients}
                             onRefresh={fetchInitialData}
                             onError={setErrorMessage}
+                            blockedMessage={
+                              currentUser?.needs_fiscal_completion
+                                ? "Completa los datos fiscales en Ajustes para gestionar clientes."
+                                : null
+                            }
                             onAddClient={async (nc) => {
                               try {
                                 await apiRequest("/clients/", "POST", nc);
@@ -255,12 +297,21 @@ function App() {
                             }}
                           />
                         )}
+                        {activeTab === "ajustes" && (
+                          <SettingsView
+                            currentUser={currentUser}
+                            services={services}
+                            onRefresh={fetchInitialData}
+                            onError={setErrorMessage}
+                          />
+                        )}
                       </section>
                     </main>
                   </div>
                   <MobileNavbar
                     activeTab={activeTab}
                     setActiveTab={setActiveTab}
+                    currentUser={currentUser}
                     onLogout={handleLogout}
                   />
                 </div>
@@ -274,7 +325,7 @@ function App() {
             path="/master-panel"
             element={
               <RoleGuard
-                allowedRoles={["super_admin"]}
+                allowedRoles={["SUPER_ADMIN"]}
                 user={currentUser}
                 isLoggedIn={isLoggedIn}
               >

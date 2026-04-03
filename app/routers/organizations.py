@@ -19,7 +19,7 @@ async def create_new_salon_admin(
     current_user: User = Depends(get_current_user)
 ):
     # 1. Seguridad: Solo el super_admin puede crear organizaciones y admins
-    if current_user.role != "super_admin":
+    if current_user.role != UserRole.SUPER_ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, 
             detail="No tienes permisos para crear salones"
@@ -60,7 +60,7 @@ async def get_all_organizations(
     db: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role != "super_admin":
+    if current_user.role != UserRole.SUPER_ADMIN:
         raise HTTPException(status_code=403, detail="No autorizado")
 
     statement = select(Organization)

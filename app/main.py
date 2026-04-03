@@ -97,11 +97,13 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
 
     access_token = create_access_token(data={"sub": user.email})
 
-    return {"access_token": access_token, 
-            "token_type": "bearer",
-            "role": user.role,
-            "organization_id": user.organization_id
-            }
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "role": user.role.value if hasattr(user.role, "value") else str(user.role),
+        "organization_id": user.organization_id,
+        "integrations_access": getattr(user, "integrations_access", True),
+    }
 
 
 @app.get("/")

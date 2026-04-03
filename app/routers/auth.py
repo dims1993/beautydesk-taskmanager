@@ -150,11 +150,24 @@ async def auth_google(data: dict, db: Session = Depends(get_session)):
 
 
 @router.get("/google/calendar/connect")
-def google_calendar_connect(current_user: User = Depends(get_current_user)):
+def google_calendar_connect(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_session),
+):
     """
     Starts OAuth2 Authorization Code flow to connect a user's Google Calendar.
     Returns the Google consent URL to redirect the user to.
     """
+    row = db.exec(select(User).where(User.id == current_user.id)).first()
+    if not row or not row.integrations_access:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "La conexión con Google Calendar no está incluida en tu plan actual. "
+                "Actualiza tu suscripción o contacta con soporte para desbloquear integraciones."
+            ),
+        )
+
     # Helpful diagnostics for Docker logs
     print(
         "DEBUG: google_calendar_connect config:",
@@ -203,9 +216,16 @@ def google_calendar_status(
     user = db.exec(select(User).where(User.id == current_user.id)).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    if not user.integrations_access:
+        return {
+            "connected": False,
+            "has_refresh_token": False,
+            "integrations_locked": True,
+        }
     return {
         "connected": bool(user.google_refresh_token or user.google_access_token),
         "has_refresh_token": bool(user.google_refresh_token),
+        "integrations_locked": False,
     }
 
 
@@ -217,6 +237,11 @@ def google_calendar_disconnect(
     user = db.exec(select(User).where(User.id == current_user.id)).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    if not user.integrations_access:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Integraciones no disponibles en tu plan actual.",
+        )
     user.google_access_token = None
     user.google_refresh_token = None
     db.add(user)
@@ -252,6 +277,12 @@ def google_calendar_callback(code: str | None = None, state: str | None = None, 
     user = db.exec(select(User).where(User.email == email)).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    if not user.integrations_access:
+        from fastapi.responses import RedirectResponse
+
+        return RedirectResponse(
+            f"{FRONTEND_URL}/app?google_calendar=locked"
+        )
 
     flow = _build_calendar_flow(state=state)
 
