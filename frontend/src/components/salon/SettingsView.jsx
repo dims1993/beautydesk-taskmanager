@@ -360,28 +360,58 @@ export default function SettingsView({
                 setSvcForm({ ...svcForm, description: e.target.value })
               }
             />
-            <div className="grid grid-cols-2 gap-2">
-              <input
-                type="number"
-                min={5}
-                placeholder="Minutos"
-                className="w-full bg-[#FAF9F6] border border-[#eaddcf] py-3 px-4 rounded-2xl text-[10px] font-black"
-                value={svcForm.duration}
-                onChange={(e) =>
-                  setSvcForm({ ...svcForm, duration: e.target.value })
-                }
-              />
-              <input
-                type="number"
-                min={0}
-                step={0.5}
-                placeholder="Precio €"
-                className="w-full bg-[#FAF9F6] border border-[#eaddcf] py-3 px-4 rounded-2xl text-[10px] font-black"
-                value={svcForm.price}
-                onChange={(e) =>
-                  setSvcForm({ ...svcForm, price: e.target.value })
-                }
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label
+                  htmlFor="settings-svc-duration"
+                  className="block text-[9px] font-black uppercase tracking-widest text-[#8c857d] ml-1"
+                >
+                  Duración del servicio
+                </label>
+                <p className="text-[9px] text-[#a39485] ml-1 leading-snug">
+                  Tiempo en <span className="font-bold text-[#5d5045]">minutos</span>{" "}
+                  (ej. 45 para una manicura).
+                </p>
+                <input
+                  id="settings-svc-duration"
+                  type="number"
+                  min={5}
+                  inputMode="numeric"
+                  placeholder="Ej. 45"
+                  aria-label="Duración en minutos"
+                  className="w-full bg-[#FAF9F6] border border-[#eaddcf] py-3 px-4 rounded-2xl text-[10px] font-black"
+                  value={svcForm.duration}
+                  onChange={(e) =>
+                    setSvcForm({ ...svcForm, duration: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <label
+                  htmlFor="settings-svc-price"
+                  className="block text-[9px] font-black uppercase tracking-widest text-[#8c857d] ml-1"
+                >
+                  Precio del servicio
+                </label>
+                <p className="text-[9px] text-[#a39485] ml-1 leading-snug">
+                  Importe en <span className="font-bold text-[#5d5045]">euros (€)</span>,{" "}
+                  puedes usar decimales (ej. 25 o 32,50).
+                </p>
+                <input
+                  id="settings-svc-price"
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  inputMode="decimal"
+                  placeholder="Ej. 25"
+                  aria-label="Precio en euros"
+                  className="w-full bg-[#FAF9F6] border border-[#eaddcf] py-3 px-4 rounded-2xl text-[10px] font-black"
+                  value={svcForm.price}
+                  onChange={(e) =>
+                    setSvcForm({ ...svcForm, price: e.target.value })
+                  }
+                />
+              </div>
             </div>
             <button
               type="submit"
