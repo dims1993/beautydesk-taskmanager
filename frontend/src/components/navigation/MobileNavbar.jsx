@@ -1,6 +1,6 @@
 import React from "react";
 import { LogOut } from "lucide-react";
-import { APP_MAIN_NAV_TABS } from "../constants/appNavTabs";
+import { APP_MAIN_NAV_TABS } from "./navTabs";
 
 const MobileNavbar = ({ activeTab, setActiveTab, onLogout }) => {
   return (

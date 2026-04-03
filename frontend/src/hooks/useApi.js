@@ -41,7 +41,14 @@ export const useApi = () => {
         return Promise.reject(payload);
       }
 
+      if (response.status === 204) {
+        return null;
+      }
+
       if (!isJson) {
+        if (!payload || String(payload).trim() === "") {
+          return null;
+        }
         return Promise.reject(
           new Error(
             `Expected JSON but received ${contentType || "unknown content-type"}`,

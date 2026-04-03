@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useApi } from "../hooks/useApi";
+import { useApi } from "../../hooks/useApi";
 import { Trash2, UserPlus, Users } from "lucide-react"; // Importamos iconos para mejorar la UI
 
 const TeamView = () => {

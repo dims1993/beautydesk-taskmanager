@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useApi } from "../hooks/useApi";
+import { useApi } from "../../hooks/useApi";
 import {
   Sparkles,
   MessageCircle,

@@ -8,6 +8,7 @@ import {
   Archive,
   Timer,
   Layers,
+  Trash2,
 } from "lucide-react";
 import { useApi } from "../../hooks/useApi";
 
@@ -295,6 +296,64 @@ export const ArchiveAppointmentModal = ({ isOpen, onClose, onConfirm }) => {
             className="w-full py-4 text-[#8c857d] font-black uppercase text-[9px] tracking-[0.2em] hover:text-[#5d5045]"
           >
             Mantener Reserva
+          </button>
+        </div>
+      </div>
+    </ModalWrapper>
+  );
+};
+
+/* --- Confirmar eliminación de ficha de cliente (directorio) --- */
+export const DeleteClientConfirmModal = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  clientLabel = "",
+  isDeleting = false,
+}) => {
+  return (
+    <ModalWrapper
+      isOpen={isOpen}
+      onClose={isDeleting ? () => {} : onClose}
+      title="Eliminar contacto"
+      subtitle="Precaución"
+    >
+      <div className="text-center space-y-8">
+        <div className="flex justify-center">
+          <div className="h-24 w-24 bg-red-50 rounded-full flex items-center justify-center animate-pulse">
+            <Trash2 className="w-10 h-10 text-red-400" strokeWidth={1.75} />
+          </div>
+        </div>
+        <div className="space-y-3">
+          <p className="text-[#5d5045] font-serif text-xl italic">
+            ¿Eliminar esta ficha del directorio?
+          </p>
+          {clientLabel ? (
+            <p className="text-[#5d5045] text-sm font-black tracking-wide px-2">
+              {clientLabel}
+            </p>
+          ) : null}
+          <p className="text-[#8c857d] text-[11px] font-medium leading-relaxed px-4 uppercase tracking-tighter">
+            Las citas guardadas no se borran; solo se quita el enlace entre esas
+            citas y este contacto.
+          </p>
+        </div>
+        <div className="flex flex-col gap-3 pt-4">
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isDeleting}
+            className="w-full py-6 bg-red-400 text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] hover:bg-red-500 transition-all disabled:opacity-50 disabled:pointer-events-none"
+          >
+            {isDeleting ? "Eliminando…" : "Confirmar eliminación"}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isDeleting}
+            className="w-full py-4 text-[#8c857d] font-black uppercase text-[9px] tracking-[0.2em] hover:text-[#5d5045] disabled:opacity-40"
+          >
+            Conservar ficha
           </button>
         </div>
       </div>

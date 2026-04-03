@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Body
+from starlette.responses import Response
 from sqlmodel import Session, select
 from typing import List
 from app.core.db.session import get_session
 from app.models.client import Client
+from app.models.appointment import Appointment
 from app.schemas.client import ClientCreate, ClientOut
 from app.models.user import User
 # Importamos la dependencia de seguridad que tienes en main.py
@@ -41,10 +43,10 @@ def update_client(
     db: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    client = db.get(Client, client_id)
+    client = db.exec(select(Client).where(Client.id == client_id)).first()
     if not client:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
-    
+
     # Actualizamos solo los campos que vienen en el body
     for key, value in client_data.items():
         # Evitamos actualizar el ID por accidente
@@ -55,3 +57,25 @@ def update_client(
     db.commit()
     db.refresh(client)
     return client
+
+
+@router.delete("/{client_id}", status_code=204)
+def delete_client(
+    client_id: int,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    client = db.exec(select(Client).where(Client.id == client_id)).first()
+    # Idempotente: segundo DELETE (doble clic / carrera) no devuelve 404
+    if not client:
+        return Response(status_code=204)
+
+    for appo in db.exec(
+        select(Appointment).where(Appointment.client_id == client_id)
+    ).all():
+        appo.client_id = None
+        db.add(appo)
+
+    db.delete(client)
+    db.commit()
+    return Response(status_code=204)

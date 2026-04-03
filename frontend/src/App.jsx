@@ -1,31 +1,23 @@
 import { useState, useEffect } from "react";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { useApi } from "./hooks/useApi";
-import {
-  BrowserRouter as Router,
-  Routes,
-  Route,
-  Navigate,
-  Link,
-} from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
-// Componentes
-import LoginView from "./components/LoginView";
-import AppointmentForm from "./components/AppointmentForm";
-import AppointmentList from "./components/AppointmentList";
-import CalendarView from "./components/CalendarView";
-import MobileNavbar from "./components/MobileNavbar";
-import StatsCharts from "./components/StatsCharts";
-import ArchivedList from "./components/ArchivedList";
-import ClientDirectory from "./components/ClientDirectory";
-import Landing from "./components/Landing";
-import RegisterView from "./components/RegisterView";
-import ContactoView from "./components/ContactoView";
-import RoleGuard from "./components/RoleGuard";
-import SuperAdminPanel from "./components/SuperAdminPanel";
-import TeamView from "./components/TeamView";
-import { LayoutDashboard, LogOut } from "lucide-react";
-import { APP_MAIN_NAV_TABS } from "./constants/appNavTabs";
+import MobileNavbar from "./components/navigation/MobileNavbar";
+import DesktopNavBar from "./components/navigation/DesktopNavBar";
+import Landing from "./components/marketing/Landing";
+import ContactoView from "./components/marketing/ContactoView";
+import LoginView from "./components/auth/LoginView";
+import RegisterView from "./components/auth/RegisterView";
+import RoleGuard from "./components/auth/RoleGuard";
+import AppointmentForm from "./components/salon/AppointmentForm";
+import AppointmentList from "./components/salon/AppointmentList";
+import CalendarView from "./components/salon/CalendarView";
+import StatsCharts from "./components/salon/StatsCharts";
+import ArchivedList from "./components/salon/ArchivedList";
+import SalonClientsView from "./components/salon/SalonClientsView";
+import TeamView from "./components/salon/TeamView";
+import SuperAdminPanel from "./components/salon/SuperAdminPanel";
 
 /** Google Sign-In only when VITE_GOOGLE_CLIENT_ID is set (e.g. Vercel env). */
 function GoogleAuthShell({ children }) {
@@ -198,56 +190,12 @@ function App() {
                     </aside>
 
                     <main className="lg:col-span-7 space-y-10">
-                      <nav className="hidden md:flex justify-center w-full">
-                        <div className="flex items-center gap-2 px-3 py-2 bg-white/40 backdrop-blur-md rounded-full border border-white/40 shadow-[0_8px_32px_rgba(93,80,69,0.1)]">
-                          {APP_MAIN_NAV_TABS.map((tab) => {
-                            const Icon = tab.icon;
-                            const isActive = activeTab === tab.id;
-                            return (
-                              <button
-                                key={tab.id}
-                                type="button"
-                                title={tab.title}
-                                onClick={() => setActiveTab(tab.id)}
-                                className={`relative flex items-center justify-center w-11 h-11 rounded-full transition-all duration-500 ${
-                                  isActive
-                                    ? "bg-[#5d5045] text-white shadow-md"
-                                    : "text-[#5d5045] opacity-40 hover:opacity-70"
-                                }`}
-                              >
-                                <Icon
-                                  size={18}
-                                  strokeWidth={isActive ? 2.5 : 1.5}
-                                />
-                                {isActive && (
-                                  <span className="absolute -bottom-0.5 w-1 h-1 bg-[#5d5045] rounded-full animate-pulse" />
-                                )}
-                              </button>
-                            );
-                          })}
-
-                          <div className="w-[1px] h-4 bg-[#5d5045]/10 mx-1" />
-
-                          {currentUser?.role === "super_admin" && (
-                            <Link
-                              to="/master-panel"
-                              className="flex items-center justify-center w-11 h-11 rounded-full text-[#5d5045] opacity-50 hover:opacity-100 hover:bg-white/60 transition-all"
-                              title="Panel Maestro"
-                            >
-                              <LayoutDashboard size={18} strokeWidth={2} />
-                            </Link>
-                          )}
-
-                          <button
-                            type="button"
-                            title="Salir"
-                            onClick={handleLogout}
-                            className="flex items-center justify-center w-11 h-11 rounded-full text-[#8c857d] opacity-40 hover:opacity-100 transition-opacity"
-                          >
-                            <LogOut size={18} strokeWidth={1.5} />
-                          </button>
-                        </div>
-                      </nav>
+                      <DesktopNavBar
+                        activeTab={activeTab}
+                        setActiveTab={setActiveTab}
+                        currentUser={currentUser}
+                        onLogout={handleLogout}
+                      />
 
                       <section className="space-y-5">
                         {activeTab === "agenda" && (
@@ -293,7 +241,7 @@ function App() {
                           </div>
                         )}
                         {activeTab === "clientes" && (
-                          <ClientDirectory
+                          <SalonClientsView
                             clients={clients}
                             onRefresh={fetchInitialData}
                             onError={setErrorMessage}

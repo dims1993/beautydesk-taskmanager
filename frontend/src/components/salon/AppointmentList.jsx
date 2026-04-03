@@ -5,7 +5,7 @@ import {
   Archive,
   Edit3,
 } from "lucide-react";
-import { useAppointmentActionModals } from "../hooks/useAppointmentActionModals";
+import { useAppointmentActionModals } from "../../hooks/useAppointmentActionModals";
 
 const AppointmentList = ({
   appointments = [],

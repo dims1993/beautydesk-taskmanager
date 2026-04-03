@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { useApi } from "../hooks/useApi"; // Asegúrate de que la ruta sea correcta
+import { useApi } from "../../hooks/useApi"; // Asegúrate de que la ruta sea correcta
 import { Link } from "react-router-dom";
 import { Sparkles, User, Lock, ArrowRight, Home } from "lucide-react"; // Importamos los iconos
 import GoogleLoginButton from "./GoogleLoginButton";

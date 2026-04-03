@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Check, Archive, Edit3 } from "lucide-react";
-import { useApi } from "../hooks/useApi";
-import { useAppointmentActionModals } from "../hooks/useAppointmentActionModals";
+import { useApi } from "../../hooks/useApi";
+import { useAppointmentActionModals } from "../../hooks/useAppointmentActionModals";
 
 const CalendarView = ({
   allAppointments = [],

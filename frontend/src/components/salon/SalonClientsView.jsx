@@ -1,5 +1,7 @@
-import React, { useState, useMemo } from "react";
-import { useApi } from "../hooks/useApi";
+import React, { useState, useMemo, useCallback, useRef } from "react";
+import { Trash2, Pencil } from "lucide-react";
+import { useApi } from "../../hooks/useApi";
+import { DeleteClientConfirmModal } from "../modals/AppointmentModals.jsx";
 
 /** Example contacts when the DB list is empty (demo / sales preview). */
 const SHOWCASE_CLIENTS = [
@@ -54,9 +56,10 @@ const SHOWCASE_CLIENTS = [
 ];
 
 /**
- * Salon client directory: search, add, and edit CRM-style contacts.
+ * Directorio de clientes del salón (CRM): buscar, alta, edición y baja.
+ * Antes: `ClientDirectory.jsx` — renombrado para dejar claro que es la ficha de clientes, no la agenda de citas.
  */
-const ClientDirectory = ({
+const SalonClientsView = ({
   clients = [],
   onAddClient,
   onRefresh,
@@ -65,6 +68,10 @@ const ClientDirectory = ({
   const { apiRequest } = useApi();
   const [searchTerm, setSearchTerm] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+  const [clientPendingDelete, setClientPendingDelete] = useState(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const deleteInFlightRef = useRef(false);
 
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState(null);
@@ -124,14 +131,65 @@ const ClientDirectory = ({
       }
     }
   };
+
+  const openDeleteModal = (client) => {
+    if (client._isShowcase) return;
+    setClientPendingDelete(client);
+  };
+
+  const closeDeleteModal = useCallback(() => {
+    if (deleteSubmitting) return;
+    setClientPendingDelete(null);
+  }, [deleteSubmitting]);
+
+  const confirmDeleteClient = async () => {
+    if (deleteInFlightRef.current) return;
+    const client = clientPendingDelete;
+    if (!client?.id || client._isShowcase) return;
+    const idToDelete = Number(client.id);
+    if (!Number.isFinite(idToDelete)) return;
+
+    deleteInFlightRef.current = true;
+    setDeleteSubmitting(true);
+    setDeletingId(idToDelete);
+    try {
+      await apiRequest(`/clients/${idToDelete}`, "DELETE");
+      if (editingId === idToDelete) {
+        setEditingId(null);
+        setEditForm(null);
+      }
+      setClientPendingDelete(null);
+      onRefresh?.();
+    } catch (err) {
+      console.error("Error al eliminar:", err);
+      onError?.("No se pudo eliminar el cliente.");
+    } finally {
+      setDeletingId(null);
+      setDeleteSubmitting(false);
+      deleteInFlightRef.current = false;
+    }
+  };
+
+  const pendingDeleteLabel = clientPendingDelete
+    ? `${clientPendingDelete.nombre} ${clientPendingDelete.apellidos || ""}`.trim()
+    : "";
+
   return (
     <div className="space-y-6 animate-fadeIn">
+      <DeleteClientConfirmModal
+        isOpen={!!clientPendingDelete}
+        onClose={closeDeleteModal}
+        onConfirm={confirmDeleteClient}
+        clientLabel={pendingDeleteLabel}
+        isDeleting={deleteSubmitting}
+      />
       <div className="bg-white p-6 rounded-[2.5rem] border border-[#eee8e2] shadow-sm space-y-4">
         <div className="flex justify-between items-center">
           <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#a39485]">
             Directorio de clientes
           </h3>
           <button
+            type="button"
             onClick={() => setShowForm(!showForm)}
             className="bg-[#5d5045] text-white text-[18px] w-10 h-10 rounded-full hover:rotate-90 transition-all flex items-center justify-center"
           >
@@ -195,7 +253,10 @@ const ClientDirectory = ({
               setNewClient({ ...newClient, email: e.target.value })
             }
           />
-          <button className="w-full bg-[#5d5045] text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-widest">
+          <button
+            type="submit"
+            className="w-full bg-[#5d5045] text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-widest"
+          >
             Guardar cliente
           </button>
         </form>
@@ -292,8 +353,8 @@ const ClientDirectory = ({
               </form>
             ) : (
               <>
-                <div className="flex justify-between items-start">
-                  <div>
+                <div className="flex justify-between items-start gap-2">
+                  <div className="min-w-0">
                     <p className="text-[10px] font-black text-[#dcc7b1] uppercase tracking-tighter">
                       Cliente
                     </p>
@@ -302,15 +363,28 @@ const ClientDirectory = ({
                     </h4>
                   </div>
                   {!client._isShowcase && (
-                    <button
-                      onClick={() => {
-                        setEditingId(client.id);
-                        setEditForm({ ...client });
-                      }}
-                      className="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 p-2.5 bg-[#f8f5f2] text-[#5d5045] rounded-full transition-all text-xs hover:bg-[#dcc7b1] hover:text-white"
-                    >
-                      ✏️
-                    </button>
+                    <div className="flex shrink-0 gap-1.5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingId(client.id);
+                          setEditForm({ ...client });
+                        }}
+                        className="p-2.5 bg-[#f8f5f2] text-[#5d5045] rounded-full text-xs hover:bg-[#dcc7b1] hover:text-white transition-all"
+                        title="Editar"
+                      >
+                        <Pencil className="w-4 h-4" strokeWidth={2} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openDeleteModal(client)}
+                        disabled={deletingId === client.id}
+                        className="p-2.5 bg-[#f8f5f2] text-red-400 rounded-full hover:bg-red-50 hover:text-red-500 transition-all disabled:opacity-40"
+                        title="Eliminar ficha"
+                      >
+                        <Trash2 className="w-4 h-4" strokeWidth={2} />
+                      </button>
+                    </div>
                   )}
                 </div>
                 <div className="mt-4 space-y-1">
@@ -332,4 +406,4 @@ const ClientDirectory = ({
   );
 };
 
-export default ClientDirectory;
+export default SalonClientsView;
