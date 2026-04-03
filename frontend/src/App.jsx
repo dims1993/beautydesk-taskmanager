@@ -27,6 +27,17 @@ import TeamView from "./components/TeamView";
 import { LayoutDashboard, LogOut } from "lucide-react";
 import { APP_MAIN_NAV_TABS } from "./constants/appNavTabs";
 
+/** Google Sign-In only when VITE_GOOGLE_CLIENT_ID is set (e.g. Vercel env). */
+function GoogleAuthShell({ children }) {
+  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  if (clientId) {
+    return (
+      <GoogleOAuthProvider clientId={clientId}>{children}</GoogleOAuthProvider>
+    );
+  }
+  return children;
+}
+
 function App() {
   const { apiRequest } = useApi();
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
@@ -114,7 +125,7 @@ function App() {
   };
 
   return (
-    <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}>
+    <GoogleAuthShell>
       <Router>
         <Routes>
           {/* --- RUTAS PÚBLICAS --- */}
@@ -327,7 +338,7 @@ function App() {
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </Router>
-    </GoogleOAuthProvider>
+    </GoogleAuthShell>
   );
 }
 

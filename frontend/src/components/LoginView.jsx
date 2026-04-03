@@ -167,23 +167,26 @@ export default function LoginView({ onLogin, onGoToRegister }) {
               {!isLoading && <ArrowRight className="w-4 h-4" />}
             </button>
 
-            {/* --- SEPARADOR Y BOTÓN DE GOOGLE --- */}
-            <div className="relative flex items-center py-4">
-              <div className="flex-grow border-t border-[#eaddcf]"></div>
-              <span className="flex-shrink mx-4 text-[9px] font-black uppercase text-[#c4bdb5] tracking-widest">
-                O accede con
-              </span>
-              <div className="flex-grow border-t border-[#eaddcf]"></div>
-            </div>
+            {import.meta.env.VITE_GOOGLE_CLIENT_ID ? (
+              <>
+                <div className="relative flex items-center py-4">
+                  <div className="flex-grow border-t border-[#eaddcf]"></div>
+                  <span className="flex-shrink mx-4 text-[9px] font-black uppercase text-[#c4bdb5] tracking-widest">
+                    O accede con
+                  </span>
+                  <div className="flex-grow border-t border-[#eaddcf]"></div>
+                </div>
 
-            <div className="flex justify-center">
-              <GoogleLoginButton
-                clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}
-                onSuccess={handleGoogleSuccess}
-                onError={handleGoogleError}
-                width={300}
-              />
-            </div>
+                <div className="flex justify-center">
+                  <GoogleLoginButton
+                    clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}
+                    onSuccess={handleGoogleSuccess}
+                    onError={handleGoogleError}
+                    width={300}
+                  />
+                </div>
+              </>
+            ) : null}
           </form>
 
           <div className="text-center">
