@@ -5,6 +5,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 
 import MobileNavbar from "./components/navigation/MobileNavbar";
 import DesktopNavBar from "./components/navigation/DesktopNavBar";
+import SalonIdentityBar from "./components/navigation/SalonIdentityBar";
 import Landing from "./components/marketing/Landing";
 import ContactoView from "./components/marketing/ContactoView";
 import TermsView from "./components/marketing/TermsView";
@@ -203,6 +204,8 @@ function App() {
                       </div>
                     </div>
                   )}
+
+                  <SalonIdentityBar currentUser={currentUser} />
 
                   <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-12">
                     <aside

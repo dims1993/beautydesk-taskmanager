@@ -17,6 +17,7 @@ from app.schemas.user import (
     RegisterBillingRequest,
     RegisterOwnerWizardConfirmRequest,
     RegisterOwnerWizardRequest,
+    UserMeOut,
     UserOut,
 )
 from app.schemas.token import Token
@@ -157,9 +158,24 @@ def register_billing(
     )
 
 
-@router.get("/me", response_model=UserOut)
-def read_users_me(current_user: User = Depends(get_current_user)):
-    return current_user
+@router.get("/me", response_model=UserMeOut)
+def read_users_me(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_session),
+):
+    base = UserOut.model_validate(current_user).model_dump()
+    org_name = None
+    org_city = None
+    if current_user.organization_id:
+        org = db.get(Organization, current_user.organization_id)
+        if org:
+            org_name = (org.name or "").strip() or None
+            org_city = (org.city or "").strip() or None
+    return UserMeOut(
+        **base,
+        organization_name=org_name,
+        organization_city=org_city,
+    )
 
 @router.get("/", response_model=List[UserOut])
 def list_users(db: Session = Depends(get_session), current_user: User = Depends(get_current_user)):

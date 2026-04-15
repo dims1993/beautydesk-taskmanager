@@ -159,3 +159,10 @@ class UserOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class UserMeOut(UserOut):
+    """GET /users/me: includes salon display fields when the user belongs to an organization."""
+
+    organization_name: Optional[str] = None
+    organization_city: Optional[str] = None
