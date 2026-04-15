@@ -1,5 +1,13 @@
-import React, { useMemo, useState } from "react";
-import { Building2, Mail, Phone, Shield, User } from "lucide-react";
+import React, { useId, useMemo, useState } from "react";
+import {
+  Building2,
+  ChevronDown,
+  Mail,
+  Phone,
+  Scissors,
+  Shield,
+  User,
+} from "lucide-react";
 import { useApi } from "../../hooks/useApi";
 
 function formatErr(err) {
@@ -9,6 +17,71 @@ function formatErr(err) {
     return err.detail.map((d) => d.msg || JSON.stringify(d)).join(" ");
   }
   return err.message || "Error";
+}
+
+/**
+ * Collapsible settings block (ready for more sections: servicios, facturación, etc.).
+ */
+function SettingsAccordion({
+  title,
+  description,
+  defaultOpen = false,
+  icon: Icon,
+  children,
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const baseId = useId();
+  const headerId = `settings-acc-h-${baseId}`;
+  const panelId = `settings-acc-p-${baseId}`;
+
+  return (
+    <div className="rounded-[2.5rem] border border-[#e5e0d8] bg-white/90 shadow-sm backdrop-blur-md overflow-hidden">
+      <button
+        type="button"
+        id={headerId}
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-4 p-6 text-left transition-colors hover:bg-black/[0.02] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5d5045]/30 focus-visible:ring-inset"
+      >
+        <div className="min-w-0 flex-1 flex items-start gap-3">
+          {Icon ? (
+            <Icon
+              className="mt-0.5 h-4 w-4 shrink-0 text-[#5d5045]"
+              strokeWidth={2}
+            />
+          ) : null}
+          <div className="min-w-0">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-[#5d5045]">
+              {title}
+            </h3>
+            {description ? (
+              <p className="mt-1 text-[10px] leading-relaxed text-[#8c857d]">
+                {description}
+              </p>
+            ) : null}
+          </div>
+        </div>
+        <ChevronDown
+          className={`h-5 w-5 shrink-0 text-[#8c857d] transition-transform duration-300 ${open ? "rotate-180" : ""}`}
+          aria-hidden
+        />
+      </button>
+      <div
+        id={panelId}
+        role="region"
+        aria-labelledby={headerId}
+        hidden={!open}
+        className={open ? "border-t border-[#e5e0d8]/80" : ""}
+      >
+        {open ? (
+          <div className="px-6 pb-6 pt-4">
+            {children}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
 }
 
 export default function SettingsView({
@@ -119,7 +192,7 @@ export default function SettingsView({
   };
 
   return (
-    <div className="animate-fadeIn space-y-8 pb-16">
+    <div className="animate-fadeIn space-y-6 pb-16">
       <div>
         <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#8c857d]">
           Cuenta
@@ -127,6 +200,7 @@ export default function SettingsView({
         <h2 className="font-serif text-2xl text-[#5d5045] mt-1">Ajustes</h2>
       </div>
 
+      {/* Fijo: perfil */}
       <div className="bg-white/90 backdrop-blur-md rounded-[2.5rem] p-6 shadow-sm border border-[#e5e0d8] space-y-4">
         <h3 className="text-[10px] font-black uppercase tracking-widest text-[#5d5045] flex items-center gap-2">
           <User className="w-4 h-4" />
@@ -313,35 +387,52 @@ export default function SettingsView({
         </div>
       )}
 
-      {!needsFiscal && String(currentUser?.role || "").toUpperCase() === "OWNER" && (
-        <div className="bg-white/90 backdrop-blur-md rounded-[2.5rem] p-6 shadow-sm border border-[#e5e0d8] space-y-3">
-          <p className="text-[11px] text-[#8c857d] leading-relaxed">
-            Los datos fiscales de tu negocio ya están registrados. Si necesitas
-            cambios administrativos, contacta con soporte.
-          </p>
-        </div>
-      )}
+      {!needsFiscal &&
+        String(currentUser?.role || "").toUpperCase() === "OWNER" && (
+          <SettingsAccordion
+            title="Facturación"
+            description="Estado de los datos fiscales registrados para tu negocio."
+            icon={Building2}
+            defaultOpen={false}
+          >
+            <p className="text-[11px] text-[#8c857d] leading-relaxed">
+              Los datos fiscales de tu negocio ya están registrados. Si necesitas
+              cambios administrativos, contacta con soporte.
+            </p>
+          </SettingsAccordion>
+        )}
 
       {isOwnerWithOrg && (
-        <div className="bg-white/90 backdrop-blur-md rounded-[2.5rem] p-6 shadow-sm border border-[#e5e0d8] space-y-4">
-          <h3 className="text-[10px] font-black uppercase tracking-widest text-[#5d5045]">
-            Servicios de tu negocio
-          </h3>
-          <p className="text-[10px] text-[#8c857d] leading-relaxed">
-            Tu cuenta solo ve los servicios de tu organización. Añade aquí los
-            que ofrezcas para poder crear citas.
+        <SettingsAccordion
+          title="Servicios del negocio"
+          description={
+            services.length > 0
+              ? `${services.length} servicio${services.length === 1 ? "" : "s"} configurado${services.length === 1 ? "" : "s"}. Abre para añadir o revisar.`
+              : "Añade los servicios que ofreces para poder crear citas."
+          }
+          icon={Scissors}
+          defaultOpen={false}
+        >
+          <p className="text-[10px] text-[#8c857d] leading-relaxed mb-4">
+            Tu cuenta solo ve los servicios de tu organización.
           </p>
           {services.length > 0 && (
-            <ul className="text-[11px] text-[#5d5045] space-y-1 list-disc list-inside">
+            <ul className="text-[11px] text-[#5d5045] space-y-1.5 list-disc list-inside mb-4 pb-4 border-b border-[#eee8e2]">
               {services.map((s) => (
                 <li key={s.id}>
-                  <span className="font-bold">{s.name}</span> — {s.duration} min —{" "}
-                  {s.price}€
+                  <span className="font-bold">{s.name}</span> — {s.duration}{" "}
+                  min — {s.price}€
                 </li>
               ))}
             </ul>
           )}
-          <form onSubmit={submitService} className="grid gap-2 pt-2 border-t border-[#eee8e2]">
+          <form
+            onSubmit={submitService}
+            className="grid gap-2 pt-1"
+          >
+            <p className="text-[9px] font-black uppercase tracking-widest text-[#5d5045] mb-1">
+              Añadir servicio
+            </p>
             <input
               type="text"
               placeholder="Nombre del servicio"
@@ -369,8 +460,9 @@ export default function SettingsView({
                   Duración del servicio
                 </label>
                 <p className="text-[9px] text-[#a39485] ml-1 leading-snug">
-                  Tiempo en <span className="font-bold text-[#5d5045]">minutos</span>{" "}
-                  (ej. 45 para una manicura).
+                  Tiempo en{" "}
+                  <span className="font-bold text-[#5d5045]">minutos</span> (ej.
+                  45 para una manicura).
                 </p>
                 <input
                   id="settings-svc-duration"
@@ -394,7 +486,8 @@ export default function SettingsView({
                   Precio del servicio
                 </label>
                 <p className="text-[9px] text-[#a39485] ml-1 leading-snug">
-                  Importe en <span className="font-bold text-[#5d5045]">euros (€)</span>,{" "}
+                  Importe en{" "}
+                  <span className="font-bold text-[#5d5045]">euros (€)</span>;
                   puedes usar decimales (ej. 25 o 32,50).
                 </p>
                 <input
@@ -416,12 +509,12 @@ export default function SettingsView({
             <button
               type="submit"
               disabled={svcSaving || !svcForm.name.trim()}
-              className="w-full bg-[#5d5045] text-[#f5ebe0] py-3 rounded-full text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+              className="w-full bg-[#5d5045] text-[#f5ebe0] py-3 rounded-full text-[10px] font-black uppercase tracking-widest disabled:opacity-50 mt-2"
             >
               {svcSaving ? "Guardando…" : "Añadir servicio"}
             </button>
           </form>
-        </div>
+        </SettingsAccordion>
       )}
     </div>
   );
