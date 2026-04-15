@@ -58,6 +58,10 @@ def _sync_postgres_serial_sequences(conn) -> None:
             "client",
             'SELECT setval(pg_get_serial_sequence(\'client\', \'id\'), COALESCE((SELECT MAX(id) FROM client), 1), (SELECT MAX(id) FROM client) IS NOT NULL)',
         ),
+        (
+            "pending_registration",
+            'SELECT setval(pg_get_serial_sequence(\'pending_registration\', \'id\'), COALESCE((SELECT MAX(id) FROM pending_registration), 1), (SELECT MAX(id) FROM pending_registration) IS NOT NULL)',
+        ),
     ]
     for label, sql in statements:
         try:
@@ -104,6 +108,12 @@ def init_db():
                     'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMP WITH TIME ZONE'
                 )
             )
+            conn.execute(
+                text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS first_name TEXT')
+            )
+            conn.execute(
+                text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS last_name TEXT')
+            )
             for col, typ in (
                 ("legal_name", "TEXT"),
                 ("billing_address_line1", "TEXT"),
@@ -121,6 +131,16 @@ def init_db():
                         f'ALTER TABLE "organization" ADD COLUMN IF NOT EXISTS {col} {typ}'
                     )
                 )
+            conn.execute(
+                text(
+                    'ALTER TABLE "organization" ADD COLUMN IF NOT EXISTS salon_category_primary TEXT'
+                )
+            )
+            conn.execute(
+                text(
+                    'ALTER TABLE "organization" ADD COLUMN IF NOT EXISTS salon_categories_json TEXT'
+                )
+            )
             conn.execute(
                 text(
                     "ALTER TABLE service ADD COLUMN IF NOT EXISTS organization_id INTEGER"

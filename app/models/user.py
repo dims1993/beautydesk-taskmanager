@@ -38,3 +38,6 @@ class User(SQLModel, table=True):
 
     phone: Optional[str] = Field(default=None)
     terms_accepted_at: Optional[datetime] = Field(default=None)
+
+    first_name: Optional[str] = Field(default=None)
+    last_name: Optional[str] = Field(default=None)

@@ -3,6 +3,8 @@ from typing import Optional
 
 from pydantic import BaseModel, EmailStr, computed_field, field_validator, model_validator
 
+from app.constants.onboarding import ALLOWED_SALON_CATEGORIES
+
 
 class UserCreate(BaseModel):
     """Esquema legado; preferir RegisterAccountRequest para nuevos clientes."""
@@ -46,6 +48,80 @@ class RegisterAccountRequest(BaseModel):
         return self
 
 
+class RegisterOwnerWizardRequest(BaseModel):
+    """Freemium OWNER: negocio + categorías + cuenta; el acceso es tras verificar el correo."""
+
+    business_name: str
+    address: str
+    city: str
+    postal_code: str
+    country: str
+    primary_category: str
+    categories: list[str]
+    first_name: str
+    last_name: str
+    email: EmailStr
+    phone: str
+    password: str
+    accept_terms_and_privacy: bool = False
+
+    @field_validator(
+        "business_name",
+        "address",
+        "city",
+        "postal_code",
+        "country",
+        "primary_category",
+        "first_name",
+        "last_name",
+        "phone",
+        "password",
+        mode="before",
+    )
+    @classmethod
+    def strip_text(cls, v):
+        if v is None:
+            return v
+        if isinstance(v, str):
+            return v.strip()
+        return v
+
+    @field_validator("categories", mode="before")
+    @classmethod
+    def normalize_categories(cls, v):
+        if v is None:
+            return []
+        if not isinstance(v, list):
+            raise ValueError("categories debe ser una lista")
+        return v
+
+    @model_validator(mode="after")
+    def validate_password_and_categories(self):
+        if len(self.password or "") < 8:
+            raise ValueError("La contraseña debe tener al menos 8 caracteres")
+        p = (self.primary_category or "").strip().upper()
+        if p not in ALLOWED_SALON_CATEGORIES:
+            raise ValueError("Servicio principal no válido")
+        for c in self.categories:
+            if (c or "").strip().upper() not in ALLOWED_SALON_CATEGORIES:
+                raise ValueError(f"Categoría no válida: {c}")
+        return self
+
+
+class RegisterOwnerWizardConfirmRequest(BaseModel):
+    registration_token: str
+    code: str
+
+    @field_validator("registration_token", "code", mode="before")
+    @classmethod
+    def strip_fields(cls, v):
+        if v is None:
+            return v
+        if isinstance(v, str):
+            return v.strip()
+        return v
+
+
 class RegisterBillingRequest(BaseModel):
     """Paso 2: titulares (OWNER) con JWT del paso 1."""
 
@@ -72,6 +148,8 @@ class UserOut(BaseModel):
     integrations_access: bool = True
     phone: Optional[str] = None
     terms_accepted_at: Optional[datetime] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
 
     @computed_field
     @property

@@ -13,6 +13,7 @@ import {
   Phone,
 } from "lucide-react";
 import GoogleLoginButton from "./GoogleLoginButton";
+import RegisterOwnerWizard from "./RegisterOwnerWizard";
 
 function formatRegisterError(err) {
   if (!err) return "Error al registrar.";
@@ -199,6 +200,18 @@ const RegisterView = ({ onBack, onCompleteRegistration }) => {
       : step === 2
         ? "Datos fiscales"
         : "Listo para entrar";
+
+  if (account.role === "OWNER") {
+    return (
+      <RegisterOwnerWizard
+        onBack={onBack}
+        onCompleteRegistration={onCompleteRegistration}
+        onSwitchAccountType={() =>
+          setAccount((a) => ({ ...a, role: "CLIENT" }))
+        }
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#FAF9F6] flex items-center justify-center p-0 md:p-10 font-sans selection:bg-[#f5ebe0]">
@@ -411,6 +424,8 @@ const RegisterView = ({ onBack, onCompleteRegistration }) => {
                     He leído y acepto los{" "}
                     <Link
                       to="/legal/terms"
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="text-[#5d5045] underline underline-offset-4 font-black"
                     >
                       términos y condiciones
@@ -434,6 +449,8 @@ const RegisterView = ({ onBack, onCompleteRegistration }) => {
                     He leído la{" "}
                     <Link
                       to="/legal/privacy"
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="text-[#5d5045] underline underline-offset-4 font-black"
                     >
                       política de privacidad

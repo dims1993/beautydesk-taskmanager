@@ -11,7 +11,14 @@ from sqlalchemy import or_
 from app.core.db.session import get_session
 from app.models.user import User, UserRole
 from app.models.organization import Organization
-from app.schemas.user import UserOut, RegisterAccountRequest, RegisterBillingRequest
+from app.core.notifications import send_registration_verification_email
+from app.schemas.user import (
+    RegisterAccountRequest,
+    RegisterBillingRequest,
+    RegisterOwnerWizardConfirmRequest,
+    RegisterOwnerWizardRequest,
+    UserOut,
+)
 from app.schemas.token import Token
 from app.dependencies import get_current_user
 from app.core.security import get_password_hash
@@ -22,10 +29,67 @@ from app.services.registration import (
     parse_user_role,
     register_account_only,
 )
+from app.services.wizard_registration import (
+    confirm_owner_wizard_registration,
+    start_owner_wizard_registration,
+)
 
 router = APIRouter(prefix="/users", tags=["users"])
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+
+
+@router.post("/register/owner-wizard")
+async def register_owner_wizard(
+    body: RegisterOwnerWizardRequest,
+    db: Session = Depends(get_session),
+):
+    """
+    OWNER freemium: guarda datos en pendiente y envía código por correo.
+    Tras confirmar con /register/owner-wizard/confirm, la cuenta queda creada.
+    """
+    token, code = start_owner_wizard_registration(
+        db,
+        business_name=body.business_name,
+        address=body.address,
+        city=body.city,
+        postal_code=body.postal_code,
+        country=body.country,
+        primary_category=body.primary_category,
+        categories=body.categories,
+        first_name=body.first_name,
+        last_name=body.last_name,
+        email=str(body.email),
+        phone=body.phone,
+        password_plain=body.password,
+        accept_terms_and_privacy=body.accept_terms_and_privacy,
+    )
+    await send_registration_verification_email(
+        to_email=str(body.email),
+        first_name=body.first_name,
+        business_name=body.business_name,
+        code=code,
+    )
+    return {
+        "registration_token": token,
+        "message": "Te hemos enviado un código de verificación por correo.",
+    }
+
+
+@router.post("/register/owner-wizard/confirm")
+def register_owner_wizard_confirm(
+    body: RegisterOwnerWizardConfirmRequest,
+    db: Session = Depends(get_session),
+):
+    confirm_owner_wizard_registration(
+        db,
+        registration_token=body.registration_token,
+        code=body.code,
+    )
+    return {
+        "success": True,
+        "message": "Cuenta activada. Ya puedes iniciar sesión.",
+    }
 
 
 @router.post("/register/account", response_model=Token)

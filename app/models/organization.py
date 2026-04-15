@@ -27,3 +27,7 @@ class Organization(SQLModel, table=True):
     tax_id: Optional[str] = Field(default=None)
     billing_phone: Optional[str] = Field(default=None)
     billing_email: Optional[str] = Field(default=None)
+
+    # Wizard onboarding (beauty vertical categories)
+    salon_category_primary: Optional[str] = Field(default=None)
+    salon_categories_json: Optional[str] = Field(default=None)
