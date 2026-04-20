@@ -398,8 +398,8 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
         <h5 className="text-[9px] font-black uppercase tracking-[0.2em] text-[#a39485] mb-10 text-center uppercase">
           Rendimiento Mensual ({monthName})
         </h5>
-        <div className="relative">
-          <div className="relative h-48 flex">
+        <div className="relative max-md:pt-1">
+          <div className="relative h-52 max-md:h-56 md:h-48 flex">
             <div className="flex flex-col justify-between h-full pb-0.5 text-right pr-3 border-r border-[#f8f5f2]">
               {[1, 0.75, 0.5, 0.25, 0].map((f) => (
                 <span
@@ -410,13 +410,16 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
                 </span>
               ))}
             </div>
-            <div className="relative flex-1 h-full px-2 flex items-end justify-around">
+            <div className="relative flex-1 h-full px-1 sm:px-2 flex items-end justify-around">
               {serviceLabels.map((label, i) => (
                 <div
                   key={i}
-                  className="flex-1 flex flex-col items-center group relative h-full justify-end"
+                  className="flex-1 flex flex-col items-center group relative h-full min-w-0 justify-end"
                 >
-                  <span className="absolute -top-6 text-[9px] font-bold text-[#5d5045] bg-white px-2 py-1 rounded-lg shadow-sm border border-[#eee8e2] opacity-0 group-hover:opacity-100 transition-opacity z-20 whitespace-nowrap">
+                  <span
+                    className="absolute -top-5 left-1/2 z-20 w-[max-content] max-w-[min(100%,5.5rem)] -translate-x-1/2 text-center text-[8px] font-bold leading-tight text-[#5d5045] opacity-100 md:text-[9px] md:opacity-0 md:transition-opacity md:group-hover:opacity-100 rounded-md border border-[#eee8e2] bg-white px-1 py-0.5 shadow-sm md:rounded-lg md:px-2 md:py-1"
+                    aria-hidden
+                  >
                     {formatMoney(statsMes.servicios[label])}€
                   </span>
                   <div
