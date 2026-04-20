@@ -22,6 +22,9 @@ import SalonClientsView from "./components/salon/SalonClientsView";
 import TeamView from "./components/salon/TeamView";
 import SuperAdminPanel from "./components/salon/SuperAdminPanel";
 import SettingsView from "./components/salon/SettingsView";
+import FirstVisitGuide from "./components/onboarding/FirstVisitGuide";
+
+const ONBOARDING_STORAGE_KEY = "beautydesk_onboarding_v2";
 
 /** Google Sign-In only when VITE_GOOGLE_CLIENT_ID is set (e.g. Vercel env). */
 function GoogleAuthShell({ children }) {
@@ -49,6 +52,8 @@ function App() {
   const [preselectedDate, setPreselectedDate] = useState("");
   const [clients, setClients] = useState([]);
   const [isRegistering, setIsRegistering] = useState(false);
+  const [showFirstVisitGuide, setShowFirstVisitGuide] = useState(false);
+  const [guidedTourActive, setGuidedTourActive] = useState(false);
 
   const agendaWeekAppointments = (apps) => {
     const now = new Date();
@@ -92,6 +97,31 @@ function App() {
   useEffect(() => {
     if (isLoggedIn) fetchInitialData();
   }, [isLoggedIn]);
+
+  useEffect(() => {
+    if (!isLoggedIn || !currentUser) {
+      setShowFirstVisitGuide(false);
+      setGuidedTourActive(false);
+      return;
+    }
+    try {
+      if (!localStorage.getItem(ONBOARDING_STORAGE_KEY)) {
+        setShowFirstVisitGuide(true);
+      }
+    } catch {
+      setShowFirstVisitGuide(false);
+    }
+  }, [isLoggedIn, currentUser]);
+
+  const completeFirstVisitGuide = () => {
+    try {
+      localStorage.setItem(ONBOARDING_STORAGE_KEY, "1");
+    } catch {
+      /* ignore */
+    }
+    setGuidedTourActive(false);
+    setShowFirstVisitGuide(false);
+  };
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -234,6 +264,7 @@ function App() {
                         setActiveTab={setActiveTab}
                         currentUser={currentUser}
                         onLogout={handleLogout}
+                        guidedTourActive={guidedTourActive}
                       />
 
                       <section className="space-y-5">
@@ -316,7 +347,16 @@ function App() {
                     setActiveTab={setActiveTab}
                     currentUser={currentUser}
                     onLogout={handleLogout}
+                    guidedTourActive={guidedTourActive}
                   />
+
+                  {showFirstVisitGuide && (
+                    <FirstVisitGuide
+                      onComplete={completeFirstVisitGuide}
+                      setActiveTab={setActiveTab}
+                      onTourOpenChange={setGuidedTourActive}
+                    />
+                  )}
                 </div>
               ) : (
                 <Navigate to="/login" />

@@ -10,13 +10,17 @@ export default function DesktopNavBar({
   setActiveTab,
   currentUser,
   onLogout,
+  guidedTourActive = false,
 }) {
   const fiscalIncomplete =
     String(currentUser?.role || "").toUpperCase() === "OWNER" &&
     currentUser?.organization_id == null;
 
   return (
-    <nav className="hidden md:flex justify-center w-full">
+    <nav
+      id="app-nav-desktop"
+      className={`hidden md:flex justify-center w-full ${guidedTourActive ? "relative z-[210]" : "relative z-10"}`}
+    >
       <div className="flex items-center gap-2 px-3 py-2 bg-white/40 backdrop-blur-md rounded-full border border-white/40 shadow-[0_8px_32px_rgba(93,80,69,0.1)]">
         {APP_MAIN_NAV_TABS.map((tab) => {
           const Icon = tab.icon;
@@ -25,6 +29,7 @@ export default function DesktopNavBar({
             <button
               key={tab.id}
               type="button"
+              data-nav-tab={tab.id}
               title={
                 tab.id === "ajustes" && fiscalIncomplete
                   ? "Ajustes — completa datos fiscales"
