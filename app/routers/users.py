@@ -17,12 +17,14 @@ from app.schemas.user import (
     RegisterBillingRequest,
     RegisterOwnerWizardConfirmRequest,
     RegisterOwnerWizardRequest,
+    SetCashClosePasswordBody,
     UserMeOut,
     UserOut,
+    VerifyCashCloseBody,
 )
 from app.schemas.token import Token
 from app.dependencies import get_current_user
-from app.core.security import get_password_hash
+from app.core.security import get_password_hash, verify_password
 
 from app.services.registration import (
     complete_owner_billing,
@@ -166,16 +168,70 @@ def read_users_me(
     base = UserOut.model_validate(current_user).model_dump()
     org_name = None
     org_city = None
+    cash_close_configured = False
     if current_user.organization_id:
         org = db.get(Organization, current_user.organization_id)
         if org:
             org_name = (org.name or "").strip() or None
             org_city = (org.city or "").strip() or None
+            h = org.cash_close_password_hash
+            cash_close_configured = bool(h and str(h).strip())
     return UserMeOut(
         **base,
         organization_name=org_name,
         organization_city=org_city,
+        cash_close_password_configured=cash_close_configured,
     )
+
+
+@router.patch("/me/organization/cash-close-password")
+def set_organization_cash_close_password(
+    body: SetCashClosePasswordBody,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Solo OWNER: define la contraseña para cerrar caja / validar cierres."""
+    if current_user.role != UserRole.OWNER:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo el titular del negocio puede configurar la contraseña de cierre de caja.",
+        )
+    if not current_user.organization_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Completa los datos del negocio antes de configurar la caja.",
+        )
+    org = db.get(Organization, current_user.organization_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+    pwd = (body.password or "").strip()
+    org.cash_close_password_hash = get_password_hash(pwd)
+    db.add(org)
+    db.commit()
+    return {"success": True, "message": "Contraseña de cierre de caja guardada."}
+
+
+@router.post("/me/organization/verify-cash-close")
+def verify_organization_cash_close(
+    body: VerifyCashCloseBody,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Valida la contraseña de cierre para el salón del usuario."""
+    if not current_user.organization_id:
+        raise HTTPException(
+            status_code=400,
+            detail="No perteneces a una organización.",
+        )
+    org = db.get(Organization, current_user.organization_id)
+    if not org or not org.cash_close_password_hash:
+        raise HTTPException(
+            status_code=400,
+            detail="El titular aún no ha configurado la contraseña de cierre de caja.",
+        )
+    if not verify_password(body.password, org.cash_close_password_hash):
+        raise HTTPException(status_code=401, detail="Contraseña incorrecta.")
+    return {"valid": True}
 
 @router.get("/", response_model=List[UserOut])
 def list_users(db: Session = Depends(get_session), current_user: User = Depends(get_current_user)):

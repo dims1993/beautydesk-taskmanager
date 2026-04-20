@@ -26,6 +26,10 @@ import FirstVisitGuide from "./components/onboarding/FirstVisitGuide";
 
 const ONBOARDING_STORAGE_KEY = "beautydesk_onboarding_v2";
 
+/** One-shot replay: first session after deploy clears “completed” for this account only. Bump suffix to replay again. */
+const ONBOARDING_REPLAY_ONCE_KEY = "beautydesk_onboarding_replay_2026_04_david_v1";
+const ONBOARDING_REPLAY_EMAIL = "davidisraelmunozsalinas@gmail.com";
+
 /** Google Sign-In only when VITE_GOOGLE_CLIENT_ID is set (e.g. Vercel env). */
 function GoogleAuthShell({ children }) {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -81,7 +85,22 @@ function App() {
         apiRequest("/clients/"),
       ]);
       console.log("Fetched appointments:", apps);
-      if (user) setCurrentUser(user);
+      if (user) {
+        try {
+          if (
+            String(user.email || "")
+              .toLowerCase()
+              .trim() === ONBOARDING_REPLAY_EMAIL &&
+            !localStorage.getItem(ONBOARDING_REPLAY_ONCE_KEY)
+          ) {
+            localStorage.removeItem(ONBOARDING_STORAGE_KEY);
+            localStorage.setItem(ONBOARDING_REPLAY_ONCE_KEY, "1");
+          }
+        } catch {
+          /* ignore */
+        }
+        setCurrentUser(user);
+      }
       if (svcs) setServices(svcs);
       if (clientsFromDB) setClients(clientsFromDB);
       if (apps) {
@@ -352,6 +371,8 @@ function App() {
 
                   {showFirstVisitGuide && (
                     <FirstVisitGuide
+                      currentUser={currentUser}
+                      onUserRefresh={fetchInitialData}
                       onComplete={completeFirstVisitGuide}
                       setActiveTab={setActiveTab}
                       onTourOpenChange={setGuidedTourActive}

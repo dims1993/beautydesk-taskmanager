@@ -31,3 +31,6 @@ class Organization(SQLModel, table=True):
     # Wizard onboarding (beauty vertical categories)
     salon_category_primary: Optional[str] = Field(default=None)
     salon_categories_json: Optional[str] = Field(default=None)
+
+    # Cierre de caja (solo el titular la define; todo el personal la usa para validar)
+    cash_close_password_hash: Optional[str] = Field(default=None)

@@ -166,3 +166,23 @@ class UserMeOut(UserOut):
 
     organization_name: Optional[str] = None
     organization_city: Optional[str] = None
+    cash_close_password_configured: bool = False
+
+
+class SetCashClosePasswordBody(BaseModel):
+    password: str
+    confirm_password: str
+
+    @model_validator(mode="after")
+    def match_and_length(self):
+        p = (self.password or "").strip()
+        c = (self.confirm_password or "").strip()
+        if len(p) < 4:
+            raise ValueError("La contraseña de cierre debe tener al menos 4 caracteres")
+        if p != c:
+            raise ValueError("Las contraseñas no coinciden")
+        return self
+
+
+class VerifyCashCloseBody(BaseModel):
+    password: str

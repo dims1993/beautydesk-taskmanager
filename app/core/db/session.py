@@ -143,6 +143,11 @@ def init_db():
             )
             conn.execute(
                 text(
+                    'ALTER TABLE "organization" ADD COLUMN IF NOT EXISTS cash_close_password_hash TEXT'
+                )
+            )
+            conn.execute(
+                text(
                     "ALTER TABLE service ADD COLUMN IF NOT EXISTS organization_id INTEGER"
                 )
             )

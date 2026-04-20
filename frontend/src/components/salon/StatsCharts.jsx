@@ -1,12 +1,23 @@
 import React, { useState } from "react";
-import { Lock, Sparkles } from "lucide-react";
+import { FileSpreadsheet, Lock, Sparkles } from "lucide-react";
 import * as XLSX from "xlsx/xlsx.mjs";
+import { useApi } from "../../hooks/useApi";
+
+function formatApiErr(err) {
+  if (!err) return "Error";
+  if (typeof err.detail === "string") return err.detail;
+  if (Array.isArray(err.detail))
+    return err.detail.map((d) => d.msg || JSON.stringify(d)).join(" ");
+  return err.message || "Error";
+}
 
 const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
+  const { apiRequest } = useApi();
   const [viewDate, setViewDate] = useState(new Date());
   const [isLocked, setIsLocked] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [password, setPassword] = useState("");
+  const [confirmingLock, setConfirmingLock] = useState(false);
 
   const PERSONAL_GOAL = 2000;
   const currentStaffId = currentUser?.id;
@@ -98,7 +109,9 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
     });
 
     if (appsDelMes.length === 0) {
-      alert(`No hay citas completadas en ${monthName} para exportar.`);
+      alert(
+        `No hay registros de caja para ${monthName}: aún no hay citas completadas con venta registrada en este mes. Completa citas y márcalas como completadas con importe para poder descargar el informe.`,
+      );
       return;
     }
 
@@ -173,12 +186,21 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
   const serviceLabels = Object.keys(statsMes.servicios);
   const maxServiceValue = Math.max(...Object.values(statsMes.servicios), 1);
 
-  const handleConfirmLock = () => {
-    if (password.length > 0) {
+  const handleConfirmLock = async () => {
+    const pwd = password.trim();
+    if (!pwd) return;
+    setConfirmingLock(true);
+    try {
+      await apiRequest("/users/me/organization/verify-cash-close", "POST", {
+        password: pwd,
+      });
       setIsLocked(true);
       setShowPasswordModal(false);
       setPassword("");
-      // exportToExcel(); // Descomenta esta línea si quieres que se descargue solo al poner la clave
+    } catch (e) {
+      alert(formatApiErr(e));
+    } finally {
+      setConfirmingLock(false);
     }
   };
 
@@ -391,10 +413,12 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
 
       {/* BOTÓN EXCEL (FINAL) */}
       <button
+        type="button"
         onClick={exportToExcel}
         className="w-full py-5 bg-[#5d5045] text-white rounded-[2rem] text-[10px] font-black uppercase hover:bg-black transition-all flex items-center justify-center gap-3 shadow-xl active:scale-95"
       >
-        <span>📊</span> Descargar Informe Mensual: {monthName}
+        <FileSpreadsheet className="h-5 w-5 shrink-0" strokeWidth={2} />
+        Descargar Informe Mensual: {monthName}
       </button>
 
       {/* MODAL CONTRASEÑA */}
@@ -404,6 +428,13 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
             <h4 className="text-[11px] font-black uppercase tracking-widest text-[#5d5045] mb-2 text-center">
               Validar Cierre
             </h4>
+            {!currentUser?.cash_close_password_configured && (
+              <p className="mb-3 text-center text-[10px] leading-snug text-amber-800">
+                {String(currentUser?.role || "").toUpperCase() === "OWNER"
+                  ? "Configura la contraseña de cierre de caja en la guía inicial o en Ajustes para poder cerrar la caja."
+                  : "El titular debe configurar la contraseña de cierre de caja (guía inicial o Ajustes) antes de poder cerrar la caja."}
+              </p>
+            )}
             <input
               type="password"
               className="w-full p-4 bg-[#f8f5f2] border-none rounded-2xl mb-4 text-center outline-none"
@@ -419,10 +450,12 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
                 Cancelar
               </button>
               <button
+                type="button"
+                disabled={confirmingLock}
                 onClick={handleConfirmLock}
-                className="flex-1 py-3 bg-[#5d5045] text-white rounded-xl text-[10px] font-black uppercase tracking-widest"
+                className="flex-1 py-3 bg-[#5d5045] text-white rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
               >
-                Confirmar
+                {confirmingLock ? "…" : "Confirmar"}
               </button>
             </div>
           </div>
