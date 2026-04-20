@@ -5,8 +5,7 @@ from app.models import Service, Organization
 
 def seed_services():
     """
-    Solo crea servicios demo dentro de la primera organización existente.
-    Cuentas nuevas (otra organización) no reciben estos datos automáticamente.
+    Crea el catálogo demo en cada organización existente (nombre único por org).
     """
     services_data = [
         {
@@ -33,32 +32,78 @@ def seed_services():
             "price": 45.0,
             "duration": 90,
         },
+        {
+            "name": "Semipermanente",
+            "description": "Esmaltado gel semipermanente manos",
+            "price": 28.0,
+            "duration": 60,
+        },
+        {
+            "name": "Uñas Gel / Acrílicas",
+            "description": "Esculpidas o refuerzo",
+            "price": 40.0,
+            "duration": 90,
+        },
+        {
+            "name": "Pedicura Spa",
+            "description": "Cuidado completo de pies",
+            "price": 32.0,
+            "duration": 60,
+        },
+        {
+            "name": "Depilación cera (zona pequeña)",
+            "description": "Labio, cejas o axilas",
+            "price": 12.0,
+            "duration": 20,
+        },
+        {
+            "name": "Micropigmentación cejas",
+            "description": "Pelos / sombreado",
+            "price": 180.0,
+            "duration": 120,
+        },
+        {
+            "name": "Masaje relajante 30'",
+            "description": "Espalda y cervicales",
+            "price": 35.0,
+            "duration": 35,
+        },
+        {
+            "name": "Tratamiento capilar",
+            "description": "Hidratación y puntas",
+            "price": 22.0,
+            "duration": 45,
+        },
     ]
 
     with Session(engine) as session:
-        first_org = session.exec(select(Organization).order_by(Organization.id)).first()
-        if not first_org:
+        orgs = session.exec(select(Organization)).all()
+        if not orgs:
             print("⚠️ Sin organizaciones en la base: se omite la siembra de servicios demo.")
             return
 
-        for item in services_data:
-            exists = session.exec(
-                select(Service).where(
-                    Service.name == item["name"],
-                    Service.organization_id == first_org.id,
-                )
-            ).first()
-            if not exists:
-                session.add(
-                    Service(
-                        **item,
-                        organization_id=first_org.id,
+        added = 0
+        for org in orgs:
+            for item in services_data:
+                exists = session.exec(
+                    select(Service).where(
+                        Service.name == item["name"],
+                        Service.organization_id == org.id,
                     )
-                )
+                ).first()
+                if not exists:
+                    session.add(
+                        Service(
+                            **item,
+                            organization_id=org.id,
+                        )
+                    )
+                    added += 1
 
         session.commit()
         print(
-            f"✅ Servicios demo verificados para la organización id={first_org.id}."
+            f"✅ Catálogo de servicios demo verificado ({len(services_data)} referencias por org). "
+            f"Entradas nuevas añadidas: {added}."
         )
 
 

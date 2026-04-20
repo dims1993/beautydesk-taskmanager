@@ -1,7 +1,6 @@
 """
-Seed demo appointments for the current (or chosen) month: calendar density + revenue chart data.
-
-Tagged with notes='SEED_DEMO' so you can remove them with --clear only.
+Seed demo appointments for a full month: completed (caja / informe), scheduled,
+cancelled (papelera), y algunas deleted (histórico API). Etiqueta notes='SEED_DEMO'.
 
 Usage (from project root, venv + .env):
   python -m app.seed_demo_appointments
@@ -10,7 +9,6 @@ Usage (from project root, venv + .env):
 With Docker:
   docker compose exec backend python -m app.seed_demo_appointments --email you@example.com
 
-Other:
   python -m app.seed_demo_appointments --year 2026 --month 4
   python -m app.seed_demo_appointments --clear
 """
@@ -66,9 +64,16 @@ def _pick_staff(session: Session, email: str | None) -> User:
     return u
 
 
-def _other_staff_ids(session: Session, exclude_id: int) -> list[int]:
-    users = session.exec(select(User).where(User.id != exclude_id)).all()
-    return [u.id for u in users[:3]]
+def _pick_status(rng: random.Random) -> str:
+    """Mezcla para evaluar cierres, informes, agenda y papelera."""
+    r = rng.random()
+    if r < 0.46:
+        return "completed"
+    if r < 0.78:
+        return "scheduled"
+    if r < 0.94:
+        return "cancelled"
+    return "deleted"
 
 
 def seed_demo_appointments(
@@ -80,9 +85,12 @@ def seed_demo_appointments(
 
     with Session(engine) as session:
         staff = _pick_staff(session, staff_email)
-        other_ids = _other_staff_ids(session, staff.id)
 
-        services = session.exec(select(Service).order_by(Service.id)).all()
+        services = session.exec(
+            select(Service)
+            .where(Service.organization_id == staff.organization_id)
+            .order_by(Service.id)
+        ).all()
         if not services:
             raise SystemExit("No services. Run seed_services or create services first.")
 
@@ -93,47 +101,48 @@ def seed_demo_appointments(
 
         slots_per_day = [
             (9, 30),
+            (10, 30),
             (11, 0),
             (12, 30),
-            (15, 0),
+            (14, 0),
+            (15, 30),
             (16, 30),
+            (17, 30),
             (18, 0),
             (19, 30),
         ]
 
+        counts = {"completed": 0, "scheduled": 0, "cancelled": 0, "deleted": 0}
         created = 0
+
         for day in range(1, last_day + 1):
-            if day % 7 == 0:
+            # ~4–6 citas por día laborable (saltamos domingo = weekday 6)
+            dt_probe = datetime(year, month, day)
+            if dt_probe.weekday() == 6:
                 continue
-            num_slots = rng.randint(2, min(5, len(slots_per_day)))
-            chosen = rng.sample(slots_per_day, num_slots)
+
+            num = rng.randint(4, min(6, len(slots_per_day)))
+            chosen = rng.sample(slots_per_day, num)
 
             for hour, minute in sorted(chosen):
                 svc = rng.choice(services)
                 start = datetime(year, month, day, hour, minute, 0)
                 end = start + timedelta(minutes=svc.duration)
-
-                is_completed = rng.random() < 0.55
-                status = "completed" if is_completed else "scheduled"
-
-                # Revenue stats filter by logged-in staff; completed rows always
-                # attach to the seeded user so charts match after --email.
-                if is_completed:
-                    sid = staff.id
-                    base = float(svc.price)
-                    final_price = round(base * rng.uniform(0.85, 1.15), 2)
-                    payment = "tarjeta" if rng.random() < 0.4 else "efectivo"
-                else:
-                    use_main_staff = rng.random() < 0.75
-                    sid = (
-                        staff.id
-                        if use_main_staff
-                        else (rng.choice(other_ids) if other_ids else staff.id)
-                    )
-                    final_price = 0.0
-                    payment = "efectivo"
+                status = _pick_status(rng)
+                counts[status] += 1
 
                 name = rng.choice(SAMPLE_CLIENT_NAMES)
+
+                # Mismo profesional que --email (coincide con equipo / sesión real)
+                sid = staff.id
+
+                if status == "completed":
+                    base = float(svc.price)
+                    final_price = round(base * rng.uniform(0.85, 1.15), 2)
+                    payment = "tarjeta" if rng.random() < 0.42 else "efectivo"
+                else:
+                    final_price = 0.0
+                    payment = "efectivo"
 
                 appo = Appointment(
                     client_name=name,
@@ -155,8 +164,11 @@ def seed_demo_appointments(
         session.commit()
         print(
             f"✅ Created {created} demo appointments for {year}-{month:02d} "
-            f"(staff focus: id={staff.id} {staff.email}). "
-            f"Charts use completed appointments for the logged-in staff only."
+            f"(staff focus: id={staff.id} {staff.email}).\n"
+            f"   Mix: completed={counts['completed']}, scheduled={counts['scheduled']}, "
+            f"cancelled={counts['cancelled']}, deleted={counts['deleted']}.\n"
+            f"   Todas las citas van asignadas a staff_id={staff.id} ({staff.email}). "
+            f"Canceladas en papelera según antigüedad; deleted fuera de calendario."
         )
 
 

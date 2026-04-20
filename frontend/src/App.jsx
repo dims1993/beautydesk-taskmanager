@@ -55,6 +55,7 @@ function App() {
   const [errorMessage, setErrorMessage] = useState("");
   const [preselectedDate, setPreselectedDate] = useState("");
   const [clients, setClients] = useState([]);
+  const [teamMembers, setTeamMembers] = useState([]);
   const [isRegistering, setIsRegistering] = useState(false);
   const [showFirstVisitGuide, setShowFirstVisitGuide] = useState(false);
   const [guidedTourActive, setGuidedTourActive] = useState(false);
@@ -78,11 +79,12 @@ function App() {
 
   const fetchInitialData = async () => {
     try {
-      const [user, svcs, apps, clientsFromDB] = await Promise.all([
+      const [user, svcs, apps, clientsFromDB, team] = await Promise.all([
         apiRequest("/users/me"),
         apiRequest("/services/"),
         apiRequest("/appointments/"),
         apiRequest("/clients/"),
+        apiRequest("/users/team"),
       ]);
       console.log("Fetched appointments:", apps);
       if (user) {
@@ -103,6 +105,8 @@ function App() {
       }
       if (svcs) setServices(svcs);
       if (clientsFromDB) setClients(clientsFromDB);
+      if (Array.isArray(team)) setTeamMembers(team);
+      else setTeamMembers([]);
       if (apps) {
         setAppointments(
           apps.sort((a, b) => new Date(a.start_time) - new Date(b.start_time)),
@@ -300,6 +304,7 @@ function App() {
                             currentUser={currentUser}
                             allAppointments={appointments}
                             services={services}
+                            teamMembers={teamMembers}
                             onUpdateStatus={handleUpdateStatus}
                             onRefresh={fetchInitialData}
                             onAddClick={(date) => {

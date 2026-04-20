@@ -1,5 +1,11 @@
-import React, { useState } from "react";
-import { FileSpreadsheet, Lock, Sparkles } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  CircleCheck,
+  FileSpreadsheet,
+  Inbox,
+  Lock,
+  Sparkles,
+} from "lucide-react";
 import * as XLSX from "xlsx/xlsx.mjs";
 import { useApi } from "../../hooks/useApi";
 
@@ -11,18 +17,70 @@ function formatApiErr(err) {
   return err.message || "Error";
 }
 
+const CAJA_DAYS_STORAGE_PREFIX = "beautydesk_caja_dias_cerrados_v1";
+
+function dateKeyLocal(d) {
+  const x = new Date(d);
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+}
+
+function loadClosedDayKeys(userId) {
+  if (userId == null) return {};
+  try {
+    const raw = localStorage.getItem(`${CAJA_DAYS_STORAGE_PREFIX}_${userId}`);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveClosedDayKeys(userId, map) {
+  if (userId == null) return;
+  try {
+    localStorage.setItem(
+      `${CAJA_DAYS_STORAGE_PREFIX}_${userId}`,
+      JSON.stringify(map),
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
 const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
   const { apiRequest } = useApi();
-  const [viewDate, setViewDate] = useState(new Date());
-  const [isLocked, setIsLocked] = useState(false);
+  const [viewDate, setViewDate] = useState(() => new Date());
+  const [closedDayKeys, setClosedDayKeys] = useState({});
+  const [cajaHydrated, setCajaHydrated] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [password, setPassword] = useState("");
   const [confirmingLock, setConfirmingLock] = useState(false);
+  const [showNoExportDataModal, setShowNoExportDataModal] = useState(false);
+  const [lockErrorMessage, setLockErrorMessage] = useState(null);
 
   const PERSONAL_GOAL = 2000;
   const currentStaffId = currentUser?.id;
   const currentStaffName =
     currentUser?.nombre || currentUser?.username || "Staff";
+
+  useEffect(() => {
+    if (currentStaffId == null) {
+      setClosedDayKeys({});
+      setCajaHydrated(false);
+      return;
+    }
+    setClosedDayKeys(loadClosedDayKeys(currentStaffId));
+    setCajaHydrated(true);
+  }, [currentStaffId]);
+
+  useEffect(() => {
+    if (currentStaffId == null || !cajaHydrated) return;
+    saveClosedDayKeys(currentStaffId, closedDayKeys);
+  }, [closedDayKeys, currentStaffId, cajaHydrated]);
+
+  const viewDayKey = useMemo(() => dateKeyLocal(viewDate), [viewDate]);
+  const isLocked = !!closedDayKeys[viewDayKey];
 
   const staffBelongsToCurrentUser = (app) =>
     currentStaffId != null &&
@@ -109,9 +167,7 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
     });
 
     if (appsDelMes.length === 0) {
-      alert(
-        `No hay registros de caja para ${monthName}: aún no hay citas completadas con venta registrada en este mes. Completa citas y márcalas como completadas con importe para poder descargar el informe.`,
-      );
+      setShowNoExportDataModal(true);
       return;
     }
 
@@ -194,11 +250,14 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
       await apiRequest("/users/me/organization/verify-cash-close", "POST", {
         password: pwd,
       });
-      setIsLocked(true);
+      setClosedDayKeys((prev) => ({
+        ...prev,
+        [viewDayKey]: true,
+      }));
       setShowPasswordModal(false);
       setPassword("");
     } catch (e) {
-      alert(formatApiErr(e));
+      setLockErrorMessage(formatApiErr(e));
     } finally {
       setConfirmingLock(false);
     }
@@ -243,8 +302,13 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
       <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-[#eee8e2]">
         <div className="flex justify-between items-center mb-8">
           <button
+            type="button"
             onClick={() =>
-              setViewDate(new Date(viewDate.setDate(viewDate.getDate() - 1)))
+              setViewDate((prev) => {
+                const d = new Date(prev);
+                d.setDate(d.getDate() - 1);
+                return d;
+              })
             }
             className="w-10 h-10 flex items-center justify-center rounded-full bg-[#f8f5f2]"
           >
@@ -259,8 +323,13 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
             </p>
           </div>
           <button
+            type="button"
             onClick={() =>
-              setViewDate(new Date(viewDate.setDate(viewDate.getDate() + 1)))
+              setViewDate((prev) => {
+                const d = new Date(prev);
+                d.setDate(d.getDate() + 1);
+                return d;
+              })
             }
             className="w-10 h-10 flex items-center justify-center rounded-full bg-[#f8f5f2]"
           >
@@ -313,8 +382,13 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
             Confirmar y Cerrar Caja
           </button>
         ) : (
-          <div className="w-full py-3 bg-green-50 text-green-600 rounded-2xl text-[9px] font-black uppercase text-center border border-green-100">
-            ✅ Caja cerrada correctamente
+          <div className="flex w-full items-center justify-center gap-2 py-3 bg-green-50 text-green-600 rounded-2xl text-[9px] font-black uppercase border border-green-100">
+            <CircleCheck
+              className="h-4 w-4 shrink-0 text-green-600"
+              strokeWidth={2}
+              aria-hidden
+            />
+            Caja cerrada correctamente
           </div>
         )}
       </div>
@@ -424,8 +498,16 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
       {/* MODAL CONTRASEÑA */}
       {showPasswordModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl">
-            <h4 className="text-[11px] font-black uppercase tracking-widest text-[#5d5045] mb-2 text-center">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-cierre-title"
+            className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl"
+          >
+            <h4
+              id="modal-cierre-title"
+              className="text-[11px] font-black uppercase tracking-widest text-[#5d5045] mb-2 text-center"
+            >
               Validar Cierre
             </h4>
             {!currentUser?.cash_close_password_configured && (
@@ -444,6 +526,7 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
             />
             <div className="flex gap-3">
               <button
+                type="button"
                 onClick={() => setShowPasswordModal(false)}
                 className="flex-1 py-3 text-[10px] font-black uppercase text-[#a39485]"
               >
@@ -458,6 +541,82 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
                 {confirmingLock ? "…" : "Confirmar"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL SIN DATOS PARA INFORME */}
+      {showNoExportDataModal && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          role="presentation"
+          onClick={() => setShowNoExportDataModal(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-sin-informe-title"
+            className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#f8f5f2] text-[#5d5045] ring-1 ring-[#eaddcf]">
+              <Inbox className="h-7 w-7" strokeWidth={1.75} />
+            </div>
+            <p className="text-[9px] font-black uppercase tracking-[0.35em] text-[#a39485] mb-2">
+              Informe mensual
+            </p>
+            <h4
+              id="modal-sin-informe-title"
+              className="font-serif text-lg text-[#5d5045] mb-4 leading-snug"
+            >
+              No hay registros de caja para {monthName}
+            </h4>
+            <p className="text-[12px] leading-relaxed text-[#6d6359] mb-8">
+              Aún no hay citas completadas con venta registrada en este mes.
+              Completa citas y márcalas como completadas con importe para poder
+              descargar el informe.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowNoExportDataModal(false)}
+              className="w-full rounded-full bg-[#5d5045] py-3.5 text-[10px] font-black uppercase tracking-[0.2em] text-[#f5ebe0] shadow-lg transition hover:bg-[#4a3f36]"
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL ERROR AL VALIDAR CIERRE */}
+      {lockErrorMessage != null && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          role="presentation"
+          onClick={() => setLockErrorMessage(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-error-cierre-title"
+            className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h4
+              id="modal-error-cierre-title"
+              className="text-[11px] font-black uppercase tracking-widest text-[#5d5045] mb-4"
+            >
+              No se pudo validar
+            </h4>
+            <p className="text-[12px] leading-relaxed text-[#6d6359] mb-8">
+              {lockErrorMessage}
+            </p>
+            <button
+              type="button"
+              onClick={() => setLockErrorMessage(null)}
+              className="w-full rounded-full bg-[#5d5045] py-3.5 text-[10px] font-black uppercase tracking-[0.2em] text-[#f5ebe0] shadow-lg transition hover:bg-[#4a3f36]"
+            >
+              Cerrar
+            </button>
           </div>
         </div>
       )}

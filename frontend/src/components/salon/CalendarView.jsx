@@ -1,12 +1,54 @@
 import { useEffect, useState } from "react";
-import { Check, Archive, Edit3 } from "lucide-react";
+import { Check, Archive, Edit3, Clock } from "lucide-react";
 import { useApi } from "../../hooks/useApi";
 import { useAppointmentActionModals } from "../../hooks/useAppointmentActionModals";
+
+function findServiceForAppointment(services, serviceId) {
+  if (serviceId == null) return null;
+  return services.find((s) => Number(s.id) === Number(serviceId));
+}
+
+function durationMinutesForAppointment(appo, service) {
+  if (appo.end_time) {
+    const start = new Date(appo.start_time).getTime();
+    const end = new Date(appo.end_time).getTime();
+    const diff = end - start;
+    if (diff > 0) return Math.max(1, Math.round(diff / 60000));
+  }
+  return service?.duration ?? 30;
+}
+
+function formatTimeRangeEs(appo, service) {
+  const dm = durationMinutesForAppointment(appo, service);
+  const start = new Date(appo.start_time);
+  const end = new Date(start.getTime() + dm * 60000);
+  const opts = { hour: "2-digit", minute: "2-digit" };
+  return `${start.toLocaleTimeString("es-ES", opts)} — ${end.toLocaleTimeString("es-ES", opts)}`;
+}
+
+function memberDisplayName(member) {
+  if (!member) return "";
+  const raw = [member.first_name, member.last_name].filter(Boolean).join(" ").trim();
+  if (raw) return raw;
+  return member.nombre || member.username || member.email || "";
+}
+
+function staffLabelForAppointment(staffId, teamMembers, currentUser) {
+  const id = Number(staffId);
+  const fromTeam = teamMembers.find((m) => Number(m.id) === id);
+  const name = memberDisplayName(fromTeam);
+  if (name) return name;
+  if (currentUser && Number(currentUser.id) === id) {
+    return memberDisplayName(currentUser) || currentUser.username || "Tú";
+  }
+  return "Profesional";
+}
 
 const CalendarView = ({
   currentUser = null,
   allAppointments = [],
   services = [],
+  teamMembers = [],
   onUpdateStatus,
   onRefresh,
   onAddClick,
@@ -53,7 +95,8 @@ const CalendarView = ({
         d.getDate() === day &&
         d.getMonth() === currentDate.getMonth() &&
         d.getFullYear() === currentDate.getFullYear() &&
-        appo.status !== "cancelled" // No mostramos las archivadas en el calendario
+        appo.status !== "cancelled" &&
+        appo.status !== "deleted" // Archivadas / borradas fuera del calendario
       );
     });
   };
@@ -211,20 +254,26 @@ const CalendarView = ({
                     : "Conectar Google"}
             </button>
             <button
+              type="button"
               onClick={() =>
-                setCurrentDate(
-                  new Date(currentDate.setMonth(currentDate.getMonth() - 1)),
-                )
+                setCurrentDate((prev) => {
+                  const d = new Date(prev);
+                  d.setMonth(d.getMonth() - 1);
+                  return d;
+                })
               }
               className="text-[#a39485] hover:text-[#5d5045]"
             >
               ←
             </button>
             <button
+              type="button"
               onClick={() =>
-                setCurrentDate(
-                  new Date(currentDate.setMonth(currentDate.getMonth() + 1)),
-                )
+                setCurrentDate((prev) => {
+                  const d = new Date(prev);
+                  d.setMonth(d.getMonth() + 1);
+                  return d;
+                })
               }
               className="text-[#a39485] hover:text-[#5d5045]"
             >
@@ -245,13 +294,30 @@ const CalendarView = ({
           {[...Array(daysInMonth)].map((_, i) => {
             const day = i + 1;
             const dayApps = getAppsForDay(day);
+            const staffIdsDay = [
+              ...new Set(dayApps.map((a) => a.staff_id).filter((id) => id != null)),
+            ].sort((a, b) => Number(a) - Number(b));
             const isSelected = selectedDay === day;
             const isToday =
               new Date().getDate() === day &&
               new Date().getMonth() === currentDate.getMonth();
 
+            const dotPaletteSel = [
+              "bg-white",
+              "bg-white/85",
+              "bg-[#dcc7b1]",
+              "bg-[#f5ebe0]",
+            ];
+            const dotPalette = [
+              "bg-[#dcc7b1]",
+              "bg-[#5d5045]",
+              "bg-amber-500/80",
+              "bg-emerald-600/75",
+            ];
+
             return (
               <button
+                type="button"
                 key={day}
                 onClick={() => handleDayClick(day)}
                 className={`aspect-square rounded-2xl flex flex-col items-center justify-center transition-all relative border ${
@@ -267,17 +333,16 @@ const CalendarView = ({
                 >
                   {day}
                 </span>
-                <div className="flex gap-0.5 mt-1">
-                  {dayApps.some((a) => a.staff_id === 1) && (
+                <div className="flex gap-0.5 mt-1 flex-wrap justify-center max-w-[90%]">
+                  {staffIdsDay.slice(0, 4).map((sid, idx) => (
                     <div
-                      className={`w-1.5 h-1.5 rounded-full ${isSelected ? "bg-white" : "bg-[#dcc7b1]"}`}
-                    ></div>
-                  )}
-                  {dayApps.some((a) => a.staff_id === 2) && (
-                    <div
-                      className={`w-1.5 h-1.5 rounded-full ${isSelected ? "bg-[#c9b7a7]" : "bg-[#5d5045]"}`}
-                    ></div>
-                  )}
+                      key={sid}
+                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                        isSelected ? dotPaletteSel[idx % dotPaletteSel.length] : dotPalette[idx % dotPalette.length]
+                      }`}
+                      title={staffLabelForAppointment(sid, teamMembers, currentUser)}
+                    />
+                  ))}
                 </div>
               </button>
             );
@@ -318,37 +383,45 @@ const CalendarView = ({
             <div className="space-y-4">
               {pendingApps.length > 0 ? (
                 pendingApps.map((appo) => {
-                  const service = safeServices.find(
-                    (s) => s.id === appo.service_id,
+                  const service = findServiceForAppointment(
+                    safeServices,
+                    appo.service_id,
                   );
-                  const isSaray = appo.staff_id === 1;
+                  const dur = durationMinutesForAppointment(appo, service);
+                  const staffName = staffLabelForAppointment(
+                    appo.staff_id,
+                    teamMembers,
+                    currentUser,
+                  );
                   return (
                     <div
                       key={appo.id}
                       className="bg-white/5 rounded-3xl p-5 border border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-4"
                     >
-                      <div className="flex items-center gap-4">
-                        <div className="bg-white/10 px-3 py-2 rounded-xl text-center min-w-[65px]">
-                          <p className="text-xs font-black">
-                            {new Date(appo.start_time).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
+                      <div className="flex items-center gap-4 min-w-0">
+                        <div className="bg-white/10 px-3 py-2 rounded-xl text-center min-w-[140px] shrink-0">
+                          <p className="text-[10px] font-black leading-tight">
+                            {formatTimeRangeEs(appo, service)}
                           </p>
                         </div>
-                        <div>
-                          <p className="font-bold text-base leading-tight">
+                        <div className="min-w-0">
+                          <p className="font-bold text-base leading-tight truncate">
                             {appo.client_name}
                           </p>
-                          <div className="flex gap-2 items-center mt-1">
-                            <span className="text-[9px] font-black uppercase tracking-widest text-[#dcc7b1]">
+                          <div className="flex flex-wrap gap-x-2 gap-y-1 items-center mt-1">
+                            <span className="text-[9px] font-black uppercase tracking-widest text-[#dcc7b1] truncate max-w-[12rem]">
                               {service?.name || "Servicio"}
                             </span>
+                            <span className="text-[10px] opacity-30 hidden sm:inline">
+                              •
+                            </span>
+                            <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase text-white/90">
+                              <Clock className="w-3 h-3 opacity-70 shrink-0" />
+                              {dur} min
+                            </span>
                             <span className="text-[10px] opacity-30">•</span>
-                            <span
-                              className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${isSaray ? "bg-[#dcc7b1]/20 text-[#dcc7b1]" : "bg-white/20 text-white"}`}
-                            >
-                              {isSaray ? "Saray" : "Stefany"}
+                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-white/15 text-white max-w-[10rem] truncate">
+                              {staffName}
                             </span>
                           </div>
                         </div>
@@ -397,21 +470,28 @@ const CalendarView = ({
                 Finalizadas
               </h4>
               <div className="space-y-3">
-                {completedApps.map((appo) => (
+                {completedApps.map((appo) => {
+                  const svc = findServiceForAppointment(
+                    safeServices,
+                    appo.service_id,
+                  );
+                  return (
                   <div
                     key={appo.id}
                     className="bg-[#fcfaf8] rounded-3xl p-4 flex items-center justify-between border border-[#eee8e2]"
                   >
-                    <div className="flex items-center gap-4 opacity-40">
-                      <span className="text-[9px] font-black text-[#5d5045]">
-                        {new Date(appo.start_time).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 opacity-40 min-w-0">
+                      <span className="text-[9px] font-black text-[#5d5045] shrink-0">
+                        {formatTimeRangeEs(appo, svc)}
                       </span>
-                      <p className="font-bold text-sm text-[#5d5045] line-through">
-                        {appo.client_name}
-                      </p>
+                      <div className="min-w-0">
+                        <p className="font-bold text-sm text-[#5d5045] line-through truncate">
+                          {appo.client_name}
+                        </p>
+                        <p className="text-[8px] font-black uppercase tracking-wider text-[#a39485] truncate">
+                          {svc?.name || "Servicio"}
+                        </p>
+                      </div>
                     </div>
                     <div className="flex gap-2">
                       {/* BOTÓN RETORNO: Vuelve a 'scheduled' */}
@@ -433,7 +513,8 @@ const CalendarView = ({
                       </button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

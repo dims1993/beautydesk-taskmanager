@@ -50,7 +50,9 @@ const AppointmentList = ({
     <>
       <div className="space-y-6">
         {safeAppointments.map((appo) => {
-          const service = services.find((s) => s.id === appo.service_id);
+          const service = services.find(
+            (s) => Number(s.id) === Number(appo.service_id),
+          );
           const duration = service?.duration || 30;
 
           return (
