@@ -1,11 +1,14 @@
 import React, { useId, useMemo, useState } from "react";
 import {
+  AlertTriangle,
   Building2,
   ChevronDown,
   Mail,
+  Pencil,
   Phone,
   Scissors,
   Shield,
+  Trash2,
   User,
 } from "lucide-react";
 import { useApi } from "../../hooks/useApi";
@@ -121,6 +124,10 @@ export default function SettingsView({
     price: 25,
   });
   const [svcSaving, setSvcSaving] = useState(false);
+  const [editingService, setEditingService] = useState(null);
+  const [svcEditSaving, setSvcEditSaving] = useState(false);
+  const [svcDeletingId, setSvcDeletingId] = useState(null);
+  const [serviceToDelete, setServiceToDelete] = useState(null);
 
   const isOwnerWithOrg =
     String(currentUser?.role || "").toUpperCase() === "OWNER" &&
@@ -188,6 +195,42 @@ export default function SettingsView({
       onError?.(formatErr(err));
     } finally {
       setSvcSaving(false);
+    }
+  };
+
+  const submitEditService = async (e) => {
+    e.preventDefault();
+    if (!editingService?.id || !String(editingService.name || "").trim()) return;
+    setSvcEditSaving(true);
+    try {
+      await apiRequest(`/services/${editingService.id}`, "PATCH", {
+        name: String(editingService.name).trim(),
+        description: String(editingService.description || "").trim() || null,
+        duration: Number(editingService.duration) || 30,
+        price: Number(editingService.price) || 0,
+      });
+      setEditingService(null);
+      await onRefresh?.();
+    } catch (err) {
+      onError?.(formatErr(err));
+    } finally {
+      setSvcEditSaving(false);
+    }
+  };
+
+  const confirmDeleteService = async () => {
+    if (!serviceToDelete?.id) return;
+    const id = serviceToDelete.id;
+    setSvcDeletingId(id);
+    try {
+      await apiRequest(`/services/${id}`, "DELETE");
+      setServiceToDelete(null);
+      if (editingService?.id === id) setEditingService(null);
+      await onRefresh?.();
+    } catch (err) {
+      onError?.(formatErr(err));
+    } finally {
+      setSvcDeletingId(null);
     }
   };
 
@@ -417,14 +460,149 @@ export default function SettingsView({
             Tu cuenta solo ve los servicios de tu organización.
           </p>
           {services.length > 0 && (
-            <ul className="text-[11px] text-[#5d5045] space-y-1.5 list-disc list-inside mb-4 pb-4 border-b border-[#eee8e2]">
-              {services.map((s) => (
-                <li key={s.id}>
-                  <span className="font-bold">{s.name}</span> — {s.duration}{" "}
-                  min — {s.price}€
-                </li>
-              ))}
-            </ul>
+            <div className="mb-4 space-y-3 pb-4 border-b border-[#eee8e2]">
+              {services.map((s) =>
+                editingService?.id === s.id ? (
+                  <form
+                    key={s.id}
+                    onSubmit={submitEditService}
+                    className="rounded-2xl border border-[#dcc7b1] bg-[#faf8f5] p-4 space-y-3"
+                  >
+                    <p className="text-[9px] font-black uppercase tracking-widest text-[#5d5045]">
+                      Editar servicio
+                    </p>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Nombre"
+                      className="w-full bg-white border border-[#eaddcf] py-3 px-4 rounded-2xl text-[10px] font-black tracking-widest"
+                      value={editingService.name}
+                      onChange={(e) =>
+                        setEditingService({
+                          ...editingService,
+                          name: e.target.value,
+                        })
+                      }
+                    />
+                    <input
+                      type="text"
+                      placeholder="Descripción (opcional)"
+                      className="w-full bg-white border border-[#eaddcf] py-3 px-4 rounded-2xl text-[10px] font-black tracking-widest"
+                      value={editingService.description}
+                      onChange={(e) =>
+                        setEditingService({
+                          ...editingService,
+                          description: e.target.value,
+                        })
+                      }
+                    />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[8px] font-black uppercase text-[#8c857d] mb-1">
+                          Minutos
+                        </label>
+                        <input
+                          type="number"
+                          min={5}
+                          className="w-full bg-white border border-[#eaddcf] py-2.5 px-3 rounded-xl text-[10px] font-black"
+                          value={editingService.duration}
+                          onChange={(e) =>
+                            setEditingService({
+                              ...editingService,
+                              duration: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[8px] font-black uppercase text-[#8c857d] mb-1">
+                          Precio (€)
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.5}
+                          className="w-full bg-white border border-[#eaddcf] py-2.5 px-3 rounded-xl text-[10px] font-black"
+                          value={editingService.price}
+                          onChange={(e) =>
+                            setEditingService({
+                              ...editingService,
+                              price: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditingService(null)}
+                        disabled={svcEditSaving}
+                        className="flex-1 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest text-[#8c857d] border border-[#eaddcf] bg-white disabled:opacity-50"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={svcEditSaving}
+                        className="flex-1 py-2.5 rounded-full bg-[#5d5045] text-[#f5ebe0] text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+                      >
+                        {svcEditSaving ? "Guardando…" : "Guardar"}
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div
+                    key={s.id}
+                    className="flex flex-col gap-3 rounded-2xl border border-[#eee8e2] bg-[#FAF9F6] p-4 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-bold text-[#5d5045] truncate">
+                        {s.name}
+                      </p>
+                      <p className="text-[10px] text-[#8c857d] mt-0.5">
+                        {s.duration} min — {s.price}€
+                        {s.description ? (
+                          <span className="block mt-1 text-[9px] opacity-90">
+                            {s.description}
+                          </span>
+                        ) : null}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 gap-2 justify-end">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setEditingService({
+                            id: s.id,
+                            name: s.name,
+                            description: s.description || "",
+                            duration: s.duration,
+                            price: s.price,
+                          })
+                        }
+                        disabled={svcDeletingId != null}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#eaddcf] bg-white px-3 py-2 text-[9px] font-black uppercase tracking-widest text-[#5d5045] transition hover:border-[#5d5045] disabled:opacity-50"
+                      >
+                        <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setServiceToDelete({ id: s.id, name: s.name })
+                        }
+                        disabled={svcDeletingId != null}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-red-100 bg-white px-3 py-2 text-[9px] font-black uppercase tracking-widest text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+                        {svcDeletingId === s.id ? "…" : "Eliminar"}
+                      </button>
+                    </div>
+                  </div>
+                ),
+              )}
+            </div>
           )}
           <form
             onSubmit={submitService}
@@ -515,6 +693,59 @@ export default function SettingsView({
             </button>
           </form>
         </SettingsAccordion>
+      )}
+
+      {serviceToDelete && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          role="presentation"
+          onClick={() => {
+            if (svcDeletingId == null) setServiceToDelete(null);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settings-delete-svc-title"
+            className="w-full max-w-sm rounded-[2.5rem] bg-white p-8 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-600 ring-1 ring-red-100">
+              <AlertTriangle className="h-7 w-7" strokeWidth={1.75} />
+            </div>
+            <p className="text-center text-[9px] font-black uppercase tracking-[0.35em] text-[#a39485] mb-2">
+              Eliminar servicio
+            </p>
+            <h3
+              id="settings-delete-svc-title"
+              className="font-serif text-lg text-center text-[#5d5045] mb-3 leading-snug"
+            >
+              ¿Eliminar «{serviceToDelete.name}»?
+            </h3>
+            <p className="text-[12px] leading-relaxed text-[#6d6359] text-center mb-8">
+              Esta acción no se puede deshacer. Si hay citas asociadas a este
+              servicio, no podrás eliminarlo hasta que las gestiones.
+            </p>
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setServiceToDelete(null)}
+                disabled={svcDeletingId != null}
+                className="w-full sm:w-auto rounded-full border border-[#eaddcf] bg-white px-6 py-3 text-[10px] font-black uppercase tracking-widest text-[#8c857d] transition hover:bg-[#faf8f5] disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteService}
+                disabled={svcDeletingId != null}
+                className="w-full sm:w-auto rounded-full bg-red-600 px-6 py-3 text-[10px] font-black uppercase tracking-widest text-white shadow-lg transition hover:bg-red-700 disabled:opacity-50"
+              >
+                {svcDeletingId != null ? "Eliminando…" : "Eliminar"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

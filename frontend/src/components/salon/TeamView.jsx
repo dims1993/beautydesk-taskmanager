@@ -2,7 +2,22 @@ import React, { useState, useEffect } from "react";
 import { useApi } from "../../hooks/useApi";
 import { Trash2, UserPlus, Users } from "lucide-react"; // Importamos iconos para mejorar la UI
 
-const TeamView = () => {
+function roleBadgeClass(role) {
+  const r = String(role || "").toUpperCase();
+  if (r === "OWNER") return "bg-[#5d5045] text-[#f5ebe0]";
+  if (r === "SUPER_ADMIN") return "bg-amber-100 text-amber-900 ring-1 ring-amber-200/80";
+  return "bg-[#f8f5f2] text-[#a39485] ring-1 ring-[#eee8e2]";
+}
+
+function formatRoleLabel(role) {
+  const r = String(role || "").toUpperCase();
+  if (r === "OWNER") return "Titular";
+  if (r === "STAFF") return "Staff";
+  if (r === "SUPER_ADMIN") return "Super admin";
+  return r || "—";
+}
+
+const TeamView = ({ currentUser = null }) => {
   const { apiRequest } = useApi();
   const [team, setTeam] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -131,48 +146,51 @@ const TeamView = () => {
 
       {/* LISTADO DE EQUIPO CON BOTÓN ELIMINAR */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {team.map((member) => (
-          <div
-            key={member.id}
-            className="bg-white p-5 rounded-[2.5rem] border border-[#eee8e2] flex items-center justify-between group hover:shadow-md transition-all hover:border-[#dcc7b1]"
-          >
-            <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 rounded-full bg-[#f8f5f2] text-[#dcc7b1] flex items-center justify-center font-black border border-[#eee8e2] group-hover:bg-[#5d5045] group-hover:text-white transition-colors">
-                {member.username.charAt(0).toUpperCase()}
+        {team.map((member) => {
+          const canRemove =
+            currentUser != null &&
+            Number(member.id) !== Number(currentUser.id);
+          return (
+            <div
+              key={member.id}
+              className="group bg-white p-5 rounded-[2.5rem] border border-[#eee8e2] flex gap-4 items-start hover:shadow-md transition-all hover:border-[#dcc7b1]"
+            >
+              <div className="h-12 w-12 shrink-0 rounded-full bg-[#f8f5f2] text-[#dcc7b1] flex items-center justify-center font-black border border-[#eee8e2] group-hover:bg-[#5d5045] group-hover:text-white transition-colors">
+                {(member.username || "?").charAt(0).toUpperCase()}
               </div>
-              <div>
-                <h4 className="font-black text-[#5d5045] text-sm uppercase tracking-tighter">
+              <div className="min-w-0 flex-1 space-y-2">
+                <h4 className="font-black text-[#5d5045] text-sm uppercase tracking-tighter truncate">
                   {member.username}
                 </h4>
-                <p className="text-[#a39485] text-[10px] font-medium">
+                <p
+                  className="text-[#a39485] text-[10px] font-medium truncate"
+                  title={member.email}
+                >
                   {member.email}
                 </p>
+                <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                  <span
+                    className={`inline-flex max-w-full items-center rounded-full px-3 py-1 text-[8px] font-black uppercase tracking-widest whitespace-nowrap ${roleBadgeClass(member.role)}`}
+                  >
+                    {formatRoleLabel(member.role)}
+                  </span>
+                </div>
               </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <span
-                className={`text-[8px] font-black uppercase px-3 py-1 rounded-full ${
-                  member.role === "admin"
-                    ? "bg-[#5d5045] text-white"
-                    : "bg-[#f8f5f2] text-[#a39485]"
-                }`}
-              >
-                {member.role}
-              </span>
-
-              {/* BOTÓN ELIMINAR (Solo aparece si no es el admin principal o el propio usuario logueado si quisieras) */}
-              {member.role !== "admin" && (
+              {canRemove ? (
                 <button
+                  type="button"
                   onClick={() => handleDeleteMember(member.id, member.username)}
-                  className="p-2 text-[#a39485] hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                  className="shrink-0 p-2 text-[#a39485] hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100"
+                  title="Retirar acceso"
                 >
                   <Trash2 size={14} strokeWidth={2.5} />
                 </button>
+              ) : (
+                <span className="shrink-0 w-9" aria-hidden />
               )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

@@ -320,7 +320,9 @@ function App() {
                             }}
                           />
                         )}
-                        {activeTab === "equipo" && <TeamView />}
+                        {activeTab === "equipo" && (
+                          <TeamView currentUser={currentUser} />
+                        )}
                         {activeTab === "stats" && (
                           <div className="animate-fadeIn space-y-6">
                             <StatsCharts
