@@ -25,6 +25,13 @@ from app.schemas.user import (
 from app.schemas.token import Token
 from app.dependencies import get_current_user
 from app.core.security import get_password_hash, verify_password
+from app.billing.subscription import (
+    count_staff_in_organization,
+    entitlements_for_organization,
+    entitlements_to_dict,
+    integrations_access_effective,
+    org_subscription_and_payment_str,
+)
 
 from app.services.registration import (
     complete_owner_billing,
@@ -165,10 +172,14 @@ def read_users_me(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_session),
 ):
-    base = UserOut.model_validate(current_user).model_dump()
+    org = None
     org_name = None
     org_city = None
     cash_close_configured = False
+    subscription_plan = None
+    payment_method = None
+    plan_entitlements = None
+
     if current_user.organization_id:
         org = db.get(Organization, current_user.organization_id)
         if org:
@@ -176,11 +187,20 @@ def read_users_me(
             org_city = (org.city or "").strip() or None
             h = org.cash_close_password_hash
             cash_close_configured = bool(h and str(h).strip())
+            subscription_plan, payment_method = org_subscription_and_payment_str(org)
+            plan_entitlements = entitlements_to_dict(entitlements_for_organization(org))
+
+    base = UserOut.model_validate(current_user).model_dump()
+    base["integrations_access"] = integrations_access_effective(current_user, org)
+
     return UserMeOut(
         **base,
         organization_name=org_name,
         organization_city=org_city,
         cash_close_password_configured=cash_close_configured,
+        subscription_plan=subscription_plan,
+        payment_method=payment_method,
+        plan_entitlements=plan_entitlements,
     )
 
 
@@ -272,6 +292,29 @@ async def add_team_member(
     statement = select(User).where(User.email == user_in["email"])
     if db.exec(statement).first():
         raise HTTPException(status_code=400, detail="Este correo ya está registrado")
+
+    org = db.get(Organization, current_user.organization_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+    ent = entitlements_for_organization(org)
+    if not ent.team_invites:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Tu plan Esencial no incluye equipo. "
+                "Actualiza a Profesional o Premium para invitar profesionales."
+            ),
+        )
+    if ent.max_staff_users is not None:
+        staff_n = count_staff_in_organization(db, current_user.organization_id)
+        if staff_n >= ent.max_staff_users:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    f"Has alcanzado el máximo de profesionales para tu plan "
+                    f"({ent.max_staff_users}). Mejora de plan para añadir más."
+                ),
+            )
 
     role_raw = (user_in.get("role") or "STAFF").strip().upper()
     try:

@@ -7,7 +7,9 @@ from google.auth.transport import requests
 from google_auth_oauthlib.flow import Flow
 from requests_oauthlib import OAuth2Session
 from app.core.db.session import get_session
-from app.models import User 
+from app.models import User
+from app.models.organization import Organization
+from app.billing.subscription import integrations_access_effective
 from app.schemas.token import Token 
 from app.core.security import create_access_token 
 from app.core.security import SECRET_KEY, ALGORITHM
@@ -159,7 +161,10 @@ def google_calendar_connect(
     Returns the Google consent URL to redirect the user to.
     """
     row = db.exec(select(User).where(User.id == current_user.id)).first()
-    if not row or not row.integrations_access:
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found")
+    org = db.get(Organization, row.organization_id) if row.organization_id else None
+    if not integrations_access_effective(row, org):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(
@@ -216,7 +221,9 @@ def google_calendar_status(
     user = db.exec(select(User).where(User.id == current_user.id)).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    if not user.integrations_access:
+    org = db.get(Organization, user.organization_id) if user.organization_id else None
+    locked = not integrations_access_effective(user, org)
+    if locked:
         return {
             "connected": False,
             "has_refresh_token": False,
@@ -237,7 +244,8 @@ def google_calendar_disconnect(
     user = db.exec(select(User).where(User.id == current_user.id)).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    if not user.integrations_access:
+    org = db.get(Organization, user.organization_id) if user.organization_id else None
+    if not integrations_access_effective(user, org):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Integraciones no disponibles en tu plan actual.",
@@ -277,7 +285,8 @@ def google_calendar_callback(code: str | None = None, state: str | None = None, 
     user = db.exec(select(User).where(User.email == email)).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    if not user.integrations_access:
+    org = db.get(Organization, user.organization_id) if user.organization_id else None
+    if not integrations_access_effective(user, org):
         from fastapi.responses import RedirectResponse
 
         return RedirectResponse(

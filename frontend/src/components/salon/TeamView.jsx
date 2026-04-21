@@ -31,6 +31,9 @@ const TeamView = ({ currentUser = null }) => {
   });
   const [isAdding, setIsAdding] = useState(false);
 
+  const teamInvitesAllowed = Boolean(currentUser?.plan_entitlements?.team_invites);
+  const maxStaffLabel = currentUser?.plan_entitlements?.max_staff_users;
+
   // Cargar equipo al montar
   useEffect(() => {
     fetchTeam();
@@ -50,6 +53,7 @@ const TeamView = ({ currentUser = null }) => {
 
   const handleAddMember = async (e) => {
     e.preventDefault();
+    if (!teamInvitesAllowed) return;
     setIsAdding(true);
     setError("");
     try {
@@ -93,9 +97,25 @@ const TeamView = ({ currentUser = null }) => {
           Gestión de Equipo
         </h2>
         <p className="text-[#a39485] text-sm">
-          Autoriza o revoca accesos de Google para tu salón
+          Invita profesionales según tu plan (Profesional: hasta 2; Premium:
+          ilimitado).
         </p>
       </div>
+
+      {!teamInvitesAllowed && (
+        <div className="rounded-2xl border border-amber-200/80 bg-amber-50/90 px-4 py-3 text-center text-[11px] leading-relaxed text-amber-950">
+          Tu plan <strong>Esencial</strong> no incluye equipo adicional. Sube a{" "}
+          <strong>Profesional</strong> o <strong>Premium</strong> para invitar
+          staff.
+        </div>
+      )}
+
+      {teamInvitesAllowed && typeof maxStaffLabel === "number" && (
+        <p className="text-center text-[10px] text-[#a39485]">
+          Profesionales adicionales permitidos en tu plan:{" "}
+          <span className="font-black text-[#5d5045]">{maxStaffLabel}</span>
+        </p>
+      )}
 
       {/* FORMULARIO PARA AÑADIR */}
       <div className="bg-white/80 p-6 rounded-[2.5rem] border border-[#eee8e2] shadow-sm">
@@ -112,26 +132,28 @@ const TeamView = ({ currentUser = null }) => {
           <input
             type="email"
             placeholder="Correo de Google"
-            className="px-5 py-3 rounded-2xl bg-[#f8f5f2] border-none text-sm focus:ring-2 focus:ring-[#dcc7b1] outline-none font-medium"
+            className="px-5 py-3 rounded-2xl bg-[#f8f5f2] border-none text-sm focus:ring-2 focus:ring-[#dcc7b1] outline-none font-medium disabled:opacity-50"
             value={newMember.email}
             onChange={(e) =>
               setNewMember({ ...newMember, email: e.target.value })
             }
             required
+            disabled={!teamInvitesAllowed}
           />
           <input
             type="text"
             placeholder="Nombre (ej: Saray)"
-            className="px-5 py-3 rounded-2xl bg-[#f8f5f2] border-none text-sm focus:ring-2 focus:ring-[#dcc7b1] outline-none font-medium"
+            className="px-5 py-3 rounded-2xl bg-[#f8f5f2] border-none text-sm focus:ring-2 focus:ring-[#dcc7b1] outline-none font-medium disabled:opacity-50"
             value={newMember.username}
             onChange={(e) =>
               setNewMember({ ...newMember, username: e.target.value })
             }
             required
+            disabled={!teamInvitesAllowed}
           />
           <button
             type="submit"
-            disabled={isAdding}
+            disabled={isAdding || !teamInvitesAllowed}
             className="bg-[#5d5045] text-white font-bold py-3 rounded-2xl hover:bg-[#a39485] transition-all disabled:opacity-50 uppercase text-[10px] tracking-widest"
           >
             {isAdding ? "Procesando..." : "Autorizar Acceso"}

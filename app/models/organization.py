@@ -2,6 +2,9 @@ from typing import Optional, List
 from sqlmodel import SQLModel, Field, Relationship
 from enum import Enum
 
+from app.billing.subscription import PaymentMethod, SubscriptionPlan
+
+
 class BusinessType(Enum):
     SALON = "salon"
     LAWYER = "lawyer"
@@ -15,6 +18,10 @@ class Organization(SQLModel, table=True):
     subscription_active: bool = Field(default=True) # <-- Control de pagos
     owner_id: Optional[int] = Field(default=None) # ID del dueño
     business_type: BusinessType = Field(default=BusinessType.SALON)
+
+    # Plan comercial y cobro (alineado con landing; pago efectivo vía pasarela en fase posterior)
+    subscription_plan: SubscriptionPlan = Field(default=SubscriptionPlan.ESENCIAL)
+    payment_method: PaymentMethod = Field(default=PaymentMethod.UNSPECIFIED)
 
     # Datos de facturación / negocio
     legal_name: Optional[str] = Field(default=None)

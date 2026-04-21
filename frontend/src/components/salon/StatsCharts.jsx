@@ -60,6 +60,7 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
   const [lockErrorMessage, setLockErrorMessage] = useState(null);
 
   const PERSONAL_GOAL = 2000;
+  const canExportMonthly = Boolean(currentUser?.plan_entitlements?.export_monthly);
   const currentStaffId = currentUser?.id;
   const currentStaffName =
     currentUser?.nombre || currentUser?.username || "Staff";
@@ -152,6 +153,7 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
   // --- LÓGICA DE EXPORTACIÓN MENSUAL ---
 
   const exportToExcel = () => {
+    if (!canExportMonthly) return;
     // 1. Filtramos TODAS las citas del mes que estamos viendo
     const appsDelMes = appointments.filter((app) => {
       const appDate = new Date(app.start_time);
@@ -492,10 +494,22 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
       <button
         type="button"
         onClick={exportToExcel}
-        className="w-full py-5 bg-[#5d5045] text-white rounded-[2rem] text-[10px] font-black uppercase hover:bg-black transition-all flex items-center justify-center gap-3 shadow-xl active:scale-95"
+        disabled={!canExportMonthly}
+        title={
+          !canExportMonthly
+            ? "La exportación mensual está incluida en Profesional y Premium."
+            : undefined
+        }
+        className={`w-full py-5 rounded-[2rem] text-[10px] font-black uppercase transition-all flex items-center justify-center gap-3 shadow-xl ${
+          canExportMonthly
+            ? "bg-[#5d5045] text-white hover:bg-black active:scale-95"
+            : "bg-[#e8e2dc] text-[#a39485] cursor-not-allowed opacity-90"
+        }`}
       >
         <FileSpreadsheet className="h-5 w-5 shrink-0" strokeWidth={2} />
-        Descargar Informe Mensual: {monthName}
+        {canExportMonthly
+          ? `Descargar Informe Mensual: ${monthName}`
+          : "Exportación mensual (Profesional o Premium)"}
       </button>
 
       {/* MODAL CONTRASEÑA */}

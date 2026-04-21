@@ -148,6 +148,28 @@ def init_db():
             )
             conn.execute(
                 text(
+                    'ALTER TABLE organization ADD COLUMN IF NOT EXISTS subscription_plan VARCHAR(32)'
+                )
+            )
+            conn.execute(
+                text(
+                    'ALTER TABLE organization ADD COLUMN IF NOT EXISTS payment_method VARCHAR(32)'
+                )
+            )
+            conn.execute(
+                text(
+                    "UPDATE organization SET subscription_plan = 'esencial' "
+                    "WHERE subscription_plan IS NULL OR TRIM(subscription_plan) = ''"
+                )
+            )
+            conn.execute(
+                text(
+                    "UPDATE organization SET payment_method = 'unspecified' "
+                    "WHERE payment_method IS NULL OR TRIM(payment_method) = ''"
+                )
+            )
+            conn.execute(
+                text(
                     "ALTER TABLE service ADD COLUMN IF NOT EXISTS organization_id INTEGER"
                 )
             )

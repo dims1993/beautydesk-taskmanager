@@ -16,6 +16,7 @@ from app.schemas.appointment import (
 from app.dependencies import get_current_user
 from app.core.notifications import send_appointment_confirmation 
 from app.core.google_calendar import sync_with_google_calendar  # Importamos la nueva función
+from app.billing.subscription import calendar_sync_allowed
 
 router = APIRouter(prefix="/appointments", tags=["appointments"])
 
@@ -159,11 +160,12 @@ async def create_appointment(
     db.commit()
     db.refresh(new_appo)
 
-    # Llamamos a la función para sincronizar con Google Calendar
-    try:
-        sync_with_google_calendar(new_appo, current_user)
-    except Exception as e:
-        print(f"⚠️ Google Calendar sync failed for appointment {new_appo.id}: {e}")
+    # Sincronizar con Google Calendar solo si el plan de la organización lo permite
+    if calendar_sync_allowed(db, current_user):
+        try:
+            sync_with_google_calendar(new_appo, current_user)
+        except Exception as e:
+            print(f"⚠️ Google Calendar sync failed for appointment {new_appo.id}: {e}")
 
     background_tasks.add_task(
         send_appointment_confirmation, 

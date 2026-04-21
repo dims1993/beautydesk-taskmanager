@@ -8,6 +8,7 @@ from sqlalchemy import or_
 
 # Importacion interna de models
 from app.models import User, Organization, Service, Appointment
+from app.billing.subscription import integrations_access_effective
 # Importaciones internas de schemas
 from app import (
     Token, get_session, init_db, seed_services,
@@ -97,12 +98,15 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
 
     access_token = create_access_token(data={"sub": user.email})
 
+    org = db.get(Organization, user.organization_id) if user.organization_id else None
+    integrations = integrations_access_effective(user, org)
+
     return {
         "access_token": access_token,
         "token_type": "bearer",
         "role": user.role.value if hasattr(user.role, "value") else str(user.role),
         "organization_id": user.organization_id,
-        "integrations_access": getattr(user, "integrations_access", True),
+        "integrations_access": integrations,
     }
 
 
