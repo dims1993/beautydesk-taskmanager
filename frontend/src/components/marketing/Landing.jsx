@@ -1,8 +1,165 @@
-import React from "react";
-import { CalendarDays, Users, Sparkles, ChevronRight } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  BarChart3,
+  CalendarDays,
+  CalendarSync,
+  Check,
+  ChevronRight,
+  Headphones,
+  Heart,
+  Sparkles,
+  TrendingUp,
+  Users,
+} from "lucide-react";
 import { Link } from "react-router-dom";
 
+/** Easing para contador (sensación “premium”, frena al final). */
+function easeOutQuart(t) {
+  return 1 - (1 - t) ** 4;
+}
+
+/**
+ * Cuenta de 0 → target cuando trigger pasa a true (una vez).
+ * delay / duration en ms.
+ */
+function useCountUp(trigger, target, { duration = 2000, delay = 0 } = {}) {
+  const [value, setValue] = useState(0);
+  useEffect(() => {
+    if (!trigger) return;
+    let rafId = 0;
+    const startAt = performance.now() + delay;
+    const from = 0;
+    const tick = (now) => {
+      if (now < startAt) {
+        rafId = requestAnimationFrame(tick);
+        return;
+      }
+      const elapsed = now - startAt;
+      const p = Math.min(1, elapsed / duration);
+      const eased = easeOutQuart(p);
+      const v = from + (target - from) * eased;
+      setValue(Math.round(v));
+      if (p < 1) {
+        rafId = requestAnimationFrame(tick);
+      } else {
+        setValue(target);
+      }
+    };
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, [trigger, target, duration, delay]);
+  return trigger ? value : 0;
+}
+
+const PRICING_PLANS = [
+  {
+    id: "esencial",
+    name: "Esencial",
+    tagline: "Autónoma o unipersonal",
+    price: "29",
+    period: "/mes",
+    trial: "10 días de prueba",
+    highlight: false,
+    features: [
+      "1 ubicación (un salón)",
+      "Usuario titular (sin equipo)",
+      "Agenda, calendario y clientes",
+      "Estadísticas y caja básicas",
+      "Soporte por email",
+    ],
+  },
+  {
+    id: "profesional",
+    name: "Profesional",
+    tagline: "Pequeño equipo",
+    price: "49",
+    period: "/mes",
+    trial: null,
+    highlight: true,
+    badge: "Popular",
+    features: [
+      "1 ubicación",
+      "Titular + hasta 2 profesionales",
+      "Sincronización con Google Calendar",
+      "Informes y exportación mensual",
+      "Estadísticas completas operativas",
+      "Gestión de equipo e invitaciones",
+    ],
+  },
+  {
+    id: "premium",
+    name: "Premium",
+    tagline: "Salón en crecimiento",
+    price: "89",
+    period: "/mes",
+    trial: null,
+    highlight: false,
+    features: [
+      "1 ubicación, equipo ilimitado",
+      "Google Calendar incluido",
+      "Analíticas e informes avanzados",
+      "Exportaciones e históricos sin límite",
+      "Prioridad en novedades y soporte",
+      "Ideal para varias estaciones de trabajo",
+    ],
+  },
+];
+
 export default function Landing() {
+  const [navHidden, setNavHidden] = useState(false);
+  const lastScrollY = useRef(0);
+  const statsSectionRef = useRef(null);
+  const [statsInView, setStatsInView] = useState(false);
+
+  const pctReservas = useCountUp(statsInView, 42, { delay: 0, duration: 1900 });
+  const pctFidel = useCountUp(statsInView, 68, { delay: 140, duration: 2000 });
+  const horasSoporte = useCountUp(statsInView, 24, { delay: 280, duration: 2100 });
+
+  useEffect(() => {
+    if (window.location.hash === "#planes") {
+      const el = document.getElementById("planes");
+      if (el) {
+        requestAnimationFrame(() =>
+          el.scrollIntoView({ behavior: "smooth", block: "start" }),
+        );
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const el = statsSectionRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) setStatsInView(true);
+      },
+      { threshold: 0.22, rootMargin: "0px 0px -8% 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  useEffect(() => {
+    lastScrollY.current = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      const delta = y - lastScrollY.current;
+      const minMove = 12;
+      const navHeightBand = 80;
+
+      if (y < navHeightBand) {
+        setNavHidden(false);
+      } else if (delta > minMove) {
+        setNavHidden(true);
+      } else if (delta < -minMove) {
+        setNavHidden(false);
+      }
+      lastScrollY.current = y;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   const features = [
     {
       type: "content",
@@ -52,13 +209,26 @@ export default function Landing() {
   ];
   return (
     <div className="bg-[#FAF9F6] min-h-screen text-[#5d5045] font-sans antialiased selection:bg-[#f5ebe0]">
-      {/* Navbar: Mobile First */}
-      <nav className="flex flex-col md:flex-row justify-between items-center px-6 md:px-16 py-6 md:py-8 gap-6">
-        <h1 className="text-2xl md:text-3xl font-serif tracking-widest italic font-medium text-[#5d5045]">
+      {/* Navbar: se oculta al bajar, reaparece al subir */}
+      <nav
+        className={`fixed top-0 left-0 right-0 z-[100] flex flex-col md:flex-row justify-between items-center px-6 md:px-16 py-6 md:py-8 gap-6 bg-[#FAF9F6]/95 backdrop-blur-md border-b border-[#eaddcf]/40 transition-transform duration-300 ease-out ${
+          navHidden ? "-translate-y-full" : "translate-y-0"
+        }`}
+      >
+        <Link
+          to="/"
+          className="text-2xl md:text-3xl font-serif tracking-widest italic font-medium text-[#5d5045] hover:opacity-80 transition-opacity"
+        >
           BEAUTYTASK
-        </h1>
-        <div className="flex items-center space-x-6 md:space-x-10 text-[10px] uppercase tracking-[0.2em] font-bold">
-          <Link to="/login" className="hover:text-gray-400 transition-colors">
+        </Link>
+        <div className="flex flex-wrap items-center justify-center gap-4 md:gap-8 md:space-x-0 text-[10px] uppercase tracking-[0.2em] font-bold">
+          <a
+            href="#planes"
+            className="hover:text-[#8c857d] transition-colors"
+          >
+            Planes
+          </a>
+          <Link to="/login" className="hover:text-[#8c857d] transition-colors">
             Iniciar Sesión
           </Link>
           <Link
@@ -71,7 +241,7 @@ export default function Landing() {
       </nav>
 
       {/* Hero */}
-      <header className="max-w-7xl mx-auto mt-0 md:mt-16 px-0 md:px-16 pb-20 md:pb-32 border-b border-[#eaddcf]/50">
+      <header className="max-w-7xl mx-auto pt-24 md:pt-28 md:mt-8 px-0 md:px-16 pb-20 md:pb-32">
         <div className="flex flex-col md:flex-row items-center justify-between gap-12 md:gap-20">
           {/* 1. COMPOSICIÓN ELEGANTE DE TRES IMÁGENES DE APP (MULTI-DEVICE SHOWCASE) */}
           {/* order-first md:order-last: Arriba en móvil, Derecha en escritorio */}
@@ -182,6 +352,102 @@ export default function Landing() {
           </div>
         </div>
       </header>
+
+      {/* Indicadores: franja a ancho completo, fondo alternativo */}
+      <section
+        ref={statsSectionRef}
+        className="relative w-full bg-[#ebe3d7] overflow-hidden"
+        aria-label="Indicadores BeautyDesk"
+      >
+        <div
+          className={`max-w-7xl mx-auto px-6 md:px-16 py-14 md:py-20 transition-all duration-1000 ease-out ${
+            statsInView
+              ? "opacity-100 translate-y-0"
+              : "opacity-0 translate-y-8"
+          }`}
+        >
+          <p className="text-sm md:text-base text-[#6b6158] font-light leading-relaxed max-w-2xl mb-12 md:mb-16">
+            Tres señales que resumen el impacto en tu salón: más citas, más
+            recurrencia y soporte cuando lo necesitas.
+          </p>
+
+          <div className="flex flex-col md:flex-row md:items-start gap-12 md:gap-6 lg:gap-12">
+            <article className="flex-1 md:pt-0">
+              <div className="flex items-center gap-3 text-[#5d5045]/70 mb-5">
+                <TrendingUp className="h-5 w-5 shrink-0" strokeWidth={1.5} />
+                <span className="text-[10px] font-black uppercase tracking-[0.35em] text-[#8c857d]">
+                  Reservas
+                </span>
+              </div>
+              <p
+                className="text-5xl sm:text-6xl md:text-7xl font-serif text-[#5d5045] tabular-nums tracking-tight leading-[0.95] mb-5"
+                aria-live="polite"
+              >
+                +{pctReservas}%
+              </p>
+              <p className="text-sm text-[#8c857d] font-light leading-relaxed max-w-xs">
+                Más reservas gestionadas con agenda clara y menos huecos.
+              </p>
+              <p className="mt-4 text-[9px] text-[#a39485] tracking-wide max-w-xs">
+                Cifras orientativas según uso típico.
+              </p>
+            </article>
+
+            <div
+              className="hidden md:block w-px shrink-0 self-stretch min-h-[200px] bg-gradient-to-b from-transparent via-[#5d5045]/12 to-transparent md:mx-2 lg:mx-4"
+              aria-hidden="true"
+            />
+
+            <article className="flex-1 border-t border-[#5d5045]/10 pt-8 md:pt-0 md:border-t-0 md:border-none">
+              <div className="flex items-center gap-3 text-[#5d5045]/70 mb-5">
+                <Heart className="h-5 w-5 shrink-0" strokeWidth={1.5} />
+                <span className="text-[10px] font-black uppercase tracking-[0.35em] text-[#8c857d]">
+                  Fidelización
+                </span>
+              </div>
+              <p
+                className="text-5xl sm:text-6xl md:text-7xl font-serif text-[#5d5045] tabular-nums tracking-tight leading-[0.95] mb-5"
+                aria-live="polite"
+              >
+                {pctFidel}%
+              </p>
+              <p className="text-sm text-[#8c857d] font-light leading-relaxed max-w-xs">
+                Clientes que repiten cuando el historial y los recordatorios
+                trabajan contigo.
+              </p>
+            </article>
+
+            <div
+              className="hidden md:block w-px shrink-0 self-stretch min-h-[200px] bg-gradient-to-b from-transparent via-[#5d5045]/12 to-transparent md:mx-2 lg:mx-4"
+              aria-hidden="true"
+            />
+
+            <article className="flex-1 border-t border-[#5d5045]/10 pt-8 md:pt-0 md:border-t-0 md:border-none">
+              <div className="flex items-center gap-3 text-[#5d5045]/70 mb-5">
+                <Headphones className="h-5 w-5 shrink-0" strokeWidth={1.5} />
+                <span className="text-[10px] font-black uppercase tracking-[0.35em] text-[#8c857d]">
+                  Soporte
+                </span>
+              </div>
+              <p
+                className="text-5xl sm:text-6xl md:text-7xl font-serif text-[#5d5045] tabular-nums tracking-tight leading-[0.95] mb-5"
+                aria-live="polite"
+              >
+                {"< "}
+                {horasSoporte}
+                <span className="text-[0.55em] font-light tracking-normal ml-1">
+                  h
+                </span>
+              </p>
+              <p className="text-sm text-[#8c857d] font-light leading-relaxed max-w-xs">
+                Primera respuesta del equipo BeautyDesk (tiempo medio
+                orientativo).
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
       {/* Bento Grid Section */}
       <section className="max-w-7xl mx-auto px-6 md:px-16 py-24 md:py-40">
         <div className="mb-12 md:mb-20 text-center md:text-left">
@@ -255,8 +521,121 @@ export default function Landing() {
           })}
         </div>
       </section>
+
+      {/* Planes */}
+      <section
+        id="planes"
+        className="scroll-mt-28 md:scroll-mt-32 border-t border-[#eaddcf]/50 bg-[#faf8f5]/80"
+      >
+        <div className="max-w-7xl mx-auto px-6 md:px-16 py-24 md:py-32">
+          <div className="text-center max-w-2xl mx-auto mb-16 md:mb-20">
+            <p className="text-[10px] uppercase tracking-[0.35em] text-[#8c857d] mb-4 font-black">
+              Planes
+            </p>
+            <h3 className="text-4xl md:text-5xl font-serif text-[#5d5045] mb-4">
+              El ritmo de tu <span className="italic">salón</span>, a tu medida.
+            </h3>
+            <p className="text-sm md:text-base text-[#8c857d] leading-relaxed font-light">
+              Tres niveles pensados para autónomas, equipos pequeños y salones
+              que quieren analítica completa. Precios orientados al mercado de
+              software de agenda y reservas (referencia similar a cuotas del
+              entorno Treatwell Connect: ~29–35 €/mes en el plan inicial en
+              varios mercados europeos).
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8 items-stretch">
+            {PRICING_PLANS.map((plan) => (
+              <div
+                key={plan.id}
+                className={`relative flex flex-col rounded-[2.5rem] border p-8 md:p-10 transition-all duration-300 ${
+                  plan.highlight
+                    ? "border-[#5d5045] bg-white shadow-[0_24px_80px_-20px_rgba(93,80,69,0.25)] ring-1 ring-[#5d5045]/20 scale-[1.02] z-10"
+                    : "border-[#eaddcf] bg-white/90 hover:border-[#dcc7b1] hover:shadow-xl"
+                }`}
+              >
+                {plan.badge && (
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[#5d5045] px-4 py-1.5 text-[9px] font-black uppercase tracking-[0.2em] text-[#f5ebe0] shadow-md">
+                    {plan.badge}
+                  </span>
+                )}
+                <div className="mb-8">
+                  <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[#a39485] mb-2">
+                    {plan.tagline}
+                  </p>
+                  <h4 className="text-2xl md:text-3xl font-serif text-[#5d5045] mb-1">
+                    {plan.name}
+                  </h4>
+                  <div className="flex items-baseline gap-1 mt-4">
+                    <span className="text-4xl md:text-5xl font-serif text-[#5d5045]">
+                      {plan.price}
+                    </span>
+                    <span className="text-lg text-[#8c857d] font-light">
+                      €{plan.period}
+                    </span>
+                  </div>
+                  {plan.trial ? (
+                    <p className="mt-3 text-[10px] font-bold uppercase tracking-widest text-[#5d5045]/80">
+                      {plan.trial}
+                    </p>
+                  ) : (
+                    <p className="mt-3 text-[10px] text-[#a39485]">
+                      Facturación mensual flexible
+                    </p>
+                  )}
+                </div>
+                <ul className="space-y-4 flex-1 mb-10">
+                  {plan.features.map((line) => (
+                    <li
+                      key={line}
+                      className="flex gap-3 text-[13px] md:text-sm text-[#5d5045] leading-snug"
+                    >
+                      <span className="mt-0.5 shrink-0 flex h-5 w-5 items-center justify-center rounded-full bg-[#f5ebe0] text-[#5d5045]">
+                        <Check className="h-3 w-3" strokeWidth={3} />
+                      </span>
+                      <span>{line}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  to="/login"
+                  className={`mt-auto block w-full rounded-full py-4 text-center text-[10px] font-black uppercase tracking-[0.2em] transition active:scale-[0.98] ${
+                    plan.highlight
+                      ? "bg-[#5d5045] text-[#f5ebe0] hover:bg-[#4a3f36] shadow-lg"
+                      : "border border-[#eaddcf] bg-[#FAF9F6] text-[#5d5045] hover:bg-[#f5ebe0]"
+                  }`}
+                >
+                  Empezar
+                </Link>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-12 md:mt-16 flex flex-col md:flex-row items-center justify-center gap-6 md:gap-10 text-[#8c857d]">
+            <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
+              <CalendarSync className="h-4 w-4 text-[#5d5045]" />
+              Integraciones en planes superiores
+            </div>
+            <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
+              <BarChart3 className="h-4 w-4 text-[#5d5045]" />
+              Analítica avanzada en Premium
+            </div>
+          </div>
+
+          <p className="mt-10 text-center text-[10px] leading-relaxed text-[#a39485] max-w-3xl mx-auto">
+            Precios sin IVA. La contratación y el cobro online se activarán en
+            una fase posterior; esta tabla comunica la propuesta de valor y la
+            orientación de mercado. Para grupos con varias sedes, contacta para
+            un presupuesto a medida.
+          </p>
+        </div>
+      </section>
+
       {/* Sección de Contacto */}
-      <section id="contacto" className="max-w-4xl mx-auto px-6 py-24 md:py-40">
+      <section
+        id="contacto"
+        className="scroll-mt-28 md:scroll-mt-32 max-w-4xl mx-auto px-6 py-24 md:py-40"
+      >
         <div className="bg-white rounded-[3rem] border border-[#eaddcf] p-8 md:p-16 shadow-2xl shadow-[#5d5045]/5">
           <div className="text-center space-y-4 mb-12">
             <p className="text-[10px] uppercase tracking-[0.4em] text-[#8c857d] font-black">

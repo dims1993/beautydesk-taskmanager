@@ -36,3 +36,6 @@ dist/
 
 # Local demo / video edits (too large for the remote)
 demo-video/
+
+# Documentación interna del equipo (no publicar en el remoto)
+docs/recordatorio-planes-y-estructura.md
