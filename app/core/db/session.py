@@ -232,6 +232,34 @@ def init_db():
             )
             conn.execute(
                 text(
+                    "ALTER TABLE organization ADD COLUMN IF NOT EXISTS billing_trial_consumed BOOLEAN DEFAULT FALSE"
+                )
+            )
+            conn.execute(
+                text(
+                    "UPDATE organization SET billing_trial_consumed = FALSE "
+                    "WHERE billing_trial_consumed IS NULL"
+                )
+            )
+            # Quien ya tenía cliente Stripe no recibe otra "primera" prueba gratuita
+            conn.execute(
+                text(
+                    "UPDATE organization SET billing_trial_consumed = TRUE "
+                    "WHERE stripe_customer_id IS NOT NULL AND trim(stripe_customer_id) <> ''"
+                )
+            )
+            for col, typ in (
+                ("stripe_sub_status", "VARCHAR(32)"),
+                ("stripe_trial_ends_at", "TIMESTAMPTZ"),
+                ("stripe_current_period_ends_at", "TIMESTAMPTZ"),
+            ):
+                conn.execute(
+                    text(
+                        f"ALTER TABLE organization ADD COLUMN IF NOT EXISTS {col} {typ}"
+                    )
+                )
+            conn.execute(
+                text(
                     "ALTER TABLE service ADD COLUMN IF NOT EXISTS organization_id INTEGER"
                 )
             )

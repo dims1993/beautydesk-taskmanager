@@ -30,6 +30,7 @@ import SalonClientsView from "./components/salon/SalonClientsView";
 import TeamView from "./components/salon/TeamView";
 import SuperAdminPanel from "./components/salon/SuperAdminPanel";
 import SettingsView from "./components/salon/SettingsView";
+import BillingSubscriptionPanel from "./components/salon/BillingSubscriptionPanel";
 import FirstVisitGuide from "./components/onboarding/FirstVisitGuide";
 
 const ONBOARDING_STORAGE_KEY = "beautydesk_onboarding_v2";
@@ -122,14 +123,36 @@ function App() {
 
   const fetchInitialData = async () => {
     try {
-      const [user, svcs, apps, clientsFromDB, team] = await Promise.all([
-        apiRequest("/users/me"),
-        apiRequest("/services/"),
-        apiRequest("/appointments/"),
-        apiRequest("/clients/"),
-        apiRequest("/users/team"),
-      ]);
-      console.log("Fetched appointments:", apps);
+      if (typeof window !== "undefined") {
+        const sp = new URLSearchParams(window.location.search);
+        if (sp.get("billing") === "success" && sp.get("session_id")) {
+          const sessionId = sp.get("session_id");
+          try {
+            await apiRequest("/billing/confirm-checkout-session", "POST", {
+              session_id: sessionId,
+            });
+          } catch (err) {
+            console.error("confirm-checkout-session", err);
+            const d = err?.detail;
+            setErrorMessage(
+              typeof d === "string"
+                ? d
+                : "No se pudo confirmar el pago. Si ya completaste el checkout en Stripe, recarga; en local asegúrate de tener STRIPE_SECRET_KEY o el webhook reenviado.",
+            );
+          }
+          try {
+            const u = new URL(window.location.href);
+            u.searchParams.delete("session_id");
+            u.searchParams.delete("billing");
+            const q = u.searchParams.toString();
+            const path = u.pathname + (q ? `?${q}` : "") + (u.hash || "");
+            window.history.replaceState({}, "", path);
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+      const user = await apiRequest("/users/me");
       if (user) {
         try {
           if (
@@ -145,7 +168,23 @@ function App() {
           /* ignore */
         }
         setCurrentUser(user);
+      } else {
+        return;
       }
+      if (user.app_access_locked) {
+        setServices([]);
+        setAppointments([]);
+        setClients([]);
+        setTeamMembers([]);
+        return;
+      }
+      const [svcs, apps, clientsFromDB, team] = await Promise.all([
+        apiRequest("/services/"),
+        apiRequest("/appointments/"),
+        apiRequest("/clients/"),
+        apiRequest("/users/team"),
+      ]);
+      console.log("Fetched appointments:", apps);
       if (svcs) setServices(svcs);
       if (clientsFromDB) setClients(clientsFromDB);
       if (Array.isArray(team)) setTeamMembers(team);
@@ -178,7 +217,7 @@ function App() {
   }, [isLoggedIn]);
 
   useEffect(() => {
-    if (!isLoggedIn || !currentUser) {
+    if (!isLoggedIn || !currentUser || currentUser.app_access_locked) {
       setShowFirstVisitGuide(false);
       setGuidedTourActive(false);
       return;
@@ -278,6 +317,11 @@ function App() {
             element={
               isLoggedIn ? (
                 <div className="min-h-screen bg-[#f8f5f2] pb-24 md:pb-12 pt-6 md:pt-12 px-4 md:px-6 font-sans text-[#5d5045]">
+                  {!currentUser && (
+                    <div className="max-w-6xl mx-auto py-20 text-center text-[10px] text-[#8c857d] font-bold uppercase tracking-widest">
+                      Cargando tu cuenta…
+                    </div>
+                  )}
                   {errorMessage && (
                     <div className="fixed top-4 md:top-10 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-md">
                       <div className="bg-white border-l-4 border-red-500 p-4 rounded-xl shadow-2xl flex justify-between items-center text-[10px] font-bold uppercase">
@@ -292,6 +336,39 @@ function App() {
                     </div>
                   )}
 
+                  {currentUser?.app_access_locked && (
+                    <div className="max-w-2xl mx-auto space-y-6 py-4">
+                      <div>
+                        <h1 className="text-2xl md:text-3xl font-serif text-[#5d5045]">
+                          Método de pago obligatorio
+                        </h1>
+                        <p className="mt-2 text-[10px] leading-relaxed text-[#8c857d]">
+                          Para proteger el servicio, la organización debe
+                          completar el alta en Stripe: periodo de prueba sin
+                          cargo y, a continuación, el cobro del plan de no
+                          cancelar. Hasta entonces, la app no estará
+                          habilitada.
+                        </p>
+                      </div>
+                      <div className="rounded-[2.5rem] border border-[#e5e0d8] bg-white/95 p-6 shadow-sm">
+                        <BillingSubscriptionPanel
+                          currentUser={currentUser}
+                          onRefresh={fetchInitialData}
+                          onError={setErrorMessage}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleLogout}
+                        className="w-full py-3 rounded-full border border-[#e5e0d8] text-[10px] font-black uppercase tracking-widest text-[#8c857d] hover:border-[#5d5045]/20"
+                      >
+                        Cerrar sesión
+                      </button>
+                    </div>
+                  )}
+
+                  {currentUser && !currentUser.app_access_locked && (
+                    <>
                   {currentUser?.needs_fiscal_completion && (
                     <div className="max-w-6xl mx-auto mb-4 px-1">
                       <div className="rounded-2xl border border-amber-300 bg-amber-50/95 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-[10px] font-bold text-amber-950">
@@ -444,6 +521,8 @@ function App() {
                       setActiveTab={setActiveTab}
                       onTourOpenChange={setGuidedTourActive}
                     />
+                  )}
+                    </>
                   )}
                 </div>
               ) : (

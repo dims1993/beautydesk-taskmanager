@@ -172,6 +172,13 @@ class UserMeOut(UserOut):
     payment_method: Optional[str] = None
     plan_entitlements: Optional[dict] = None
     has_stripe_subscription: bool = False
+    # Stripe (suscripción; cache en organización, actualizado vía webhooks)
+    billing_trial_consumed: bool = False
+    stripe_subscription_status: Optional[str] = None
+    stripe_trial_ends_at: Optional[datetime] = None
+    stripe_current_period_ends_at: Optional[datetime] = None
+    # True: la org debe completar checkout Stripe antes de usar la app (citas, etc.)
+    app_access_locked: bool = False
 
 
 class SetCashClosePasswordBody(BaseModel):

@@ -6,7 +6,7 @@ from typing import List, Optional
 from app.core.db.session import get_session
 from app.models import Appointment, Service, User
 from app.models.user import UserRole
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user_for_app
 
 router = APIRouter(prefix="/services", tags=["services"])
 
@@ -40,7 +40,7 @@ def _get_service_for_org(
 @router.get("/", response_model=List[Service])
 def list_services(
     db: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_for_app),
 ):
     if current_user.role == UserRole.SUPER_ADMIN:
         return db.exec(select(Service)).all()
@@ -55,7 +55,7 @@ def list_services(
 def create_service(
     service: Service,
     db: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_for_app),
 ):
     if current_user.role not in (UserRole.OWNER, UserRole.SUPER_ADMIN):
         raise HTTPException(status_code=403, detail="No autorizado")
@@ -83,7 +83,7 @@ def update_service(
     service_id: int,
     body: ServiceUpdate,
     db: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_for_app),
 ):
     if not _can_manage_services(current_user):
         raise HTTPException(status_code=403, detail="No autorizado")
@@ -115,7 +115,7 @@ def update_service(
 def delete_service(
     service_id: int,
     db: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_for_app),
 ):
     if not _can_manage_services(current_user):
         raise HTTPException(status_code=403, detail="No autorizado")

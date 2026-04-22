@@ -1,10 +1,11 @@
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from sqlmodel import Session
 from app.core.db.session import get_session
 from app.models.user import User
 from app.core.security import SECRET_KEY, ALGORITHM
+from app.billing.org_access import organization_blocks_app_access
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
@@ -22,4 +23,17 @@ def get_current_user(db: Session = Depends(get_session), token: str = Depends(oa
     user = db.query(User).filter(User.email == email).first()
     if user is None:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    return user
+
+
+def get_current_user_for_app(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_session),
+) -> User:
+    """JWT + organización con suscripción Stripe (si el entorno exige pago)."""
+    if organization_blocks_app_access(db, user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="ORG_BILLING_REQUIRED",
+        )
     return user

@@ -1,4 +1,5 @@
-from typing import Optional, List
+from datetime import datetime
+from typing import List, Optional
 from enum import Enum
 
 from sqlalchemy import Column
@@ -50,6 +51,12 @@ class Organization(SQLModel, table=True):
     # Stripe (Checkout + Customer Portal + webhooks)
     stripe_customer_id: Optional[str] = Field(default=None, index=True)
     stripe_subscription_id: Optional[str] = Field(default=None, index=True)
+    # Tras un checkout de suscripción completado, no se ofrece otra prueba (una sola por org)
+    billing_trial_consumed: bool = Field(default=False)
+    # Sincronizados desde Stripe (suscripción); evitan llamar a la API en cada /users/me
+    stripe_sub_status: Optional[str] = Field(default=None)  # trialing, active, past_due, ...
+    stripe_trial_ends_at: Optional[datetime] = Field(default=None)
+    stripe_current_period_ends_at: Optional[datetime] = Field(default=None)
 
     # Datos de facturación / negocio
     legal_name: Optional[str] = Field(default=None)

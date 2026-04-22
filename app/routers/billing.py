@@ -21,6 +21,8 @@ from app.billing.stripe_service import (
     plans_price_availability,
     price_id_for_plan,
     stripe_secret_configured,
+    sync_organization_from_checkout_session_id,
+    trial_period_days,
     webhook_secret_configured,
 )
 from app.billing.subscription import SubscriptionPlan, parse_subscription_plan
@@ -40,6 +42,10 @@ class ChangePlanBody(BaseModel):
     plan: str = Field(..., description="esencial | profesional | premium")
 
 
+class ConfirmCheckoutSessionBody(BaseModel):
+    session_id: str = Field(..., min_length=8, description="cs_… de la URL al volver de Stripe")
+
+
 def _require_owner_with_org(user: User) -> None:
     if user.role != UserRole.OWNER:
         raise HTTPException(
@@ -57,13 +63,51 @@ def _parse_plan(raw: str) -> SubscriptionPlan:
     return parse_subscription_plan(raw)
 
 
+@router.post("/confirm-checkout-session")
+def confirm_checkout_session(
+    body: ConfirmCheckoutSessionBody,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Sincroniza la organización como el webhook, usando el session_id de la URL
+    de éxito. Necesario si el webhook aún no llegó (local sin `stripe listen`).
+    Usa get_current_user (no el gate de app) para poder ejecutarse con cuenta
+    aún “bloqueada” hasta asignar stripe_subscription_id.
+    """
+    _require_owner_with_org(current_user)
+    if not stripe_secret_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Pagos no configurados en el servidor (STRIPE_SECRET_KEY).",
+        )
+    sid = (body.session_id or "").strip()
+    if not sid:
+        raise HTTPException(status_code=400, detail="session_id requerido")
+
+    ok, err = sync_organization_from_checkout_session_id(
+        db,
+        organization_id=current_user.organization_id,
+        session_id=sid,
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=err or "No se pudo confirmar el pago con Stripe",
+        )
+    return {"success": True}
+
+
 @router.get("/status")
 def billing_status():
     """Estado de configuración (sin secretos). Útil para la UI de Ajustes."""
+    tdays = trial_period_days()
     return {
         "stripe_configured": stripe_secret_configured(),
         "webhook_configured": webhook_secret_configured(),
         "prices": plans_price_availability(),
+        "trial_period_days": tdays,
+        "first_checkout_uses_trial": tdays > 0,
     }
 
 
@@ -100,11 +144,17 @@ def create_checkout(
             ),
         )
 
+    # Una sola prueba por organización: si ya hubo un checkout completado, sin trial
+    include_trial = not bool(
+        getattr(org, "billing_trial_consumed", False) or False
+    ) and (trial_period_days() > 0)
+
     try:
         url = create_checkout_session(
             organization_id=org.id,
             owner_email=current_user.email,
             plan=plan,
+            include_trial=include_trial,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -114,7 +164,12 @@ def create_checkout(
             detail=f"Stripe: {getattr(e, 'user_message', None) or str(e)}",
         ) from e
 
-    return {"url": url}
+    tdays = trial_period_days()
+    return {
+        "url": url,
+        "trial_applied": include_trial and tdays > 0,
+        "trial_period_days": tdays if include_trial else 0,
+    }
 
 
 @router.post("/change-plan")

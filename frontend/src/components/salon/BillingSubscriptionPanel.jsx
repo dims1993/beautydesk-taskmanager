@@ -22,6 +22,21 @@ function formatErr(err) {
   return err.message || "Error";
 }
 
+function formatEsDate(iso) {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toLocaleDateString("es-ES", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  } catch {
+    return "";
+  }
+}
+
 export default function BillingSubscriptionPanel({
   currentUser,
   onRefresh,
@@ -38,7 +53,9 @@ export default function BillingSubscriptionPanel({
   );
 
   const hasSub = Boolean(currentUser?.has_stripe_subscription);
+  const subStatus = (currentUser?.stripe_subscription_status || "").toLowerCase();
   const currentPlan = (currentUser?.subscription_plan || "esencial").toLowerCase();
+  const trialConsumed = Boolean(currentUser?.billing_trial_consumed);
 
   const flowHint = useMemo(() => {
     if (!pendingFromLanding) return null;
@@ -55,7 +72,7 @@ export default function BillingSubscriptionPanel({
         kind: "same_unpaid",
         text: `Tu cuenta está asignada al plan **${planLabel(
           currentPlan,
-        )}** (sin pago online aún). El plan que elegiste en la web coincide: confirma el pago con Stripe abajo para activar la suscripción.`,
+        )}** (sin pago online aún). Con el botón de abajo abres Stripe: **tarjeta obligatoria**; en la **primera** contratación aplica prueba con cargo 0€ hasta el fin del periodo y el cobro mensual programado al terminar la prueba si no cancelas antes.`,
       };
     }
     const diff = comparePlans(currentPlan, t);
@@ -190,8 +207,18 @@ export default function BillingSubscriptionPanel({
   }
 
   const stripeOk = status?.stripe_configured;
-  const priceOk = status?.prices?.[targetPlan];
+  const priceMap = status?.prices;
+  const priceForTarget = priceMap?.[targetPlan];
+  const priceOk = priceForTarget === true;
+  /** Stripe OK pero no hay ID de precio (env) para el plan elegido: el CTA se deshabilita. */
+  const priceBlocked =
+    Boolean(stripeOk) && priceMap && priceForTarget !== true;
   const sameTargetAsCurrent = targetPlan === currentPlan;
+  const trialDays = Number(status?.trial_period_days ?? 10) || 10;
+  const canOfferTrial =
+    !hasSub && !trialConsumed && trialDays > 0 && (status?.first_checkout_uses_trial !== false);
+  const trialing = subStatus === "trialing";
+  const trialEndLabel = formatEsDate(currentUser?.stripe_trial_ends_at);
 
   return (
     <div className="space-y-4">
@@ -236,7 +263,11 @@ export default function BillingSubscriptionPanel({
             :{" "}
             <span className="font-serif text-base capitalize">{currentPlan}</span>
             {hasSub ? (
-              <span className="text-[#8c857d]"> · Suscripción Stripe activa</span>
+              <span className="text-[#8c857d]">
+                {trialing
+                  ? " · Prueba activa: tarjeta registrada, primer cargo al final del periodo de prueba"
+                  : " · Suscripción Stripe activa"}
+              </span>
             ) : (
               <span className="text-[#8c857d]">
                 {" "}
@@ -253,6 +284,16 @@ export default function BillingSubscriptionPanel({
           )}
         </div>
       </div>
+
+      {trialing && trialEndLabel && (
+        <p className="text-[10px] leading-relaxed text-[#1e3a2f] bg-[#f0f9f4] border border-[#b8e0c8] rounded-2xl px-4 py-3">
+          <strong>Periodo de prueba</strong> (Stripe) en curso. Fin de prueba:{" "}
+          <strong>{trialEndLabel}</strong>. Mientras dure, el cargo periódico
+          del plan queda <strong>0€</strong>; al terminar, se programa el cargo
+          mensual si no has cancelado (portal de Stripe o{" "}
+          <span className="whitespace-nowrap">«Facturación y métodos»</span>).
+        </p>
+      )}
 
       {typeof window !== "undefined" &&
         new URLSearchParams(window.location.search).get("billing") ===
@@ -287,17 +328,53 @@ export default function BillingSubscriptionPanel({
           {hasSub ? " (pagado vía Stripe)" : ""}. Ajusta el desplegable si quieres
           otro destino.
         </p>
+        {priceBlocked && !hasSub && (
+          <p
+            className="text-[10px] text-amber-950 bg-amber-50 border border-amber-200/80 rounded-2xl px-4 py-3 leading-relaxed"
+            role="status"
+          >
+            No se puede abrir el checkout con <strong>{planLabel(targetPlan)}</strong>{" "}
+            hasta que en el servidor exista el ID de precio de Stripe (variable
+            <code className="bg-amber-100/80 px-1 rounded text-[#5d5045]">
+              STRIPE_PRICE_
+              {String(targetPlan).toUpperCase()}
+            </code>
+            ). Con Esencial a veces basta; para Profesional/Premium hay que
+            añadirlos en .env. El botón de prueba permanece desactivado si falta
+            ese precio.
+          </p>
+        )}
       </div>
+
+      {canOfferTrial && (
+        <p className="text-[9px] leading-relaxed text-[#5d5045] bg-white border border-[#e5e0d8] rounded-2xl px-4 py-3">
+          <strong>Primera contratación:</strong> en Stripe se registra un método
+          de pago (verificación/SCA, importe 0€ en el inicio) y comienza el
+          periodo de prueba de {trialDays} días. Al terminar, se aplica el cargo
+          mensual del plan si la suscripción sigue activa.
+        </p>
+      )}
 
       <div className="flex flex-col sm:flex-row gap-3">
         {!hasSub ? (
           <button
             type="button"
             disabled={busy || !stripeOk || !priceOk}
+            title={
+              !stripeOk
+                ? "Configura STRIPE_SECRET_KEY en el servidor"
+                : !priceOk
+                  ? "Falta el precio de Stripe para el plan elegido (STRIPE_PRICE_…)"
+                  : undefined
+            }
             onClick={goCheckout}
             className="flex-1 rounded-full bg-[#5d5045] py-3.5 text-[10px] font-black uppercase tracking-[0.2em] text-[#f5ebe0] shadow-lg transition hover:bg-[#4a3f36] disabled:opacity-40"
           >
-            {busy ? "…" : "Ir a pagar con Stripe"}
+            {busy
+              ? "…"
+              : canOfferTrial
+                ? `Prueba ${trialDays} días — continuar con Stripe`
+                : "Ir a pagar con Stripe"}
           </button>
         ) : (
           <button

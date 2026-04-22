@@ -13,7 +13,7 @@ from app.schemas.appointment import (
     AppointmentUpdate,
 )
 # Eliminamos la importación de schemas.misc si vas a definir StatusUpdate aquí abajo
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user_for_app
 from app.core.notifications import send_appointment_confirmation 
 from app.core.google_calendar import sync_with_google_calendar  # Importamos la nueva función
 from app.billing.subscription import calendar_sync_allowed
@@ -31,7 +31,7 @@ class StatusUpdate(BaseModel):
 @router.get("/")
 async def get_appointments(
     db: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_for_app)
 ):
     try:
         print(f"DEBUG: Current User ID: {current_user.id}")
@@ -56,7 +56,7 @@ async def get_appointments(
 @router.get("/upcoming")
 async def get_upcoming(
     db: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_for_app)
 ):
     try:
         today = datetime.now().date()
@@ -84,7 +84,7 @@ async def create_appointment(
     data: AppointmentCreate, 
     background_tasks: BackgroundTasks, 
     db: Session = Depends(get_session), 
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_for_app)
 ):
     if current_user.role != UserRole.SUPER_ADMIN and not current_user.organization_id:
         raise HTTPException(
@@ -189,7 +189,7 @@ def update_appointment(
     appointment_id: int,
     data: AppointmentUpdate,
     db: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_for_app),
 ):
     if data.service_id is None and data.start_time is None:
         raise HTTPException(
@@ -273,7 +273,7 @@ def update_status(
 @router.get("/archived", response_model=List[AppointmentOut])
 def get_archived(
     db: Session = Depends(get_session), 
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_for_app)
 ):
     return db.exec(select(Appointment).where(
         Appointment.staff_id == current_user.id, 

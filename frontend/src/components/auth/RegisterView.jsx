@@ -223,7 +223,6 @@ const RegisterView = ({ onBack, onCompleteRegistration }) => {
     return (
       <RegisterOwnerWizard
         onBack={onBack}
-        onCompleteRegistration={onCompleteRegistration}
         onSwitchAccountType={() =>
           setAccount((a) => ({ ...a, role: "CLIENT" }))
         }

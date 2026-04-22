@@ -1,8 +1,9 @@
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowLeft,
   Building2,
+  CreditCard,
   ChevronRight,
   Loader2,
   MapPin,
@@ -11,6 +12,7 @@ import {
   User,
 } from "lucide-react";
 import { useApi } from "../../hooks/useApi";
+import { getPendingPlanFromSession, planLabel } from "../../utils/billingPlan";
 
 const CATEGORY_OPTIONS = [
   { key: "PELUQUERO", label: "Peluquería" },
@@ -36,13 +38,12 @@ function formatRegisterError(err) {
 
 const RegisterOwnerWizard = ({
   onBack,
-  onCompleteRegistration,
   onSwitchAccountType,
   /** Si viene de la landing con ?plan=, nombre legible del plan (p. ej. "Profesional"). */
   selectedPlanName = null,
 }) => {
   const { apiRequest } = useApi();
-  const [phase, setPhase] = useState("form"); // form | verify | loading
+  const [phase, setPhase] = useState("form"); // form | verify | trial_checkout
   const [wizardStep, setWizardStep] = useState(1);
   const [registrationToken, setRegistrationToken] = useState(null);
 
@@ -71,6 +72,78 @@ const RegisterOwnerWizard = ({
 
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [acceptTrialPayment, setAcceptTrialPayment] = useState(false);
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [billingPublicStatus, setBillingPublicStatus] = useState(null);
+
+  const checkoutPlan = getPendingPlanFromSession() || "esencial";
+  const checkoutPlanLabel = planLabel(checkoutPlan);
+  const trialDays =
+    billingPublicStatus && typeof billingPublicStatus.trial_period_days === "number"
+      ? billingPublicStatus.trial_period_days
+      : 10;
+  const stripeOk = Boolean(billingPublicStatus?.stripe_configured);
+  const priceOkForPlan =
+    !billingPublicStatus?.prices ||
+    billingPublicStatus.prices[checkoutPlan] !== false;
+
+  useEffect(() => {
+    if (phase !== "trial_checkout") return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const s = await apiRequest("/billing/status", "GET");
+        if (!cancelled) setBillingPublicStatus(s);
+      } catch {
+        if (!cancelled) {
+          setBillingPublicStatus({ trial_period_days: 10, stripe_configured: false });
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [phase, apiRequest]);
+
+  const applySessionToken = (data) => {
+    if (!data?.access_token) return;
+    localStorage.setItem("token", data.access_token);
+    if (data.role) localStorage.setItem("role", data.role);
+    if (data.organization_id != null) {
+      localStorage.setItem("organization_id", String(data.organization_id));
+    }
+    if (data.integrations_access != null) {
+      localStorage.setItem(
+        "integrations_access",
+        data.integrations_access ? "1" : "0",
+      );
+    }
+  };
+
+  const goStripeCheckout = async () => {
+    if (!acceptTrialPayment) {
+      setError(
+        "Debes aceptar las condiciones del periodo de prueba y el cobro posterior.",
+      );
+      return;
+    }
+    setCheckoutBusy(true);
+    setError("");
+    try {
+      const r = await apiRequest("/billing/checkout-session", "POST", {
+        plan: checkoutPlan,
+      });
+      if (r?.url) {
+        window.location.href = r.url;
+        return;
+      }
+      setError("No hemos recibido la URL de pago. Inténtalo de nuevo.");
+    } catch (err) {
+      setError(formatRegisterError(err));
+    } finally {
+      setCheckoutBusy(false);
+    }
+  };
 
   const categoriesPayload = useMemo(() => {
     if (!primaryCategory) return [];
@@ -182,15 +255,23 @@ const RegisterOwnerWizard = ({
     setError("");
     setIsLoading(true);
     try {
-      await apiRequest("/users/register/owner-wizard/confirm", "POST", {
-        registration_token: registrationToken,
-        code,
-      });
-      setPhase("loading");
-      setTimeout(() => {
-        onCompleteRegistration?.();
-        onBack?.();
-      }, 2800);
+      const data = await apiRequest(
+        "/users/register/owner-wizard/confirm",
+        "POST",
+        {
+          registration_token: registrationToken,
+          code,
+        },
+        { skipAuthRedirect: true },
+      );
+      if (!data?.access_token) {
+        setError("Respuesta inesperada del servidor.");
+        return;
+      }
+      applySessionToken(data);
+      setAcceptTrialPayment(false);
+      setBillingPublicStatus(null);
+      setPhase("trial_checkout");
     } catch (err) {
       setError(formatRegisterError(err));
     } finally {
@@ -232,8 +313,8 @@ const RegisterOwnerWizard = ({
   const stepTitle =
     phase === "verify"
       ? "Verificación"
-      : phase === "loading"
-        ? "Preparando tu espacio"
+      : phase === "trial_checkout"
+        ? "Prueba y pago"
         : wizardStep === 1
           ? "Tu negocio"
           : wizardStep === 2
@@ -241,7 +322,7 @@ const RegisterOwnerWizard = ({
             : "Tu cuenta";
 
   const displayStep = useMemo(() => {
-    if (phase === "loading") return 5;
+    if (phase === "trial_checkout") return 5;
     if (phase === "verify") return 4;
     return wizardStep;
   }, [phase, wizardStep]);
@@ -292,11 +373,8 @@ const RegisterOwnerWizard = ({
               <span className="font-serif font-semibold text-[#5d5045]">
                 {selectedPlanName}
               </span>
-              . Tras verificar el correo e iniciar sesión, en{" "}
-              <strong className="font-black uppercase tracking-widest text-[9px]">
-                Ajustes → Suscripción
-              </strong>{" "}
-              podrás completar el pago con Stripe.
+              . Tras verificar el correo, en el último paso añadirás el método de
+              pago (prueba y suscripción) con total transparencia.
             </p>
           )}
 
@@ -332,7 +410,7 @@ const RegisterOwnerWizard = ({
             </p>
             <h3 className="text-3xl md:text-4xl font-serif text-[#5d5045]">
               {phase === "verify" && "Esperando el código"}
-              {phase === "loading" && "Estamos preparando todo"}
+              {phase === "trial_checkout" && "Método de pago y periodo de prueba"}
               {phase === "form" && wizardStep === 1 && "Cuéntanos sobre tu negocio"}
               {phase === "form" && wizardStep === 2 && "¿Qué servicios ofreces?"}
               {phase === "form" && wizardStep === 3 && "Cuéntanos sobre ti"}
@@ -684,22 +762,104 @@ const RegisterOwnerWizard = ({
             </form>
           )}
 
-          {phase === "loading" && (
-            <div className="space-y-8 text-center py-8">
-              <div className="relative mx-auto w-28 h-28">
-                <div className="absolute inset-0 rounded-full border-4 border-[#eaddcf]" />
-                <div className="absolute inset-0 rounded-full border-4 border-[#5d5045] border-t-transparent animate-spin" />
-                <Sparkles className="absolute inset-0 m-auto w-10 h-10 text-[#5d5045] animate-pulse" />
-              </div>
-              <div className="space-y-2">
-                <p className="text-[11px] font-black uppercase tracking-[0.25em] text-[#5d5045]">
-                  Preparando tu agenda
+          {phase === "trial_checkout" && (
+            <div className="space-y-5">
+              {error && (
+                <div className="bg-red-50 text-red-600 text-[9px] font-black uppercase p-4 rounded-2xl border border-red-100 italic">
+                  {error}
+                </div>
+              )}
+              <div className="flex gap-3 text-left">
+                <CreditCard
+                  className="mt-0.5 h-4 w-4 shrink-0 text-[#c4bdb5]"
+                  aria-hidden
+                />
+                <p className="min-w-0 text-[10px] leading-relaxed text-[#8c857d]">
+                  Plan:{" "}
+                  <span className="font-black text-[#5d5045]">
+                    {checkoutPlanLabel}
+                  </span>
+                  . Con la tarjeta se programa la suscripción: primero
+                  <span className="text-[#5d5045] font-black"> 0€</span> en la
+                  factura de prueba ({trialDays} días), y a continuación, si no
+                  cancelas, el cobro recurrente que verás en Stripe.
                 </p>
-                <p className="text-[10px] text-[#8c857d] leading-relaxed max-w-sm mx-auto">
-                  Estamos afinando sillones virtuales, ordenando pomos de esmalte
-                  y enseñando a los píxeles a sonreír… casi está.
-                </p>
               </div>
+              <div className="rounded-2xl border border-[#eaddcf] bg-[#FAF9F6] p-4 text-left space-y-2 text-[10px] text-[#5d5045] leading-relaxed">
+                <p className="font-black uppercase tracking-widest text-[9px] text-[#8c857d]">
+                  Resumen
+                </p>
+                <ul className="list-disc pl-4 space-y-1 text-[#8c857d]">
+                  <li>
+                    En la primera factura, el importe de la prueba es{" "}
+                    <span className="text-[#5d5045] font-black">0€</span>: la
+                    suscripción queda programada, la tarjeta se guarda en Stripe
+                    y no hay cobro durante esos {trialDays} días.
+                  </li>
+                  <li>
+                    Cumplidos los {trialDays} días,{" "}
+                    <span className="text-[#5d5045] font-black">
+                      se cobra la cuota del plan
+                    </span>{" "}
+                    de forma periódica, salvo que canceles antes en el portal
+                    de facturación de Stripe.
+                  </li>
+                </ul>
+              </div>
+              {!stripeOk && (
+                <p className="text-[10px] text-amber-900 bg-amber-50 border border-amber-200 rounded-2xl p-3 leading-relaxed">
+                  El registro no puede completarse sin validar el método de
+                  pago. El servicio de pago (Stripe) no está disponible; revisa
+                  la configuración del servidor o inténtalo más tarde. Puedes
+                  recargar la página cuando el pago esté activo.
+                </p>
+              )}
+              {stripeOk && !priceOkForPlan && (
+                <p className="text-[10px] text-amber-900 bg-amber-50 border border-amber-200 rounded-2xl p-3 leading-relaxed">
+                  Falta el precio de Stripe para el plan {checkoutPlanLabel} en
+                  el servidor. Hasta entonces no se puede abrir el checkout. Es
+                  necesario un administrador que configure el precio
+                  (variable STRIPE_PRICE_…) correspondiente.
+                </p>
+              )}
+              {stripeOk && priceOkForPlan && (
+                <>
+                  <label className="flex items-start gap-3 cursor-pointer text-[10px] font-bold text-[#5d5045] leading-relaxed">
+                    <input
+                      type="checkbox"
+                      className="mt-1 rounded border-[#eaddcf]"
+                      checked={acceptTrialPayment}
+                      onChange={(e) => setAcceptTrialPayment(e.target.checked)}
+                    />
+                    <span className="text-left">
+                      He leído y acepto que inicio un periodo de prueba; que la
+                      tarjeta queda vinculada a través de Stripe; y que, pasados
+                      los {trialDays} días, se aplicará el cobro de la
+                      suscripción a{" "}
+                      <span className="font-black">{checkoutPlanLabel}</span> de
+                      forma periódica, salvo que canceles a tiempo (según las
+                      condiciones que muestre Stripe en el checkout).
+                    </span>
+                  </label>
+                  <div className="flex flex-col gap-3">
+                    <button
+                      type="button"
+                      onClick={goStripeCheckout}
+                      disabled={checkoutBusy || !acceptTrialPayment}
+                      className="w-full bg-[#5d5045] text-[#f5ebe0] py-4 rounded-full text-[10px] font-black uppercase tracking-widest disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {checkoutBusy ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Conectando con Stripe…
+                        </>
+                      ) : (
+                        "Añadir tarjeta y continuar en Stripe"
+                      )}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           )}
 

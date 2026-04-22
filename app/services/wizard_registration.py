@@ -175,7 +175,7 @@ def confirm_owner_wizard_registration(
     *,
     registration_token: str,
     code: str,
-) -> None:
+) -> User:
     token = (registration_token or "").strip()
     if not token:
         raise HTTPException(status_code=400, detail="Token de registro requerido.")
@@ -280,3 +280,4 @@ def confirm_owner_wizard_registration(
     db.add(org)
     db.delete(row)
     db.commit()
+    return user

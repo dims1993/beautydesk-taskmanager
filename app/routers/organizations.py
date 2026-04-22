@@ -5,7 +5,7 @@ from typing import List, Optional
 
 # Importas la sesión y la seguridad
 from app.core.db.session import get_session
-from app.dependencies import get_current_user 
+from app.dependencies import get_current_user_for_app 
 
 # Importas tus modelos
 from app.models import User, Organization, UserRole, BusinessType
@@ -36,7 +36,7 @@ def patch_organization_billing(
     org_id: int,
     body: OrganizationBillingUpdate,
     db: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_for_app),
 ):
     if current_user.role != UserRole.SUPER_ADMIN:
         raise HTTPException(
@@ -61,7 +61,7 @@ def patch_organization_billing(
 async def create_new_salon_admin(
     data: dict, 
     db: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_for_app)
 ):
     # 1. Seguridad: Solo el super_admin puede crear organizaciones y admins
     if current_user.role != UserRole.SUPER_ADMIN:
@@ -103,7 +103,7 @@ async def create_new_salon_admin(
 @router.get("/organizations", response_model=List[dict])
 async def get_all_organizations(
     db: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_for_app)
 ):
     if current_user.role != UserRole.SUPER_ADMIN:
         raise HTTPException(status_code=403, detail="No autorizado")

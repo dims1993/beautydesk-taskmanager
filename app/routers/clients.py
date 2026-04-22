@@ -8,7 +8,7 @@ from app.models.client import Client
 from app.models.appointment import Appointment
 from app.schemas.client import ClientCreate, ClientOut
 from app.models.user import User, UserRole
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user_for_app
 
 router = APIRouter(prefix="/clients", tags=["clients"])
 
@@ -31,7 +31,7 @@ def _require_org(current_user: User) -> int:
 def create_client(
     client_data: ClientCreate,
     db: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_for_app),
 ):
     org_id = _require_org(current_user)
     existing = db.exec(
@@ -53,7 +53,7 @@ def create_client(
 @router.get("/", response_model=List[ClientOut])
 def list_clients(
     db: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_for_app),
 ):
     if current_user.role == UserRole.SUPER_ADMIN:
         return db.exec(select(Client)).all()
@@ -69,7 +69,7 @@ def update_client(
     client_id: int,
     client_data: dict = Body(...),
     db: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_for_app),
 ):
     client = db.exec(select(Client).where(Client.id == client_id)).first()
     if not client:
@@ -92,7 +92,7 @@ def update_client(
 def delete_client(
     client_id: int,
     db: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_for_app),
 ):
     client = db.exec(select(Client).where(Client.id == client_id)).first()
     if not client:

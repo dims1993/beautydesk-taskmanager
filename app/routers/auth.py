@@ -14,7 +14,7 @@ from app.schemas.token import Token
 from app.core.security import create_access_token 
 from app.core.security import SECRET_KEY, ALGORITHM
 from jose import jwt, JWTError
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user_for_app
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -153,7 +153,7 @@ async def auth_google(data: dict, db: Session = Depends(get_session)):
 
 @router.get("/google/calendar/connect")
 def google_calendar_connect(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_for_app),
     db: Session = Depends(get_session),
 ):
     """
@@ -215,7 +215,7 @@ def google_calendar_connect(
 
 @router.get("/google/calendar/status")
 def google_calendar_status(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_for_app),
     db: Session = Depends(get_session),
 ):
     user = db.exec(select(User).where(User.id == current_user.id)).first()
@@ -238,7 +238,7 @@ def google_calendar_status(
 
 @router.post("/google/calendar/disconnect")
 def google_calendar_disconnect(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_for_app),
     db: Session = Depends(get_session),
 ):
     user = db.exec(select(User).where(User.id == current_user.id)).first()

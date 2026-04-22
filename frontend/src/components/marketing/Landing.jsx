@@ -74,7 +74,7 @@ const PRICING_PLANS = [
     tagline: "Pequeño equipo",
     price: "49",
     period: "/mes",
-    trial: null,
+    trial: "10 días de prueba",
     highlight: true,
     badge: "Popular",
     features: [
@@ -92,7 +92,7 @@ const PRICING_PLANS = [
     tagline: "Salón en crecimiento",
     price: "89",
     period: "/mes",
-    trial: null,
+    trial: "10 días de prueba",
     highlight: false,
     features: [
       "1 ubicación, equipo ilimitado",

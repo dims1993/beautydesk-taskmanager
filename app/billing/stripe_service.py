@@ -5,6 +5,7 @@ Requiere STRIPE_SECRET_KEY y precios por plan (STRIPE_PRICE_ESENCIAL, etc.).
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 import stripe
@@ -48,13 +49,38 @@ def _frontend_base() -> str:
     return (os.getenv("FRONTEND_URL") or "http://localhost:5173").rstrip("/")
 
 
+def trial_period_days() -> int:
+    """Días de prueba para la primera suscripción (0 = sin periodo de prueba)."""
+    try:
+        return max(0, int((os.getenv("STRIPE_TRIAL_DAYS") or "10").strip() or 10))
+    except (TypeError, ValueError):
+        return 10
+
+
+def _stripe_ts_to_utc(v: Any) -> Optional[datetime]:
+    if v is None:
+        return None
+    if isinstance(v, datetime):
+        if v.tzinfo is not None:
+            return v
+        return v.replace(tzinfo=timezone.utc)
+    if isinstance(v, (int, float)):
+        return datetime.fromtimestamp(int(v), tz=timezone.utc)
+    return None
+
+
 def create_checkout_session(
     *,
     organization_id: int,
     owner_email: str,
     plan: SubscriptionPlan,
+    include_trial: bool = False,
 ) -> str:
-    """Devuelve la URL de Stripe Checkout (suscripción)."""
+    """
+    URL de Stripe Checkout (suscripción). Si include_trial y STRIPE_TRIAL_DAYS>0,
+    se programa periodo de prueba: se guarda la tarjeta, cargo 0 en el inicio
+    (factura 0) y el cobro mensual al terminar la prueba salvo cancelación.
+    """
     configure_stripe()
     price_id = price_id_for_plan(plan)
     if not price_id:
@@ -64,6 +90,16 @@ def create_checkout_session(
 
     success_url = f"{_frontend_base()}/app?tab=ajustes&billing=success"
     cancel_url = f"{_frontend_base()}/app?tab=ajustes&billing=cancel"
+
+    subscription_data: dict[str, Any] = {
+        "metadata": {
+            "organization_id": str(organization_id),
+            "plan": plan.value,
+        },
+    }
+    tdays = trial_period_days() if include_trial else 0
+    if tdays > 0:
+        subscription_data["trial_period_days"] = tdays
 
     session = stripe.checkout.Session.create(
         mode="subscription",
@@ -76,13 +112,9 @@ def create_checkout_session(
             "organization_id": str(organization_id),
             "plan": plan.value,
         },
-        subscription_data={
-            "metadata": {
-                "organization_id": str(organization_id),
-                "plan": plan.value,
-            },
-        },
+        subscription_data=subscription_data,
         allow_promotion_codes=True,
+        payment_method_collection="always",
     )
     url = session.url
     if not url:
@@ -154,23 +186,109 @@ def sync_org_from_stripe_subscription(
     sub: Any,
 ) -> None:
     """Actualiza organización desde objeto Subscription de Stripe."""
-    status = sub.get("status") if isinstance(sub, dict) else getattr(sub, "status", None)
-    price_id = _subscription_price_id(sub)
+    d = sub if isinstance(sub, dict) else (sub.to_dict() if hasattr(sub, "to_dict") else sub)
+    if not isinstance(d, dict):
+        d = {}
+
+    status = d.get("status")
+    if status is not None and isinstance(status, str):
+        org.stripe_sub_status = status
+    price_id = _subscription_price_id(d)
     if price_id:
         org.subscription_plan = plan_from_stripe_price_id(price_id)
     org.payment_method = PaymentMethod.CARD
     org.subscription_active = status in ("active", "trialing")
-    cid = sub.get("customer") if isinstance(sub, dict) else getattr(sub, "customer", None)
+    org.stripe_trial_ends_at = _stripe_ts_to_utc(d.get("trial_end"))
+    org.stripe_current_period_ends_at = _stripe_ts_to_utc(d.get("current_period_end"))
+    cid = d.get("customer")
     if isinstance(cid, str):
         org.stripe_customer_id = cid
     elif cid is not None and hasattr(cid, "id"):
         org.stripe_customer_id = str(cid.id)
-    sid = sub.get("id") if isinstance(sub, dict) else getattr(sub, "id", None)
+    sid = d.get("id")
     if sid:
         org.stripe_subscription_id = sid
     db.add(org)
     db.commit()
     db.refresh(org)
+
+
+def _subscription_id_from_checkout_session(session_obj: dict) -> Optional[str]:
+    """`subscription` en Session puede ser id (str) o objeto expandido (dict)."""
+    raw = session_obj.get("subscription")
+    if raw is None:
+        return None
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip()
+    if isinstance(raw, dict):
+        rid = raw.get("id")
+        if isinstance(rid, str) and rid.strip():
+            return rid.strip()
+    return None
+
+
+def _checkout_session_belongs_to_org(session_obj: dict, organization_id: int) -> bool:
+    exp = str(organization_id)
+    cr = (session_obj.get("client_reference_id") or "").strip()
+    meta = session_obj.get("metadata") or {}
+    mo = meta.get("organization_id")
+    mo_s = str(mo).strip() if mo is not None and str(mo).strip() else ""
+    return cr == exp or mo_s == exp
+
+
+def sync_organization_from_checkout_session_id(
+    db: Session,
+    *,
+    organization_id: int,
+    session_id: str,
+) -> tuple[bool, Optional[str]]:
+    """
+    Aplica el mismo resultado que el webhook `checkout.session.completed` leyendo
+    la Session en la API. Útil si el webhook aún no llegó (p. ej. local sin
+    `stripe listen` o retraso).
+    """
+    org = db.get(Organization, organization_id)
+    if not org:
+        return False, "Organización no encontrada"
+    if org.stripe_subscription_id and str(org.stripe_subscription_id).strip():
+        return True, None
+
+    configure_stripe()
+    try:
+        sess = stripe.checkout.Session.retrieve(
+            session_id, expand=["subscription"]
+        )
+    except stripe.error.StripeError as e:
+        return False, (getattr(e, "user_message", None) or str(e) or "Error de Stripe")
+
+    d = sess.to_dict() if hasattr(sess, "to_dict") else None
+    if not isinstance(d, dict):
+        return False, "Respuesta de Stripe inesperada"
+
+    if not _checkout_session_belongs_to_org(d, organization_id):
+        return False, "Esta sesión de pago no corresponde a tu organización"
+
+    if d.get("mode") != "subscription":
+        return False, "La sesión no es de suscripción"
+
+    st = d.get("status")
+    if st != "complete":
+        return False, f"La sesión aún no está completa (estado: {st})"
+
+    if not _subscription_id_from_checkout_session(d):
+        return False, "Stripe aún no asoció la suscripción; espera unos segundos y recarga"
+
+    try:
+        handle_checkout_session_completed(db, d)
+    except Exception as e:  # noqa: BLE001
+        return False, str(e) or "Error al sincronizar"
+    org2 = db.get(Organization, organization_id)
+    if not org2 or not (org2.stripe_subscription_id and str(org2.stripe_subscription_id).strip()):
+        return (
+            False,
+            "La suscripción no quedó guardada. Reintenta o comprueba el webhook y los logs del servidor.",
+        )
+    return True, None
 
 
 def handle_checkout_session_completed(db: Session, session_obj: dict) -> None:
@@ -189,12 +307,13 @@ def handle_checkout_session_completed(db: Session, session_obj: dict) -> None:
     if not org:
         return
 
-    sub_id = session_obj.get("subscription")
+    sub_id = _subscription_id_from_checkout_session(session_obj)
     if not sub_id:
         return
     configure_stripe()
     sub = stripe.Subscription.retrieve(sub_id, expand=["items.data.price"])
     sub_payload = sub.to_dict() if hasattr(sub, "to_dict") else sub
+    org.billing_trial_consumed = True
     sync_org_from_stripe_subscription(db, org, sub_payload)
 
 
@@ -224,5 +343,8 @@ def handle_subscription_deleted(db: Session, sub_obj: dict) -> None:
     org.stripe_subscription_id = None
     org.subscription_plan = SubscriptionPlan.ESENCIAL
     org.subscription_active = True
+    org.stripe_sub_status = "canceled"
+    org.stripe_trial_ends_at = None
+    org.stripe_current_period_ends_at = None
     db.add(org)
     db.commit()

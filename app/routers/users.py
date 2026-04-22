@@ -23,8 +23,9 @@ from app.schemas.user import (
     VerifyCashCloseBody,
 )
 from app.schemas.token import Token
-from app.dependencies import get_current_user
-from app.core.security import get_password_hash, verify_password
+from app.billing.org_access import organization_blocks_app_access
+from app.dependencies import get_current_user, get_current_user_for_app
+from app.core.security import get_password_hash, verify_password, create_access_token
 from app.billing.subscription import (
     count_staff_in_organization,
     entitlements_for_organization,
@@ -86,19 +87,31 @@ async def register_owner_wizard(
     }
 
 
-@router.post("/register/owner-wizard/confirm")
+@router.post("/register/owner-wizard/confirm", response_model=Token)
 def register_owner_wizard_confirm(
     body: RegisterOwnerWizardConfirmRequest,
     db: Session = Depends(get_session),
 ):
-    confirm_owner_wizard_registration(
+    """
+    Activa la cuenta y devuelve el mismo JWT que /token para abrir el paso
+    de método de pago (Stripe) sin forzar otra autenticación.
+    """
+    user = confirm_owner_wizard_registration(
         db,
         registration_token=body.registration_token,
         code=body.code,
     )
+    access_token = create_access_token(data={"sub": user.email})
+    org = (
+        db.get(Organization, user.organization_id) if user.organization_id else None
+    )
+    integrations = integrations_access_effective(user, org)
     return {
-        "success": True,
-        "message": "Cuenta activada. Ya puedes iniciar sesión.",
+        "access_token": access_token,
+        "token_type": "bearer",
+        "role": user.role.value if hasattr(user.role, "value") else str(user.role),
+        "organization_id": user.organization_id,
+        "integrations_access": integrations,
     }
 
 
@@ -180,6 +193,10 @@ def read_users_me(
     payment_method = None
     plan_entitlements = None
     has_stripe_subscription = False
+    billing_trial_consumed = False
+    stripe_subscription_status = None
+    stripe_trial_ends_at = None
+    stripe_current_period_ends_at = None
 
     if current_user.organization_id:
         org = db.get(Organization, current_user.organization_id)
@@ -193,9 +210,18 @@ def read_users_me(
             has_stripe_subscription = bool(
                 getattr(org, "stripe_subscription_id", None)
             )
+            billing_trial_consumed = bool(
+                getattr(org, "billing_trial_consumed", False) or False
+            )
+            stripe_subscription_status = getattr(org, "stripe_sub_status", None)
+            stripe_trial_ends_at = getattr(org, "stripe_trial_ends_at", None)
+            stripe_current_period_ends_at = getattr(
+                org, "stripe_current_period_ends_at", None
+            )
 
     base = UserOut.model_validate(current_user).model_dump()
     base["integrations_access"] = integrations_access_effective(current_user, org)
+    app_access_locked = organization_blocks_app_access(db, current_user)
 
     return UserMeOut(
         **base,
@@ -206,6 +232,11 @@ def read_users_me(
         payment_method=payment_method,
         plan_entitlements=plan_entitlements,
         has_stripe_subscription=has_stripe_subscription,
+        billing_trial_consumed=billing_trial_consumed,
+        stripe_subscription_status=stripe_subscription_status,
+        stripe_trial_ends_at=stripe_trial_ends_at,
+        stripe_current_period_ends_at=stripe_current_period_ends_at,
+        app_access_locked=app_access_locked,
     )
 
 
@@ -213,7 +244,7 @@ def read_users_me(
 def set_organization_cash_close_password(
     body: SetCashClosePasswordBody,
     db: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_for_app),
 ):
     """Solo OWNER: define la contraseña para cerrar caja / validar cierres."""
     if current_user.role != UserRole.OWNER:
@@ -240,7 +271,7 @@ def set_organization_cash_close_password(
 def verify_organization_cash_close(
     body: VerifyCashCloseBody,
     db: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_for_app),
 ):
     """Valida la contraseña de cierre para el salón del usuario."""
     if not current_user.organization_id:
@@ -259,7 +290,9 @@ def verify_organization_cash_close(
     return {"valid": True}
 
 @router.get("/", response_model=List[UserOut])
-def list_users(db: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
+def list_users(
+    db: Session = Depends(get_session), current_user: User = Depends(get_current_user_for_app)
+):
     return db.query(User).all()
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -274,7 +307,7 @@ def delete_user(user_id: int, db: Session = Depends(get_session)):
 @router.get("/team", response_model=list[User])
 async def get_team(
     db: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_for_app),
 ):
     if not current_user.organization_id:
         return []
@@ -287,7 +320,7 @@ async def get_team(
 async def add_team_member(
     user_in: dict,
     db: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_for_app),
 ):
     if not current_user.organization_id:
         raise HTTPException(
@@ -344,7 +377,7 @@ async def add_team_member(
 async def delete_organization(
     org_id: str,
     db: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_for_app),
 ):
     if current_user.role != UserRole.SUPER_ADMIN:
         raise HTTPException(status_code=403, detail="No autorizado")
@@ -363,7 +396,7 @@ async def delete_organization(
 async def delete_team_member(
     user_id: int,
     db: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_for_app),
 ):
     statement = select(User).where(User.id == user_id)
     user_to_delete = db.exec(statement).first()
