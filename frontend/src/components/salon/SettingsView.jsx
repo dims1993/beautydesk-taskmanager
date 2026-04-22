@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   Building2,
   ChevronDown,
+  CreditCard,
   Mail,
   Pencil,
   Phone,
@@ -11,6 +12,7 @@ import {
   Trash2,
   User,
 } from "lucide-react";
+import BillingSubscriptionPanel from "./BillingSubscriptionPanel";
 import { useApi } from "../../hooks/useApi";
 
 function formatErr(err) {
@@ -444,6 +446,21 @@ export default function SettingsView({
             </p>
           </SettingsAccordion>
         )}
+
+      {isOwnerWithOrg && (
+        <SettingsAccordion
+          title="Suscripción y pago"
+          description="Contrata o cambia tu plan con Stripe; los permisos se aplican según el plan activo."
+          icon={CreditCard}
+          defaultOpen={false}
+        >
+          <BillingSubscriptionPanel
+            currentUser={currentUser}
+            onRefresh={onRefresh}
+            onError={onError}
+          />
+        </SettingsAccordion>
+      )}
 
       {isOwnerWithOrg && (
         <SettingsAccordion

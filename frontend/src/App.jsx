@@ -122,6 +122,16 @@ function App() {
   }, [isLoggedIn]);
 
   useEffect(() => {
+    if (!isLoggedIn) return;
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      if (sp.get("tab") === "ajustes") setActiveTab("ajustes");
+    } catch {
+      /* ignore */
+    }
+  }, [isLoggedIn]);
+
+  useEffect(() => {
     if (!isLoggedIn || !currentUser) {
       setShowFirstVisitGuide(false);
       setGuidedTourActive(false);

@@ -171,6 +171,7 @@ class UserMeOut(UserOut):
     subscription_plan: Optional[str] = None
     payment_method: Optional[str] = None
     plan_entitlements: Optional[dict] = None
+    has_stripe_subscription: bool = False
 
 
 class SetCashClosePasswordBody(BaseModel):

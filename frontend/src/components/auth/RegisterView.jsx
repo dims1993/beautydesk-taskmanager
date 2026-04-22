@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useApi } from "../../hooks/useApi";
 import {
   User,
@@ -27,8 +27,20 @@ function formatRegisterError(err) {
 }
 
 const RegisterView = ({ onBack, onCompleteRegistration }) => {
+  const [searchParams] = useSearchParams();
   const { apiRequest } = useApi();
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
+  useEffect(() => {
+    const p = (searchParams.get("plan") || "").trim().toLowerCase();
+    if (p === "esencial" || p === "profesional" || p === "premium") {
+      try {
+        sessionStorage.setItem("beautydesk_pending_checkout_plan", p);
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [searchParams]);
 
   const [step, setStep] = useState(1);
   const [pendingToken, setPendingToken] = useState(null);

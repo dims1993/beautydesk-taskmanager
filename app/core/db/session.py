@@ -30,6 +30,57 @@ if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
 engine = create_engine(DATABASE_URL, echo=False)
 
 
+def _normalize_org_plan_payment_enums_to_varchar(conn) -> None:
+    """
+    Legacy DBs may have PostgreSQL native enums whose labels are Python member
+    names (ESENCIAL, UNSPECIFIED). The app persists str Enum *values* (esencial,
+    unspecified). Convert those columns to VARCHAR when still USER-DEFINED.
+    """
+    if conn.engine.dialect.name != "postgresql":
+        return
+    for column, default_sql in (
+        ("subscription_plan", "'esencial'"),
+        ("payment_method", "'unspecified'"),
+    ):
+        row = conn.execute(
+            text(
+                """
+                SELECT data_type
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'organization'
+                  AND column_name = :col
+                """
+            ),
+            {"col": column},
+        ).fetchone()
+        if not row or row[0] != "USER-DEFINED":
+            continue
+        try:
+            conn.execute(
+                text(
+                    f"ALTER TABLE organization ALTER COLUMN {column} DROP DEFAULT"
+                )
+            )
+        except Exception:
+            pass
+        conn.execute(
+            text(
+                f"""
+                ALTER TABLE organization
+                ALTER COLUMN {column} TYPE VARCHAR(32)
+                USING lower({column}::text)
+                """
+            )
+        )
+        conn.execute(
+            text(
+                f"ALTER TABLE organization ALTER COLUMN {column} "
+                f"SET DEFAULT {default_sql}"
+            )
+        )
+
+
 def _sync_postgres_serial_sequences(conn) -> None:
     """
     Realign SERIAL/IDENTITY sequences with MAX(id) after restores, manual SQL,
@@ -146,6 +197,7 @@ def init_db():
                     'ALTER TABLE "organization" ADD COLUMN IF NOT EXISTS cash_close_password_hash TEXT'
                 )
             )
+            _normalize_org_plan_payment_enums_to_varchar(conn)
             conn.execute(
                 text(
                     'ALTER TABLE organization ADD COLUMN IF NOT EXISTS subscription_plan VARCHAR(32)'
@@ -166,6 +218,16 @@ def init_db():
                 text(
                     "UPDATE organization SET payment_method = 'unspecified' "
                     "WHERE payment_method IS NULL OR TRIM(payment_method) = ''"
+                )
+            )
+            conn.execute(
+                text(
+                    'ALTER TABLE organization ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255)'
+                )
+            )
+            conn.execute(
+                text(
+                    'ALTER TABLE organization ADD COLUMN IF NOT EXISTS stripe_subscription_id VARCHAR(255)'
                 )
             )
             conn.execute(

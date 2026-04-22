@@ -1,6 +1,9 @@
 from typing import Optional, List
-from sqlmodel import SQLModel, Field, Relationship
 from enum import Enum
+
+from sqlalchemy import Column
+from sqlalchemy import Enum as SAEnum
+from sqlmodel import SQLModel, Field, Relationship
 
 from app.billing.subscription import PaymentMethod, SubscriptionPlan
 
@@ -20,8 +23,33 @@ class Organization(SQLModel, table=True):
     business_type: BusinessType = Field(default=BusinessType.SALON)
 
     # Plan comercial y cobro (alineado con landing; pago efectivo vía pasarela en fase posterior)
-    subscription_plan: SubscriptionPlan = Field(default=SubscriptionPlan.ESENCIAL)
-    payment_method: PaymentMethod = Field(default=PaymentMethod.UNSPECIFIED)
+    # VARCHAR + enum values (esencial, …) — not PG native enum labels (ESENCIAL, …).
+    subscription_plan: SubscriptionPlan = Field(
+        default=SubscriptionPlan.ESENCIAL,
+        sa_column=Column(
+            SAEnum(
+                SubscriptionPlan,
+                native_enum=False,
+                values_callable=lambda obj: [m.value for m in obj],
+                length=32,
+            )
+        ),
+    )
+    payment_method: PaymentMethod = Field(
+        default=PaymentMethod.UNSPECIFIED,
+        sa_column=Column(
+            SAEnum(
+                PaymentMethod,
+                native_enum=False,
+                values_callable=lambda obj: [m.value for m in obj],
+                length=32,
+            )
+        ),
+    )
+
+    # Stripe (Checkout + Customer Portal + webhooks)
+    stripe_customer_id: Optional[str] = Field(default=None, index=True)
+    stripe_subscription_id: Optional[str] = Field(default=None, index=True)
 
     # Datos de facturación / negocio
     legal_name: Optional[str] = Field(default=None)

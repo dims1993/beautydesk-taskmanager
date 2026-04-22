@@ -1,15 +1,27 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useApi } from "../../hooks/useApi"; // Asegúrate de que la ruta sea correcta
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Sparkles, User, Lock, ArrowRight, Home } from "lucide-react"; // Importamos los iconos
 import GoogleLoginButton from "./GoogleLoginButton";
 
 export default function LoginView({ onLogin, onGoToRegister }) {
+  const [searchParams] = useSearchParams();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const { apiRequest } = useApi();
+
+  useEffect(() => {
+    const p = (searchParams.get("plan") || "").trim().toLowerCase();
+    if (p === "esencial" || p === "profesional" || p === "premium") {
+      try {
+        sessionStorage.setItem("beautydesk_pending_checkout_plan", p);
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [searchParams]);
 
   // --- LÓGICA LOGIN NORMAL ---
   const handleSubmit = async (e) => {

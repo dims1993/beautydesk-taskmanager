@@ -598,7 +598,7 @@ export default function Landing() {
                   ))}
                 </ul>
                 <Link
-                  to="/login"
+                  to={`/login?plan=${encodeURIComponent(plan.id)}`}
                   className={`mt-auto block w-full rounded-full py-4 text-center text-[10px] font-black uppercase tracking-[0.2em] transition active:scale-[0.98] ${
                     plan.highlight
                       ? "bg-[#5d5045] text-[#f5ebe0] hover:bg-[#4a3f36] shadow-lg"
@@ -623,10 +623,10 @@ export default function Landing() {
           </div>
 
           <p className="mt-10 text-center text-[10px] leading-relaxed text-[#a39485] max-w-3xl mx-auto">
-            Precios sin IVA. La contratación y el cobro online se activarán en
-            una fase posterior; esta tabla comunica la propuesta de valor y la
-            orientación de mercado. Para grupos con varias sedes, contacta para
-            un presupuesto a medida.
+            Precios sin IVA. Tras iniciar sesión o registrarte, puedes contratar
+            el plan con Stripe desde Ajustes cuando el servidor tenga las claves
+            de pago configuradas. Para grupos con varias sedes, contacta para un
+            presupuesto a medida.
           </p>
         </div>
       </section>

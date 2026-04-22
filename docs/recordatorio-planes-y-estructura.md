@@ -130,4 +130,12 @@ Usad esta tabla cuando cerréis hitos de producto:
 
 ---
 
+## 8. Stripe (suscripción)
+
+- **Backend**: `app/billing/stripe_service.py` (Checkout, portal, webhooks, cambio de plan), `app/routers/billing.py` (`/billing/status`, `checkout-session`, `change-plan`, `portal-session`, `webhook`). Modelo org: `stripe_customer_id`, `stripe_subscription_id` (ver migración best-effort en `app/core/db/session.py`).
+- **Variables**: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ESENCIAL`, `STRIPE_PRICE_PROFESIONAL`, `STRIPE_PRICE_PREMIUM` (ver `.env.example`). En local: `stripe listen --forward-to …/billing/webhook`.
+- **Frontend**: landing `Empezar` → `/login?plan=…` (y `/register?plan=…` guarda el mismo valor en `sessionStorage`); tras login, `BillingSubscriptionPanel` en Ajustes puede iniciar Checkout y limpia la clave pendiente.
+
+---
+
 *Última revisión orientativa al estado del repo; no sustituye contratos legales ni pricing comercial.*

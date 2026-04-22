@@ -16,7 +16,7 @@ from app import (
 )
 
 # 1. Importación del router
-from app.routers import clients, users, appointments, services, auth, organizations
+from app.routers import clients, users, appointments, services, auth, organizations, billing
 
 # --- CONFIGURACIÓN Y CICLO DE VIDA LIFESPAN---
 
@@ -83,6 +83,7 @@ app.include_router(appointments.router)
 app.include_router(services.router)
 app.include_router(organizations.router, prefix="/users")
 app.include_router(auth.router)
+app.include_router(billing.router)
 
 # --- ENDPOINTS DE AUTENTICACIÓN ---
 

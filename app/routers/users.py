@@ -179,6 +179,7 @@ def read_users_me(
     subscription_plan = None
     payment_method = None
     plan_entitlements = None
+    has_stripe_subscription = False
 
     if current_user.organization_id:
         org = db.get(Organization, current_user.organization_id)
@@ -189,6 +190,9 @@ def read_users_me(
             cash_close_configured = bool(h and str(h).strip())
             subscription_plan, payment_method = org_subscription_and_payment_str(org)
             plan_entitlements = entitlements_to_dict(entitlements_for_organization(org))
+            has_stripe_subscription = bool(
+                getattr(org, "stripe_subscription_id", None)
+            )
 
     base = UserOut.model_validate(current_user).model_dump()
     base["integrations_access"] = integrations_access_effective(current_user, org)
@@ -201,6 +205,7 @@ def read_users_me(
         subscription_plan=subscription_plan,
         payment_method=payment_method,
         plan_entitlements=plan_entitlements,
+        has_stripe_subscription=has_stripe_subscription,
     )
 
 
