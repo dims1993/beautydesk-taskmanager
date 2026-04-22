@@ -1,6 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { CreditCard, ExternalLink } from "lucide-react";
 import { useApi } from "../../hooks/useApi";
+import {
+  comparePlans,
+  getPendingPlanFromSession,
+  isValidPlanId,
+  planLabel,
+} from "../../utils/billingPlan";
 
 const PLANS = [
   { id: "esencial", label: "Esencial" },
@@ -27,9 +33,61 @@ export default function BillingSubscriptionPanel({
   const [busy, setBusy] = useState(false);
   const [localMsg, setLocalMsg] = useState("");
   const [targetPlan, setTargetPlan] = useState("profesional");
+  const [pendingFromLanding, setPendingFromLanding] = useState(() =>
+    getPendingPlanFromSession(),
+  );
 
   const hasSub = Boolean(currentUser?.has_stripe_subscription);
   const currentPlan = (currentUser?.subscription_plan || "esencial").toLowerCase();
+
+  const flowHint = useMemo(() => {
+    if (!pendingFromLanding) return null;
+    const t = pendingFromLanding;
+    if (!isValidPlanId(t)) return null;
+    if (t === currentPlan && hasSub) {
+      return {
+        kind: "same_paid",
+        text: `Ya tienes el plan **${planLabel(t)}** con suscripción activa. Puedes gestionar facturación o cambiar de plan abajo; si no necesitas nada, puedes ignorar el plan elegido en la web.`,
+      };
+    }
+    if (t === currentPlan && !hasSub) {
+      return {
+        kind: "same_unpaid",
+        text: `Tu cuenta está asignada al plan **${planLabel(
+          currentPlan,
+        )}** (sin pago online aún). El plan que elegiste en la web coincide: confirma el pago con Stripe abajo para activar la suscripción.`,
+      };
+    }
+    const diff = comparePlans(currentPlan, t);
+    if (hasSub) {
+      if (diff > 0) {
+        return {
+          kind: "upgrade",
+          text: `Vas a **subir** de ${planLabel(currentPlan)} a **${planLabel(
+            t,
+          )}** (cambio con prorrateo en la suscripción).`,
+        };
+      }
+      if (diff < 0) {
+        return {
+          kind: "downgrade",
+          text: `Vas a **bajar** de ${planLabel(currentPlan)} a **${planLabel(
+            t,
+          )}** (cambio con prorrateo). Revisa en Stripe el efecto en la próxima factura.`,
+        };
+      }
+    } else {
+      return {
+        kind: "new_sub",
+        text: `Confirmar **${planLabel(
+          t,
+        )}** como plan de pago. Tu asignación actual en la app es ${planLabel(
+          currentPlan,
+        )} hasta que completes el checkout.`,
+      };
+    }
+    return null;
+  }, [pendingFromLanding, currentPlan, hasSub]);
 
   useEffect(() => {
     let cancelled = false;
@@ -49,16 +107,12 @@ export default function BillingSubscriptionPanel({
   }, [apiRequest]);
 
   useEffect(() => {
-    try {
-      const p = sessionStorage.getItem("beautydesk_pending_checkout_plan");
-      if (p && ["esencial", "profesional", "premium"].includes(p)) {
-        setTargetPlan(p);
-        setLocalMsg(
-          `Plan seleccionado desde la web: ${p}. Elige «Ir a pagar con Stripe» cuando estés listo.`,
-        );
-      }
-    } catch {
-      /* ignore */
+    const p = getPendingPlanFromSession();
+    if (p) {
+      setTargetPlan(p);
+      setLocalMsg(
+        "Plan elegido desde la página de precios. Revisa el resumen y confirma con el botón de abajo.",
+      );
     }
   }, []);
 
@@ -68,6 +122,7 @@ export default function BillingSubscriptionPanel({
     } catch {
       /* ignore */
     }
+    setPendingFromLanding(null);
   };
 
   const goCheckout = async () => {
@@ -120,6 +175,12 @@ export default function BillingSubscriptionPanel({
     }
   };
 
+  const dismissFlowHint = () => {
+    clearPending();
+    setPendingFromLanding(null);
+    setLocalMsg("");
+  };
+
   if (loading) {
     return (
       <p className="text-[10px] text-[#a39485] animate-pulse">
@@ -130,15 +191,47 @@ export default function BillingSubscriptionPanel({
 
   const stripeOk = status?.stripe_configured;
   const priceOk = status?.prices?.[targetPlan];
+  const sameTargetAsCurrent = targetPlan === currentPlan;
 
   return (
     <div className="space-y-4">
+      {flowHint && (
+        <div
+          className={`rounded-2xl border px-4 py-3 text-[11px] leading-relaxed ${
+            flowHint.kind === "downgrade"
+              ? "border-amber-200 bg-amber-50/80 text-amber-950"
+              : "border-[#c9e7db] bg-emerald-50/80 text-[#1e3a2f]"
+          }`}
+        >
+          <p className="text-[#2d2a28]">
+            {flowHint.text.split("**").map((part, i) =>
+              i % 2 === 1 ? (
+                <strong key={i} className="font-serif text-[#5d5045]">
+                  {part}
+                </strong>
+              ) : (
+                <span key={i}>{part}</span>
+              ),
+            )}
+          </p>
+          {flowHint.kind === "same_paid" && (
+            <button
+              type="button"
+              onClick={dismissFlowHint}
+              className="mt-2 text-[9px] font-black uppercase tracking-widest text-[#5d5045] underline"
+            >
+              Cerrar aviso
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="flex items-start gap-3 rounded-2xl border border-[#e5e0d8] bg-[#faf8f5] px-4 py-3">
         <CreditCard className="h-5 w-5 shrink-0 text-[#5d5045] mt-0.5" />
         <div className="space-y-1 text-[11px] text-[#5d5045] leading-relaxed">
           <p>
             <span className="font-black uppercase tracking-widest text-[10px] text-[#8c857d]">
-              Plan actual
+              Plan en la app
             </span>
             :{" "}
             <span className="font-serif text-base capitalize">{currentPlan}</span>
@@ -176,7 +269,7 @@ export default function BillingSubscriptionPanel({
 
       <div className="space-y-2">
         <label className="text-[9px] font-black uppercase tracking-widest text-[#a39485]">
-          Elegir plan objetivo
+          Objetivo (plan de la oferta o cambio)
         </label>
         <select
           value={targetPlan}
@@ -189,6 +282,11 @@ export default function BillingSubscriptionPanel({
             </option>
           ))}
         </select>
+        <p className="text-[9px] text-[#a39485]">
+          Plan de la app ahora: <strong>{planLabel(currentPlan)}</strong>
+          {hasSub ? " (pagado vía Stripe)" : ""}. Ajusta el desplegable si quieres
+          otro destino.
+        </p>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">
@@ -204,11 +302,22 @@ export default function BillingSubscriptionPanel({
         ) : (
           <button
             type="button"
-            disabled={busy || !stripeOk || !priceOk}
+            disabled={
+              busy || !stripeOk || !priceOk || (sameTargetAsCurrent && hasSub)
+            }
             onClick={goChangePlan}
             className="flex-1 rounded-full bg-[#5d5045] py-3.5 text-[10px] font-black uppercase tracking-[0.2em] text-[#f5ebe0] shadow-lg transition hover:bg-[#4a3f36] disabled:opacity-40"
+            title={
+              sameTargetAsCurrent
+                ? "Elige otro plan en el desplegable para cambiar"
+                : undefined
+            }
           >
-            {busy ? "…" : "Cambiar plan (prorrateo)"}
+            {busy
+              ? "…"
+              : sameTargetAsCurrent
+                ? "Mismo plan (elige otro arriba)"
+                : "Cambiar plan (prorrateo)"}
           </button>
         )}
         <button

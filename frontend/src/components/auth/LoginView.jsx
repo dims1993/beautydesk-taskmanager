@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useApi } from "../../hooks/useApi"; // Asegúrate de que la ruta sea correcta
 import { Link, useSearchParams } from "react-router-dom";
+import { planLabel } from "../../utils/billingPlan";
 import { Sparkles, User, Lock, ArrowRight, Home } from "lucide-react"; // Importamos los iconos
 import GoogleLoginButton from "./GoogleLoginButton";
 
@@ -12,16 +13,21 @@ export default function LoginView({ onLogin, onGoToRegister }) {
   const [isLoading, setIsLoading] = useState(false);
   const { apiRequest } = useApi();
 
+  const planFromQuery = (searchParams.get("plan") || "").trim().toLowerCase();
+  const hasPlanQuery =
+    planFromQuery === "esencial" ||
+    planFromQuery === "profesional" ||
+    planFromQuery === "premium";
+
   useEffect(() => {
-    const p = (searchParams.get("plan") || "").trim().toLowerCase();
-    if (p === "esencial" || p === "profesional" || p === "premium") {
+    if (hasPlanQuery) {
       try {
-        sessionStorage.setItem("beautydesk_pending_checkout_plan", p);
+        sessionStorage.setItem("beautydesk_pending_checkout_plan", planFromQuery);
       } catch {
         /* ignore */
       }
     }
-  }, [searchParams]);
+  }, [searchParams, hasPlanQuery, planFromQuery]);
 
   // --- LÓGICA LOGIN NORMAL ---
   const handleSubmit = async (e) => {
@@ -136,6 +142,19 @@ export default function LoginView({ onLogin, onGoToRegister }) {
             <h3 className="text-3xl md:text-4xl font-serif text-[#5d5045]">
               Bienvenido
             </h3>
+            {hasPlanQuery && (
+              <p className="text-[10px] text-[#5d5045]/90 leading-relaxed max-w-sm mx-auto lg:mx-0 pt-1 border-t border-[#eaddcf]/60 mt-2">
+                Has elegido el plan{" "}
+                <span className="font-serif font-semibold">
+                  {planLabel(planFromQuery)}
+                </span>
+                . Tras entrar te llevaremos a{" "}
+                <strong className="font-black uppercase tracking-widest text-[9px]">
+                  Ajustes → Suscripción
+                </strong>{" "}
+                para pagar o, si ya pagas, para revisar o cambiar de plan.
+              </p>
+            )}
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">

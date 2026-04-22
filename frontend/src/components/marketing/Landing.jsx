@@ -597,16 +597,24 @@ export default function Landing() {
                     </li>
                   ))}
                 </ul>
-                <Link
-                  to={`/login?plan=${encodeURIComponent(plan.id)}`}
-                  className={`mt-auto block w-full rounded-full py-4 text-center text-[10px] font-black uppercase tracking-[0.2em] transition active:scale-[0.98] ${
-                    plan.highlight
-                      ? "bg-[#5d5045] text-[#f5ebe0] hover:bg-[#4a3f36] shadow-lg"
-                      : "border border-[#eaddcf] bg-[#FAF9F6] text-[#5d5045] hover:bg-[#f5ebe0]"
-                  }`}
-                >
-                  Empezar
-                </Link>
+                <div className="mt-auto space-y-3 w-full">
+                  <Link
+                    to={`/register?plan=${encodeURIComponent(plan.id)}`}
+                    className={`block w-full rounded-full py-4 text-center text-[10px] font-black uppercase tracking-[0.2em] transition active:scale-[0.98] ${
+                      plan.highlight
+                        ? "bg-[#5d5045] text-[#f5ebe0] hover:bg-[#4a3f36] shadow-lg"
+                        : "border border-[#eaddcf] bg-[#FAF9F6] text-[#5d5045] hover:bg-[#f5ebe0]"
+                    }`}
+                  >
+                    Crear cuenta y continuar
+                  </Link>
+                  <Link
+                    to={`/login?plan=${encodeURIComponent(plan.id)}`}
+                    className="block w-full text-center text-[9px] font-bold uppercase tracking-[0.2em] text-[#8c857d] hover:text-[#5d5045] transition-colors"
+                  >
+                    Ya tengo cuenta — iniciar sesión
+                  </Link>
+                </div>
               </div>
             ))}
           </div>
@@ -623,10 +631,10 @@ export default function Landing() {
           </div>
 
           <p className="mt-10 text-center text-[10px] leading-relaxed text-[#a39485] max-w-3xl mx-auto">
-            Precios sin IVA. Tras iniciar sesión o registrarte, puedes contratar
-            el plan con Stripe desde Ajustes cuando el servidor tenga las claves
-            de pago configuradas. Para grupos con varias sedes, contacta para un
-            presupuesto a medida.
+            Precios sin IVA. El plan que elijas se guarda al crear cuenta o al
+            iniciar sesión; luego, en Ajustes → Suscripción, podrás pagar con
+            Stripe o cambiar de plan si ya tenías suscripción. Para varias
+            sedes, contacta para un presupuesto a medida.
           </p>
         </div>
       </section>

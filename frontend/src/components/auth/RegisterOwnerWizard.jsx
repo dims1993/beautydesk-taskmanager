@@ -38,6 +38,8 @@ const RegisterOwnerWizard = ({
   onBack,
   onCompleteRegistration,
   onSwitchAccountType,
+  /** Si viene de la landing con ?plan=, nombre legible del plan (p. ej. "Profesional"). */
+  selectedPlanName = null,
 }) => {
   const { apiRequest } = useApi();
   const [phase, setPhase] = useState("form"); // form | verify | loading
@@ -282,6 +284,20 @@ const RegisterOwnerWizard = ({
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
+          )}
+
+          {selectedPlanName && phase === "form" && (
+            <p className="rounded-2xl border border-[#c9e7db] bg-[#f4faf7] px-4 py-3 text-[10px] leading-relaxed text-[#1e3a2f]">
+              Has elegido el plan{" "}
+              <span className="font-serif font-semibold text-[#5d5045]">
+                {selectedPlanName}
+              </span>
+              . Tras verificar el correo e iniciar sesión, en{" "}
+              <strong className="font-black uppercase tracking-widest text-[9px]">
+                Ajustes → Suscripción
+              </strong>{" "}
+              podrás completar el pago con Stripe.
+            </p>
           )}
 
           <div

@@ -1,7 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { useApi } from "./hooks/useApi";
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
+import { getPendingPlanFromSession } from "./utils/billingPlan";
 
 import MobileNavbar from "./components/navigation/MobileNavbar";
 import DesktopNavBar from "./components/navigation/DesktopNavBar";
@@ -29,6 +37,41 @@ const ONBOARDING_STORAGE_KEY = "beautydesk_onboarding_v2";
 /** One-shot replay: first session after deploy clears “completed” for this account only. Bump suffix to replay again. */
 const ONBOARDING_REPLAY_ONCE_KEY = "beautydesk_onboarding_replay_2026_04_david_v1";
 const ONBOARDING_REPLAY_EMAIL = "davidisraelmunozsalinas@gmail.com";
+
+/** Tras login/registro, si había un plan en la landing, ir a Ajustes → Suscripción. */
+function PostLoginAppRedirect() {
+  const to = useMemo(() => {
+    if (getPendingPlanFromSession()) {
+      return "/app?tab=ajustes&billing=1";
+    }
+    return "/app";
+  }, []);
+  return <Navigate to={to} replace />;
+}
+
+/**
+ * Registro con ?plan= desde la landing; al volver al login se conserva la query
+ * para el flujo de pago/cambio de plan.
+ */
+function RegisterFromLandingRoute() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const q = searchParams.toString() ? `?${searchParams.toString()}` : "";
+  return (
+    <div className="relative">
+      <a
+        href="/"
+        className="absolute top-8 left-8 text-[#5d5045] font-black text-[10px] uppercase tracking-widest z-50 bg-white/50 px-4 py-2 rounded-full border border-[#5d5045]/10 hover:bg-white transition-colors"
+      >
+        ← Inicio
+      </a>
+      <RegisterView
+        onBack={() => navigate(`/login${q}`)}
+        onCompleteRegistration={() => navigate(`/login${q}`)}
+      />
+    </div>
+  );
+}
 
 /** Google Sign-In only when VITE_GOOGLE_CLIENT_ID is set (e.g. Vercel env). */
 function GoogleAuthShell({ children }) {
@@ -126,6 +169,9 @@ function App() {
     try {
       const sp = new URLSearchParams(window.location.search);
       if (sp.get("tab") === "ajustes") setActiveTab("ajustes");
+      if (sp.get("billing") === "1" || sp.get("billing") === "focus") {
+        setActiveTab("ajustes");
+      }
     } catch {
       /* ignore */
     }
@@ -194,6 +240,10 @@ function App() {
           <Route path="/legal/privacy" element={<PrivacyView />} />
 
           <Route
+            path="/register"
+            element={!isLoggedIn ? <RegisterFromLandingRoute /> : <PostLoginAppRedirect />}
+          />
+          <Route
             path="/login"
             element={
               !isLoggedIn ? (
@@ -217,7 +267,7 @@ function App() {
                   )}
                 </div>
               ) : (
-                <Navigate to="/app" />
+                <PostLoginAppRedirect />
               )
             }
           />

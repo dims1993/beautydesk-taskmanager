@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import GoogleLoginButton from "./GoogleLoginButton";
 import RegisterOwnerWizard from "./RegisterOwnerWizard";
+import { planLabel } from "../../utils/billingPlan";
 
 function formatRegisterError(err) {
   if (!err) return "Error al registrar.";
@@ -31,16 +32,21 @@ const RegisterView = ({ onBack, onCompleteRegistration }) => {
   const { apiRequest } = useApi();
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
+  const planFromQuery = (searchParams.get("plan") || "").trim().toLowerCase();
+  const hasPlanFromLanding =
+    planFromQuery === "esencial" ||
+    planFromQuery === "profesional" ||
+    planFromQuery === "premium";
+
   useEffect(() => {
-    const p = (searchParams.get("plan") || "").trim().toLowerCase();
-    if (p === "esencial" || p === "profesional" || p === "premium") {
+    if (hasPlanFromLanding) {
       try {
-        sessionStorage.setItem("beautydesk_pending_checkout_plan", p);
+        sessionStorage.setItem("beautydesk_pending_checkout_plan", planFromQuery);
       } catch {
         /* ignore */
       }
     }
-  }, [searchParams]);
+  }, [searchParams, hasPlanFromLanding, planFromQuery]);
 
   const [step, setStep] = useState(1);
   const [pendingToken, setPendingToken] = useState(null);
@@ -220,6 +226,9 @@ const RegisterView = ({ onBack, onCompleteRegistration }) => {
         onCompleteRegistration={onCompleteRegistration}
         onSwitchAccountType={() =>
           setAccount((a) => ({ ...a, role: "CLIENT" }))
+        }
+        selectedPlanName={
+          hasPlanFromLanding ? planLabel(planFromQuery) : null
         }
       />
     );

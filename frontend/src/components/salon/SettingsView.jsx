@@ -1,4 +1,6 @@
 import React, { useId, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { getPendingPlanFromSession } from "../../utils/billingPlan";
 import {
   AlertTriangle,
   Building2,
@@ -95,6 +97,12 @@ export default function SettingsView({
   onError,
   services = [],
 }) {
+  const [searchParams] = useSearchParams();
+  const [subscriptionOpenDefault] = useState(() => {
+    const b = searchParams.get("billing");
+    if (b === "1" || b === "focus") return true;
+    return Boolean(getPendingPlanFromSession());
+  });
   const { apiRequest } = useApi();
   const needsFiscal =
     String(currentUser?.role || "").toUpperCase() === "OWNER" &&
@@ -452,7 +460,7 @@ export default function SettingsView({
           title="Suscripción y pago"
           description="Contrata o cambia tu plan con Stripe; los permisos se aplican según el plan activo."
           icon={CreditCard}
-          defaultOpen={false}
+          defaultOpen={subscriptionOpenDefault}
         >
           <BillingSubscriptionPanel
             currentUser={currentUser}
