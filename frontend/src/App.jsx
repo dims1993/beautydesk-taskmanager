@@ -397,9 +397,9 @@ function App() {
 
                   <SalonIdentityBar currentUser={currentUser} />
 
-                  <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-12">
+                  <div className="mx-auto grid min-w-0 max-w-6xl grid-cols-1 gap-8 md:gap-12 lg:grid-cols-12">
                     <aside
-                      className={`lg:col-span-5 ${activeTab !== "agenda" ? "hidden lg:block" : "block"}`}
+                      className={`min-w-0 lg:col-span-5 ${activeTab !== "agenda" ? "hidden lg:block" : "block"}`}
                     >
                       {currentUser && (
                         <AppointmentForm

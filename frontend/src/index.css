@@ -1,5 +1,26 @@
 @import "tailwindcss";
 
+/* iOS (y móviles) hacen zoom al enfocar inputs con fuente < 16px. Mínimo 1rem en controles. */
+@layer base {
+  @media (max-width: 1280px) {
+    input:not(
+        [type="button"],
+        [type="submit"],
+        [type="reset"],
+        [type="checkbox"],
+        [type="radio"],
+        [type="file"],
+        [type="range"],
+        [type="image"]
+      ),
+    select,
+    textarea {
+      font-size: 1rem;
+      line-height: 1.5;
+    }
+  }
+}
+
 @keyframes bounce-in {
   0% {
     transform: translate(-50%, -100%);

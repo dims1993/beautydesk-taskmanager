@@ -40,8 +40,8 @@ const ModalWrapper = ({ isOpen, onClose, children, title, subtitle }) => {
         className="absolute inset-0 bg-[#5d5045]/20 backdrop-blur-md animate-in fade-in duration-300"
         onClick={onClose}
       />
-      <div className="relative bg-white w-full max-w-md rounded-[3rem] shadow-2xl border border-[#eaddcf] overflow-hidden animate-in fade-in zoom-in-95 duration-300">
-        <div className="p-8 md:p-10">
+      <div className="relative w-full min-w-0 max-w-md rounded-[3rem] border border-[#eaddcf] bg-white overflow-x-clip overflow-y-visible shadow-2xl animate-in fade-in zoom-in-95 duration-300">
+        <div className="p-8 md:p-10 min-w-0">
           <div className="flex justify-between items-start mb-8">
             <div className="space-y-1">
               <p className="text-[9px] font-black uppercase tracking-[0.4em] text-[#8c857d]">
@@ -107,7 +107,7 @@ export const PaymentModal = ({ isOpen, onClose, appointment, onConfirm }) => {
                 type="number"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
-                className="w-full pl-12 pr-6 py-5 bg-[#FAF9F6] border-b border-[#eaddcf] outline-none focus:border-[#5d5045] text-sm font-bold tracking-widest text-[#5d5045] transition-all"
+                className="w-full min-w-0 pl-12 pr-6 py-5 bg-[#FAF9F6] border-b border-[#eaddcf] outline-none focus:border-[#5d5045] text-base font-bold tracking-wide text-[#5d5045] transition-all"
               />
             </div>
           </div>
@@ -198,7 +198,7 @@ export const EditAppointmentModal = ({
       title="Modificar Cita"
       subtitle="Ajustes"
     >
-      <form className="space-y-8" onSubmit={handleSubmit}>
+      <form className="min-w-0 space-y-8" onSubmit={handleSubmit}>
         {appointment?.client_name && (
           <p className="text-[11px] font-bold text-[#5d5045] px-1">
             {appointment.client_name}
@@ -216,7 +216,7 @@ export const EditAppointmentModal = ({
                 required
                 value={serviceId}
                 onChange={(e) => setServiceId(e.target.value)}
-                className="w-full pl-8 py-4 bg-transparent border-b border-[#eaddcf] outline-none text-[10px] font-black tracking-widest text-[#5d5045] appearance-none"
+                className="w-full min-w-0 max-w-full pl-8 py-4 bg-transparent border-b border-[#eaddcf] outline-none text-base font-bold tracking-wide text-[#5d5045] appearance-none"
               >
                 {services.map((s) => (
                   <option key={s.id} value={s.id}>
@@ -231,14 +231,14 @@ export const EditAppointmentModal = ({
             <label className="px-1 text-[9px] font-black text-[#8c857d] uppercase tracking-[0.3em] block mb-2">
               Fecha y hora
             </label>
-            <div className="relative">
-              <Timer className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 text-[#c4bdb5]" />
+            <div className="relative min-w-0 w-full max-w-full">
+              <Timer className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 shrink-0 text-[#c4bdb5] pointer-events-none" />
               <input
                 type="datetime-local"
                 required
                 value={startLocal}
                 onChange={(e) => setStartLocal(e.target.value)}
-                className="w-full pl-8 py-4 bg-transparent border-b border-[#eaddcf] outline-none text-[10px] font-black tracking-widest text-[#5d5045]"
+                className="box-border w-full min-w-0 max-w-full pl-8 py-4 bg-transparent border-b border-[#eaddcf] outline-none text-base font-bold tracking-wide text-[#5d5045] [color-scheme:light]"
               />
             </div>
           </div>

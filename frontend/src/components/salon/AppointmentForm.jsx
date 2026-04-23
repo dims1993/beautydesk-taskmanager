@@ -158,7 +158,7 @@ const AppointmentForm = ({
     );
 
   return (
-    <div className="bg-white rounded-[3rem] shadow-2xl shadow-[#5d5045]/10 border border-[#eaddcf] overflow-hidden sticky top-8 z-40 transition-all duration-500">
+    <div className="min-w-0 max-w-full bg-white rounded-[3rem] shadow-2xl shadow-[#5d5045]/10 border border-[#eaddcf] overflow-x-clip overflow-y-visible sticky top-8 z-40 transition-all duration-500">
       {/* Cabecera Editorial */}
       <div className="bg-[#FAF9F6] p-10 border-b border-[#eaddcf] text-center space-y-2">
         <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#8c857d]">
@@ -171,7 +171,7 @@ const AppointmentForm = ({
 
       <form
         onSubmit={handleSubmit}
-        className={`p-8 md:p-10 space-y-6 relative ${disabledReason ? "pointer-events-none opacity-50" : ""}`}
+        className={`min-w-0 max-w-full p-8 md:p-10 space-y-6 relative ${disabledReason ? "pointer-events-none opacity-50" : ""}`}
       >
         {disabledReason && (
           <div className="pointer-events-auto absolute inset-0 z-50 flex items-start justify-center pt-8 px-4 bg-white/80 backdrop-blur-[2px] rounded-b-[3rem]">
@@ -226,7 +226,7 @@ const AppointmentForm = ({
             <User className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#c4bdb5]" />
             <input
               required
-              className="w-full pl-14 pr-6 py-5 bg-[#FAF9F6] border border-[#eaddcf] rounded-2xl outline-none focus:border-[#5d5045] focus:bg-white transition-all text-xs font-bold tracking-wider text-[#5d5045] placeholder:text-[#c4bdb5]"
+              className="w-full min-w-0 pl-14 pr-6 py-5 bg-[#FAF9F6] border border-[#eaddcf] rounded-2xl outline-none focus:border-[#5d5045] focus:bg-white transition-all text-base font-bold tracking-wider text-[#5d5045] placeholder:text-[#c4bdb5]"
               placeholder="NOMBRE COMPLETO"
               value={formData.client_name}
               onChange={(e) =>
@@ -268,7 +268,7 @@ const AppointmentForm = ({
             <Phone className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#c4bdb5]" />
             <input
               required={isNewClient}
-              className={`w-full pl-14 pr-6 py-5 border rounded-2xl outline-none transition-all text-xs font-bold tracking-wider ${isNewClient ? "bg-[#fdf8f3] border-[#c4a484]/30" : "bg-[#FAF9F6] border-[#eaddcf]"} focus:border-[#5d5045]`}
+              className={`w-full min-w-0 pl-14 pr-6 py-5 border rounded-2xl outline-none transition-all text-base font-bold tracking-wider ${isNewClient ? "bg-[#fdf8f3] border-[#c4a484]/30" : "bg-[#FAF9F6] border-[#eaddcf]"} focus:border-[#5d5045]`}
               placeholder="600 000 000"
               value={formData.client_phone}
               onChange={(e) =>
@@ -278,14 +278,14 @@ const AppointmentForm = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="grid min-w-0 grid-cols-1 md:grid-cols-2 gap-5">
           {/* Campo: Servicio */}
-          <div className="space-y-3">
+          <div className="min-w-0 space-y-3">
             <label className="px-2 text-[10px] font-black text-[#8c857d] uppercase tracking-[0.2em]">
               Servicio
             </label>
             <select
-              className="w-full px-6 py-5 bg-[#FAF9F6] border border-[#eaddcf] rounded-2xl outline-none cursor-pointer text-xs font-bold tracking-wider text-[#5d5045] appearance-none focus:border-[#5d5045] transition-all"
+              className="w-full min-w-0 max-w-full box-border px-6 py-5 bg-[#FAF9F6] border border-[#eaddcf] rounded-2xl outline-none cursor-pointer text-base font-bold tracking-wider text-[#5d5045] appearance-none focus:border-[#5d5045] transition-all"
               value={formData.service_id}
               onChange={(e) =>
                 setFormData({ ...formData, service_id: e.target.value })
@@ -306,16 +306,16 @@ const AppointmentForm = ({
             </select>
           </div>
 
-          {/* Campo: Fecha y Hora */}
-          <div className="space-y-3">
+          {/* Campo: Fecha y Hora (min-w-0 evita desbordes con datetime-local en iOS) */}
+          <div className="min-w-0 space-y-3">
             <label className="px-2 text-[10px] font-black text-[#8c857d] uppercase tracking-[0.2em]">
               Horario
             </label>
-            <div className="relative">
+            <div className="relative min-w-0 w-full max-w-full">
               <input
                 required
                 type="datetime-local"
-                className="w-full px-6 py-5 bg-[#FAF9F6] border border-[#eaddcf] rounded-2xl outline-none text-xs font-bold tracking-wider text-[#5d5045] focus:border-[#5d5045] transition-all"
+                className="box-border w-full min-w-0 max-w-full px-4 sm:px-6 py-5 bg-[#FAF9F6] border border-[#eaddcf] rounded-2xl outline-none text-base font-bold tracking-wide text-[#5d5045] focus:border-[#5d5045] transition-all [color-scheme:light]"
                 value={formData.start_time}
                 onChange={(e) =>
                   setFormData({ ...formData, start_time: e.target.value })
