@@ -7,6 +7,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 import stripe
 from sqlmodel import Session, select
@@ -46,7 +47,23 @@ def plans_price_availability() -> dict[str, bool]:
 
 
 def _frontend_base() -> str:
-    return (os.getenv("FRONTEND_URL") or "http://localhost:5173").rstrip("/")
+    """
+    Base URL del front (sin / final). Debe ser el sitio público (p. ej.
+    https://app.vercel.app), no el panel de Vercel (vercel.com/.../project).
+    """
+    base = (os.getenv("FRONTEND_URL") or "http://localhost:5173").rstrip("/")
+    try:
+        host = (urlparse(base).netloc or "").lower()
+    except Exception:  # noqa: BLE001
+        return base
+    # 404 al volver de Stripe: muchas veces FRONTEND_URL = URL copiada del dashboard
+    if host in ("vercel.com", "www.vercel.com"):
+        raise ValueError(
+            "FRONTEND_URL apunta a vercel.com (panel). Configura en Render la URL "
+            "pública de la app, por ejemplo https://tu-proyecto.vercel.app "
+            "(Vercel → tu proyecto → Domains, o prueba con la URL de preview https://...vercel.app)."
+        )
+    return base
 
 
 def trial_period_days() -> int:

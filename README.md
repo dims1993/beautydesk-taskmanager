@@ -7,6 +7,8 @@ Full-stack web app for beauty salons: multi-tenant organizations, appointment sc
 You can explore the live version here: https://beautydesk-taskmanager.vercel.app
 The backend it will be deployed by render: https://beautydesk-taskmanager.onrender.com
 
+**Despliegue (Render + Vercel):** guía con variables, Stripe, CORS y orden de pasos en [`docs/DEPLOY_RENDER_VERCEL.md`](docs/DEPLOY_RENDER_VERCEL.md).
+
 ---
 
 ## Tech Stack

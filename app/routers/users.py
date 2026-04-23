@@ -1,3 +1,4 @@
+import logging
 import os
 import secrets
 
@@ -45,6 +46,8 @@ from app.services.wizard_registration import (
     start_owner_wizard_registration,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/users", tags=["users"])
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
@@ -75,12 +78,24 @@ async def register_owner_wizard(
         password_plain=body.password,
         accept_terms_and_privacy=body.accept_terms_and_privacy,
     )
-    await send_registration_verification_email(
-        to_email=str(body.email),
-        first_name=body.first_name,
-        business_name=body.business_name,
-        code=code,
-    )
+    try:
+        await send_registration_verification_email(
+            to_email=str(body.email),
+            first_name=body.first_name,
+            business_name=body.business_name,
+            code=code,
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.exception("send_registration_verification_email failed: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "No se pudo enviar el correo de verificación. Revisa en Render que "
+                "MAIL_SERVER, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD y MAIL_FROM sean correctos "
+                f"(Gmail requiere contraseña de aplicación o SMTP de tu proveedor). Error: {e!s}"
+            ),
+        ) from e
+
     return {
         "registration_token": token,
         "message": "Te hemos enviado un código de verificación por correo.",

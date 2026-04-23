@@ -21,5 +21,5 @@ RUN pip install --no-cache-dir --upgrade -r requirements.txt
 # Copiamos el resto del código (aunque usaremos volúmenes en desarrollo)
 COPY . .
 
-# Comando por defecto (aunque docker-compose lo puede sobreescribir)
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Render inyecta PORT; en local (compose) no suele existir → 8000
+CMD ["/bin/sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
