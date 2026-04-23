@@ -37,9 +37,9 @@ const AppointmentList = ({
 
   if (safeAppointments.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-32 bg-[#FAF9F6] rounded-[3rem] border border-dashed border-[#eaddcf]">
-        <CalendarIcon className="w-8 h-8 text-[#c4bdb5] mb-4" />
-        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#8c857d]">
+      <div className="flex flex-col items-center justify-center text-center py-20 sm:py-32 px-5 sm:px-8 md:px-6 bg-[#FAF9F6] rounded-[3rem] border border-dashed border-[#eaddcf]">
+        <CalendarIcon className="w-8 h-8 text-[#c4bdb5] mb-4 shrink-0" />
+        <p className="max-w-[20rem] text-[10px] font-black uppercase leading-relaxed tracking-[0.3em] text-[#8c857d] text-balance">
           No hay citas programadas esta semana
         </p>
       </div>
