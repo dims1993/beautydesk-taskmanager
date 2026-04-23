@@ -10,6 +10,23 @@ import {
   ChevronRight,
 } from "lucide-react";
 
+/**
+ * Digits-only international number for wa.me (no leading +).
+ * Handles Spanish 9-digit numbers, +34 / 0034, avoids double country code.
+ */
+function normalizePhoneForWhatsApp(raw) {
+  if (raw == null || typeof raw !== "string") return "";
+  let d = raw.replace(/\D/g, "");
+  if (!d) return "";
+  if (d.startsWith("0034") && d.length >= 12) {
+    d = "34" + d.slice(4);
+  }
+  if (d.startsWith("34") && d.length >= 11) return d;
+  if (d.length === 9 && /^[6789]\d{8}$/.test(d)) return `34${d}`;
+  if (d.length < 10 || d.length > 15) return "";
+  return d;
+}
+
 /** Text for wa.me after creating an appointment (salon + billing address from profile). */
 function buildAppointmentWhatsAppText(clientName, startAt, currentUser) {
   const d = new Date(startAt);
@@ -116,6 +133,10 @@ const AppointmentForm = ({
       );
 
       let finalClientId = existingClient?.id || null;
+      const phoneForWhatsApp = (
+        (formData.client_phone || "").trim() ||
+        (existingClient?.telefono || "").trim()
+      ).trim();
 
       if (!existingClient) {
         if (!formData.client_phone) {
@@ -146,7 +167,7 @@ const AppointmentForm = ({
 
       setLastCreated({
         name: formData.client_name,
-        phone: formData.client_phone,
+        phone: phoneForWhatsApp,
         startAt: formData.start_time,
       });
 
@@ -220,9 +241,17 @@ const AppointmentForm = ({
                   lastCreated.startAt,
                   currentUser,
                 );
+                const waDigits = normalizePhoneForWhatsApp(lastCreated.phone);
+                if (!waDigits) {
+                  onError?.(
+                    "No hay un teléfono válido para WhatsApp. Si es un cliente existente, edítalo en Clientes y añade el móvil.",
+                  );
+                  return;
+                }
                 window.open(
-                  `https://wa.me/34${lastCreated.phone.replace(/\s+/g, "")}?text=${encodeURIComponent(msg)}`,
+                  `https://wa.me/${waDigits}?text=${encodeURIComponent(msg)}`,
                   "_blank",
+                  "noopener,noreferrer",
                 );
                 setLastCreated(null);
               }}
