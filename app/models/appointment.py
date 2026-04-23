@@ -33,6 +33,8 @@ class Appointment(SQLModel, table=True):
     # Claves foráneas
     staff_id: int = Field(foreign_key="user.id")
     service_id: int = Field(foreign_key="service.id")
+    # JSON array of extra service IDs (same order as booked), e.g. "[2,3]"
+    additional_service_ids_json: Optional[str] = Field(default=None)
 
     # Multi-tenant
     organization_id: Optional[int] = Field(

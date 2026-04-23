@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useApi } from "../../hooks/useApi";
 import {
   Sparkles,
@@ -8,7 +8,10 @@ import {
   CheckCircle2,
   X,
   ChevronRight,
+  Plus,
+  Minus,
 } from "lucide-react";
+import { totalsForSelectedServiceIds } from "../../utils/appointmentServices";
 
 /**
  * Digits-only international number for wa.me (no leading +).
@@ -72,25 +75,33 @@ const AppointmentForm = ({
     client_name: "",
     client_email: "",
     client_phone: "",
-    service_id: services[0]?.id || "",
     start_time: initialDate || "",
     staff_id: currentUser?.id || "",
   });
+
+  const [selectedServiceIds, setSelectedServiceIds] = useState([]);
 
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
   useEffect(() => {
-    if (services.length > 0) {
-      setFormData((f) => {
-        const valid = services.some(
-          (s) => String(s.id) === String(f.service_id),
-        );
-        if (valid && f.service_id) return f;
-        return { ...f, service_id: services[0].id };
-      });
+    if (services.length === 0) {
+      setSelectedServiceIds([]);
+      return;
     }
+    setSelectedServiceIds((prev) => {
+      const valid = prev.filter((id) =>
+        services.some((s) => String(s.id) === String(id)),
+      );
+      if (valid.length > 0) return valid;
+      return [String(services[0].id)];
+    });
   }, [services]);
+
+  const serviceTotals = useMemo(
+    () => totalsForSelectedServiceIds(selectedServiceIds, services),
+    [selectedServiceIds, services],
+  );
 
   useEffect(() => {
     if (formData.client_name.length > 1) {
@@ -157,10 +168,13 @@ const AppointmentForm = ({
       }
 
       const payload = {
-        ...formData,
+        client_name: formData.client_name,
+        client_phone: formData.client_phone || null,
+        client_email: formData.client_email || null,
         client_id: finalClientId,
-        service_id: parseInt(formData.service_id),
+        start_time: formData.start_time,
         staff_id: formData.staff_id || currentUser?.id || 1,
+        service_ids: selectedServiceIds.map((id) => parseInt(id, 10)),
       };
 
       await apiRequest("/appointments/", "POST", payload);
@@ -175,9 +189,11 @@ const AppointmentForm = ({
         client_name: "",
         client_email: "",
         client_phone: "",
-        service_id: services[0]?.id || "",
         start_time: "",
       });
+      setSelectedServiceIds(
+        services[0]?.id != null ? [String(services[0].id)] : [],
+      );
 
       onSuccess();
     } catch (err) {
@@ -328,51 +344,101 @@ const AppointmentForm = ({
           </div>
         </div>
 
-        <div className="grid min-w-0 grid-cols-1 md:grid-cols-2 gap-5">
-          {/* Campo: Servicio */}
-          <div className="min-w-0 space-y-3">
-            <label className="px-2 text-[10px] font-black text-[#8c857d] uppercase tracking-[0.2em]">
-              Servicio
+        {/* Servicios (varias líneas) + resumen duración / precio */}
+        <div className="min-w-0 w-full max-w-full space-y-3 overflow-x-clip">
+          <div className="flex items-center justify-between gap-2 px-2">
+            <label className="text-[10px] font-black text-[#8c857d] uppercase tracking-[0.2em]">
+              Servicios
             </label>
-            <select
-              className="w-full min-w-0 max-w-full box-border px-6 py-5 bg-[#FAF9F6] border border-[#eaddcf] rounded-2xl outline-none cursor-pointer text-base font-bold tracking-wider text-[#5d5045] appearance-none focus:border-[#5d5045] transition-all"
-              value={formData.service_id}
-              onChange={(e) =>
-                setFormData({ ...formData, service_id: e.target.value })
-              }
-              required
+            <button
+              type="button"
+              disabled={!!disabledReason || services.length === 0}
+              onClick={() => {
+                const fallback = services[0]?.id;
+                if (fallback == null) return;
+                setSelectedServiceIds((prev) => [
+                  ...prev,
+                  String(fallback),
+                ]);
+              }}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#eaddcf] bg-[#FAF9F6] text-[#5d5045] hover:border-[#5d5045] disabled:opacity-40"
+              title="Añadir otro servicio"
             >
-              {services.length === 0 ? (
-                <option value="">
-                  Sin servicios — añádelos en Ajustes
-                </option>
-              ) : (
-                services.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name.toUpperCase()}
-                  </option>
-                ))
-              )}
-            </select>
+              <Plus className="w-4 h-4" strokeWidth={2.5} />
+            </button>
           </div>
+          <div className="space-y-2 min-w-0">
+            {selectedServiceIds.map((sid, index) => (
+              <div
+                key={`${sid}-${index}`}
+                className="flex min-w-0 w-full max-w-full items-stretch gap-2"
+              >
+                <select
+                  className="min-w-0 flex-1 max-w-full box-border px-4 py-5 sm:px-6 bg-[#FAF9F6] border border-[#eaddcf] rounded-2xl outline-none cursor-pointer text-base font-bold tracking-wider text-[#5d5045] appearance-none focus:border-[#5d5045] transition-all"
+                  value={sid}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setSelectedServiceIds((prev) => {
+                      const next = [...prev];
+                      next[index] = v;
+                      return next;
+                    });
+                  }}
+                  required
+                >
+                  {services.length === 0 ? (
+                    <option value="">Sin servicios — Ajustes</option>
+                  ) : (
+                    services.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name.toUpperCase()} · {s.duration} min · {s.price}€
+                      </option>
+                    ))
+                  )}
+                </select>
+                <button
+                  type="button"
+                  disabled={
+                    !!disabledReason || selectedServiceIds.length <= 1
+                  }
+                  onClick={() =>
+                    setSelectedServiceIds((prev) =>
+                      prev.length <= 1
+                        ? prev
+                        : prev.filter((_, i) => i !== index),
+                    )
+                  }
+                  className="shrink-0 flex h-auto w-11 items-center justify-center rounded-2xl border border-[#eaddcf] bg-white text-[#a39485] hover:border-red-200 hover:text-red-500 disabled:opacity-40"
+                  title="Quitar servicio"
+                >
+                  <Minus className="w-4 h-4" strokeWidth={2.5} />
+                </button>
+              </div>
+            ))}
+          </div>
+          {selectedServiceIds.length > 0 && services.length > 0 && (
+            <p className="px-2 text-[10px] font-bold uppercase tracking-widest text-[#c4a484]">
+              Total estimado: {serviceTotals.minutes} min ·{" "}
+              {serviceTotals.price}€
+            </p>
+          )}
+        </div>
 
-          {/* Campo: Fecha y Hora (min-w-0 evita desbordes con datetime-local en iOS) */}
-          <div className="min-w-0 space-y-3">
-            <label className="px-2 text-[10px] font-black text-[#8c857d] uppercase tracking-[0.2em]">
-              Horario
-            </label>
-            <div className="relative min-w-0 w-full max-w-full">
-              <input
-                required
-                type="datetime-local"
-                className="box-border w-full min-w-0 max-w-full px-4 sm:px-6 py-5 bg-[#FAF9F6] border border-[#eaddcf] rounded-2xl outline-none text-base font-bold tracking-wide text-[#5d5045] focus:border-[#5d5045] transition-all [color-scheme:light]"
-                value={formData.start_time}
-                onChange={(e) =>
-                  setFormData({ ...formData, start_time: e.target.value })
-                }
-              />
-            </div>
-          </div>
+        {/* Horario: ancho completo, mismo padding que el resto (iOS / Safari) */}
+        <div className="min-w-0 w-full max-w-full space-y-3 overflow-x-clip">
+          <label className="px-2 text-[10px] font-black text-[#8c857d] uppercase tracking-[0.2em]">
+            Horario
+          </label>
+          <input
+            required
+            type="datetime-local"
+            className="block box-border w-full min-w-0 max-w-full px-4 py-5 sm:px-6 bg-[#FAF9F6] border border-[#eaddcf] rounded-2xl outline-none text-base font-bold tracking-wide text-[#5d5045] focus:border-[#5d5045] transition-all [color-scheme:light]"
+            style={{ fontSize: "16px" }}
+            value={formData.start_time}
+            onChange={(e) =>
+              setFormData({ ...formData, start_time: e.target.value })
+            }
+          />
         </div>
 
         {/* Botón de Acción Principal */}
@@ -382,7 +448,7 @@ const AppointmentForm = ({
             loading ||
             !!disabledReason ||
             services.length === 0 ||
-            !formData.service_id
+            selectedServiceIds.length === 0
           }
           className="w-full py-6 mt-4 bg-[#5d5045] text-[#f5ebe0] rounded-2xl font-black uppercase text-[11px] tracking-[0.4em] shadow-xl shadow-[#5d5045]/20 disabled:opacity-50 transition-all hover:bg-[#4a3f36] active:scale-[0.98]"
         >

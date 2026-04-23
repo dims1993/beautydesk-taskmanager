@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
 
@@ -7,9 +7,10 @@ class AppointmentCreate(BaseModel):
     client_name: str
     client_phone: Optional[str] = None
     client_email: Optional[str] = None
+    client_id: Optional[int] = None
     start_time: datetime
     end_time: Optional[datetime] = None
-    service_id: int
+    service_ids: list[int] = Field(..., min_length=1)
     staff_id: Optional[int] = 1
 
 # Actualización parcial desde el modal de edición
@@ -27,6 +28,7 @@ class AppointmentOut(BaseModel):
     status: str
     service_id: int
     staff_id: int
+    additional_service_ids: list[int] = Field(default_factory=list)
     # Cambiamos estos dos para que acepten valores nulos de la base de datos
     final_price: Optional[float] = 0.0
     payment_method: Optional[str] = "efectivo" 

@@ -2,24 +2,13 @@ import { useEffect, useState } from "react";
 import { Check, Archive, Edit3, Clock } from "lucide-react";
 import { useApi } from "../../hooks/useApi";
 import { useAppointmentActionModals } from "../../hooks/useAppointmentActionModals";
+import {
+  durationMinutesForAppointment,
+  serviceNamesForAppointment,
+} from "../../utils/appointmentServices";
 
-function findServiceForAppointment(services, serviceId) {
-  if (serviceId == null) return null;
-  return services.find((s) => Number(s.id) === Number(serviceId));
-}
-
-function durationMinutesForAppointment(appo, service) {
-  if (appo.end_time) {
-    const start = new Date(appo.start_time).getTime();
-    const end = new Date(appo.end_time).getTime();
-    const diff = end - start;
-    if (diff > 0) return Math.max(1, Math.round(diff / 60000));
-  }
-  return service?.duration ?? 30;
-}
-
-function formatTimeRangeEs(appo, service) {
-  const dm = durationMinutesForAppointment(appo, service);
+function formatTimeRangeEs(appo, services) {
+  const dm = durationMinutesForAppointment(appo, services);
   const start = new Date(appo.start_time);
   const end = new Date(start.getTime() + dm * 60000);
   const opts = { hour: "2-digit", minute: "2-digit" };
@@ -383,11 +372,7 @@ const CalendarView = ({
             <div className="space-y-4">
               {pendingApps.length > 0 ? (
                 pendingApps.map((appo) => {
-                  const service = findServiceForAppointment(
-                    safeServices,
-                    appo.service_id,
-                  );
-                  const dur = durationMinutesForAppointment(appo, service);
+                  const dur = durationMinutesForAppointment(appo, safeServices);
                   const staffName = staffLabelForAppointment(
                     appo.staff_id,
                     teamMembers,
@@ -401,7 +386,7 @@ const CalendarView = ({
                       <div className="flex items-center gap-4 min-w-0">
                         <div className="bg-white/10 px-3 py-2 rounded-xl text-center min-w-[140px] shrink-0">
                           <p className="text-[10px] font-black leading-tight">
-                            {formatTimeRangeEs(appo, service)}
+                            {formatTimeRangeEs(appo, safeServices)}
                           </p>
                         </div>
                         <div className="min-w-0">
@@ -410,7 +395,9 @@ const CalendarView = ({
                           </p>
                           <div className="flex flex-wrap gap-x-2 gap-y-1 items-center mt-1">
                             <span className="text-[9px] font-black uppercase tracking-widest text-[#dcc7b1] truncate max-w-[12rem]">
-                              {service?.name || "Servicio"}
+                              {serviceNamesForAppointment(appo, safeServices).join(
+                                " · ",
+                              )}
                             </span>
                             <span className="text-[10px] opacity-30 hidden sm:inline">
                               •
@@ -471,10 +458,6 @@ const CalendarView = ({
               </h4>
               <div className="space-y-3">
                 {completedApps.map((appo) => {
-                  const svc = findServiceForAppointment(
-                    safeServices,
-                    appo.service_id,
-                  );
                   return (
                   <div
                     key={appo.id}
@@ -482,14 +465,16 @@ const CalendarView = ({
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 opacity-40 min-w-0">
                       <span className="text-[9px] font-black text-[#5d5045] shrink-0">
-                        {formatTimeRangeEs(appo, svc)}
+                        {formatTimeRangeEs(appo, safeServices)}
                       </span>
                       <div className="min-w-0">
                         <p className="font-bold text-sm text-[#5d5045] line-through truncate">
                           {appo.client_name}
                         </p>
                         <p className="text-[8px] font-black uppercase tracking-wider text-[#a39485] truncate">
-                          {svc?.name || "Servicio"}
+                          {serviceNamesForAppointment(appo, safeServices).join(
+                            " · ",
+                          )}
                         </p>
                       </div>
                     </div>

@@ -1,5 +1,13 @@
 import React, { useState, useCallback, useRef } from "react";
-import { Trash2, Pencil, Smartphone, Upload, Download } from "lucide-react";
+import {
+  Trash2,
+  Pencil,
+  Smartphone,
+  Upload,
+  Download,
+  Phone,
+  Mail,
+} from "lucide-react";
 import { useApi } from "../../hooks/useApi";
 import { DeleteClientConfirmModal } from "../modals/AppointmentModals.jsx";
 import {
@@ -479,11 +487,13 @@ const SalonClientsView = ({
                 </div>
                 <div className="mt-4 space-y-1">
                   <p className="text-[11px] font-medium text-[#a39485] flex items-center gap-2">
-                    <span className="opacity-50">📞</span> {client.telefono}
+                    <Phone className="w-3.5 h-3.5 shrink-0 text-[#c4bdb5]" strokeWidth={2} />
+                    {client.telefono}
                   </p>
                   {client.email && (
                     <p className="text-[11px] font-medium text-[#a39485] flex items-center gap-2">
-                      <span className="opacity-50">✉️</span> {client.email}
+                      <Mail className="w-3.5 h-3.5 shrink-0 text-[#c4bdb5]" strokeWidth={2} />
+                      {client.email}
                     </p>
                   )}
                 </div>

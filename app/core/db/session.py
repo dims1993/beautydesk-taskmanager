@@ -148,6 +148,11 @@ def init_db():
             )
             conn.execute(
                 text(
+                    'ALTER TABLE "appointment" ADD COLUMN IF NOT EXISTS additional_service_ids_json TEXT'
+                )
+            )
+            conn.execute(
+                text(
                     'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS integrations_access BOOLEAN DEFAULT TRUE'
                 )
             )

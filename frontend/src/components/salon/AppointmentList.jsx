@@ -6,6 +6,11 @@ import {
   Edit3,
 } from "lucide-react";
 import { useAppointmentActionModals } from "../../hooks/useAppointmentActionModals";
+import {
+  durationMinutesForAppointment,
+  serviceNamesForAppointment,
+  totalPriceForAppointment,
+} from "../../utils/appointmentServices";
 
 const AppointmentList = ({
   appointments = [],
@@ -16,8 +21,8 @@ const AppointmentList = ({
   const { openEdit, openPayment, openArchive, appointmentModals } =
     useAppointmentActionModals(services, onUpdateStatus, onRefresh);
 
-  const formatTimeRange = (startTime, durationMinutes = 30) => {
-    const start = new Date(startTime);
+  const formatTimeRange = (appo, durationMinutes) => {
+    const start = new Date(appo.start_time);
     const end = new Date(start.getTime() + durationMinutes * 60000);
     const options = { hour: "2-digit", minute: "2-digit" };
     return `${start.toLocaleTimeString("es-ES", options)} — ${end.toLocaleTimeString("es-ES", options)}`;
@@ -50,10 +55,9 @@ const AppointmentList = ({
     <>
       <div className="space-y-6">
         {safeAppointments.map((appo) => {
-          const service = services.find(
-            (s) => Number(s.id) === Number(appo.service_id),
-          );
-          const duration = service?.duration || 30;
+          const duration = durationMinutesForAppointment(appo, services);
+          const names = serviceNamesForAppointment(appo, services).join(" · ");
+          const priceTotal = totalPriceForAppointment(appo, services);
 
           return (
             <div
@@ -64,7 +68,7 @@ const AppointmentList = ({
                 <div className="space-y-4">
                   <div className="flex flex-wrap items-center gap-3">
                     <span className="bg-[#5d5045] text-[#f5ebe0] px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest">
-                      {formatTimeRange(appo.start_time, duration)}
+                      {formatTimeRange(appo, duration)}
                     </span>
                     <div className="flex items-center gap-1.5 text-[9px] font-black text-[#c4a484] uppercase tracking-widest">
                       <Clock className="w-3 h-3" />
@@ -76,13 +80,13 @@ const AppointmentList = ({
                     <h4 className="font-serif text-2xl md:text-3xl text-[#5d5045]">
                       {appo.client_name}
                     </h4>
-                    <div className="flex items-center gap-2">
-                      <p className="text-[10px] font-black text-[#8c857d] uppercase tracking-[0.2em]">
-                        {service?.name || "Servicio Premium"}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-[10px] font-black text-[#8c857d] uppercase tracking-[0.2em] max-w-[min(100%,28rem)]">
+                        {names || "Servicio"}
                       </p>
-                      <span className="w-1 h-1 bg-[#eaddcf] rounded-full" />
+                      <span className="w-1 h-1 bg-[#eaddcf] rounded-full shrink-0" />
                       <p className="text-[10px] font-black text-[#5d5045] tracking-widest">
-                        {service?.price}€
+                        {priceTotal}€
                       </p>
                     </div>
                   </div>

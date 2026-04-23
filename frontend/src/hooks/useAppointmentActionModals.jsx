@@ -4,6 +4,7 @@ import {
   EditAppointmentModal,
   ArchiveAppointmentModal,
 } from "../components/modals/AppointmentModals.jsx";
+import { totalPriceForAppointment } from "../utils/appointmentServices";
 
 /**
  * Shared appointment actions: edit, payment (complete), archive — same modals as AppointmentList.
@@ -31,10 +32,8 @@ export function useAppointmentActionModals(
 
   const openPayment = useCallback(
     (appo) => {
-      const service = safeServices.find(
-        (s) => Number(s.id) === Number(appo.service_id),
-      );
-      setSelectedAppo({ ...appo, price: service?.price });
+      const price = totalPriceForAppointment(appo, safeServices);
+      setSelectedAppo({ ...appo, price });
       setModalType("payment");
     },
     [safeServices],

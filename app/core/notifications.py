@@ -18,13 +18,17 @@ conf = ConnectionConfig(
 
 async def send_appointment_confirmation(email: str, client_name: str, date: str, service_name: str = "Servicio"):
     if not email or not str(email).strip():
-        print("📭 Skipping appointment confirmation email: client_email is empty.")
+        print("Skipping appointment confirmation email: client_email is empty.")
         return
 
+    safe_client = html_module.escape((client_name or "").strip() or "cliente")
+    safe_service = html_module.escape((service_name or "").strip() or "Servicio")
+    safe_date = html_module.escape((date or "").strip())
+
     html = f"""
-    <p>Hola <b>{client_name}</b>,</p>
-    <p>Tu cita para <b>{service_name}</b> ha sido confirmada para el día {date}.</p>
-    <p>¡Te esperamos en BeautyTask!</p>
+    <p>Hola <b>{safe_client}</b>,</p>
+    <p>Tu cita para <b>{safe_service}</b> ha sido confirmada para el día {safe_date}.</p>
+    <p>Te esperamos en BeautyTask.</p>
     """
 
     message = MessageSchema(

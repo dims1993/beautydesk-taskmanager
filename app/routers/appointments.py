@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlmodel import Session, select
 from typing import List, Optional  # Añadimos Optional
@@ -20,6 +22,36 @@ from app.billing.subscription import calendar_sync_allowed
 
 router = APIRouter(prefix="/appointments", tags=["appointments"])
 
+
+def _parse_extra_service_ids_json(raw: Optional[str]) -> list[int]:
+    if not raw or not str(raw).strip():
+        return []
+    try:
+        data = json.loads(raw)
+        if not isinstance(data, list):
+            return []
+        return [int(x) for x in data]
+    except (ValueError, TypeError, json.JSONDecodeError):
+        return []
+
+
+def appointment_to_out(a: Appointment) -> AppointmentOut:
+    return AppointmentOut(
+        id=a.id,
+        client_name=a.client_name,
+        start_time=a.start_time,
+        end_time=a.end_time,
+        status=a.status,
+        service_id=a.service_id,
+        staff_id=a.staff_id,
+        additional_service_ids=_parse_extra_service_ids_json(
+            getattr(a, "additional_service_ids_json", None)
+        ),
+        final_price=a.final_price,
+        payment_method=a.payment_method,
+    )
+
+
 # --- ESQUEMAS (Definidos arriba para que los endpoints los reconozcan) ---
 class StatusUpdate(BaseModel):
     new_status: str
@@ -28,7 +60,7 @@ class StatusUpdate(BaseModel):
 
 # --- ENDPOINTS ---
 
-@router.get("/")
+@router.get("/", response_model=List[AppointmentOut])
 async def get_appointments(
     db: Session = Depends(get_session),
     current_user: User = Depends(get_current_user_for_app)
@@ -46,14 +78,14 @@ async def get_appointments(
         
         results = db.exec(statement).all()
         print(f"DEBUG: Appointments in DB: {len(results)}")
-        return results
+        return [appointment_to_out(a) for a in results]
         
     except Exception as e:
         print(f"❌ Error en GET appointments: {e}")
         # Devolvemos una lista vacía en lugar de un 500 para no romper el CORS
         return []
 
-@router.get("/upcoming")
+@router.get("/upcoming", response_model=List[AppointmentOut])
 async def get_upcoming(
     db: Session = Depends(get_session),
     current_user: User = Depends(get_current_user_for_app)
@@ -72,7 +104,7 @@ async def get_upcoming(
             statement = statement.where(Appointment.organization_id == current_user.organization_id)
         
         results = db.exec(statement).all()
-        return results
+        return [appointment_to_out(a) for a in results]
         
     except Exception as e:
         print(f"❌ Error en GET upcoming appointments: {e}")
@@ -92,24 +124,34 @@ async def create_appointment(
             detail="Completa los datos fiscales de tu negocio en Ajustes antes de crear citas.",
         )
 
-    service = db.get(Service, data.service_id)
-    if not service:
-        raise HTTPException(status_code=400, detail="Servicio no encontrado")
+    service_ids = list(data.service_ids)
+    ordered_services: list[Service] = []
+    for sid in service_ids:
+        svc = db.get(Service, sid)
+        if not svc:
+            raise HTTPException(status_code=400, detail="Servicio no encontrado")
+        if current_user.role != UserRole.SUPER_ADMIN:
+            if svc.organization_id != current_user.organization_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="El servicio no pertenece a tu organización.",
+                )
+        ordered_services.append(svc)
 
-    if current_user.role != UserRole.SUPER_ADMIN:
-        if service.organization_id != current_user.organization_id:
-            raise HTTPException(
-                status_code=400,
-                detail="El servicio no pertenece a tu organización.",
-            )
+    primary = ordered_services[0]
+    extras = service_ids[1:]
 
-    appointment_data = data.model_dump()
+    appointment_data = data.model_dump(exclude={"service_ids"})
+    appointment_data["service_id"] = primary.id
     appointment_data["staff_id"] = current_user.id
+    appointment_data["additional_service_ids_json"] = (
+        json.dumps(extras) if extras else None
+    )
     new_appo = Appointment(**appointment_data)
     new_appo.organization_id = (
         current_user.organization_id
         if current_user.organization_id is not None
-        else service.organization_id
+        else primary.organization_id
     )
     if new_appo.organization_id is None:
         raise HTTPException(
@@ -117,8 +159,8 @@ async def create_appointment(
             detail="No se puede determinar la organización de la cita.",
         )
 
-    duration = service.duration if service else 60
-    new_appo.end_time = new_appo.start_time + timedelta(minutes=duration)
+    total_minutes = sum((s.duration or 60) for s in ordered_services)
+    new_appo.end_time = new_appo.start_time + timedelta(minutes=total_minutes)
 
     collision_stmt = select(Appointment).where(
         Appointment.staff_id == current_user.id,
@@ -167,13 +209,15 @@ async def create_appointment(
         except Exception as e:
             print(f"⚠️ Google Calendar sync failed for appointment {new_appo.id}: {e}")
 
+    service_label = " + ".join(s.name for s in ordered_services)
     background_tasks.add_task(
-        send_appointment_confirmation, 
-        email=new_appo.client_email, 
-        client_name=new_appo.client_name, 
-        date=new_appo.start_time.strftime("%d/%m/%Y %H:%M")
+        send_appointment_confirmation,
+        email=new_appo.client_email,
+        client_name=new_appo.client_name,
+        date=new_appo.start_time.strftime("%d/%m/%Y %H:%M"),
+        service_name=service_label,
     )
-    return new_appo
+    return appointment_to_out(new_appo)
 
 
 def _user_can_access_appointment(user: User, appo: Appointment) -> bool:
@@ -241,11 +285,12 @@ def update_appointment(
     appo.service_id = new_service_id
     appo.start_time = new_start
     appo.end_time = new_end
+    appo.additional_service_ids_json = None
 
     db.add(appo)
     db.commit()
     db.refresh(appo)
-    return appo
+    return appointment_to_out(appo)
 
 
 @router.patch("/{appointment_id}/status", response_model=AppointmentOut)
@@ -268,14 +313,17 @@ def update_status(
     db.add(appo)
     db.commit()
     db.refresh(appo)
-    return appo
+    return appointment_to_out(appo)
 
 @router.get("/archived", response_model=List[AppointmentOut])
 def get_archived(
     db: Session = Depends(get_session), 
     current_user: User = Depends(get_current_user_for_app)
 ):
-    return db.exec(select(Appointment).where(
-        Appointment.staff_id == current_user.id, 
-        Appointment.status == "deleted"
-    )).all()
+    rows = db.exec(
+        select(Appointment).where(
+            Appointment.staff_id == current_user.id,
+            Appointment.status == "deleted",
+        )
+    ).all()
+    return [appointment_to_out(a) for a in rows]
