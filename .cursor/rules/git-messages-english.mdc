@@ -1,0 +1,11 @@
+---
+description: Git commits and PR text must be in English
+alwaysApply: true
+---
+
+# Git messages in English
+
+- **All `git commit` messages** (subject and body) must be written in **English**, not Spanish or other languages, unless the user explicitly asks for a different language in that session.
+- The same applies to **pull request titles and descriptions** in this project.
+
+Use Conventional Commits style when it fits the repo (e.g. `fix:`, `feat:`), and keep the subject line clear and imperative.
