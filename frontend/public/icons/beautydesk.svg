@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="BeautyDesk">
+  <rect width="512" height="512" rx="108" fill="#5d5045"/>
+  <g fill="#f5ebe0" transform="translate(256 248)">
+    <!-- center sparkle (salon / excellence) -->
+    <path
+      d="M0-92c5 0 9 3 10 8l10 32 34 4c5 0 8 4 8 8s-3 7-8 8l-34 4-10 32c-1 4-5 7-10 7s-9-3-10-7l-10-32-34-4c-5-1-8-3-8-8s3-7 8-8l34-4 10-32c1-5 5-8 10-8z"
+    />
+    <circle cx="-118" cy="28" r="20" opacity="0.95"/>
+    <circle cx="118" cy="28" r="20" opacity="0.95"/>
+    <path
+      d="M-32 56h64c6 0 10 4 10 10s-4 10-10 10h-64c-6 0-10-4-10-10s4-10 10-10z"
+      opacity="0.9"
+    />
+  </g>
+</svg>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { useApi } from "./hooks/useApi";
 import {
@@ -103,6 +103,14 @@ function App() {
   const [isRegistering, setIsRegistering] = useState(false);
   const [showFirstVisitGuide, setShowFirstVisitGuide] = useState(false);
   const [guidedTourActive, setGuidedTourActive] = useState(false);
+
+  /** Main nav (mobile/desktop pill): switch tab and show content from the top. */
+  const setActiveTabFromNavbar = useCallback((tabId) => {
+    setActiveTab(tabId);
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    }
+  }, []);
 
   const agendaWeekAppointments = (apps) => {
     const now = new Date();
@@ -428,7 +436,7 @@ function App() {
                     <main className="lg:col-span-7 space-y-10">
                       <DesktopNavBar
                         activeTab={activeTab}
-                        setActiveTab={setActiveTab}
+                        setActiveTab={setActiveTabFromNavbar}
                         currentUser={currentUser}
                         onLogout={handleLogout}
                         guidedTourActive={guidedTourActive}
@@ -514,7 +522,7 @@ function App() {
                   </div>
                   <MobileNavbar
                     activeTab={activeTab}
-                    setActiveTab={setActiveTab}
+                    setActiveTab={setActiveTabFromNavbar}
                     currentUser={currentUser}
                     onLogout={handleLogout}
                     guidedTourActive={guidedTourActive}
