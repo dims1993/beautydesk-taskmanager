@@ -1,17 +1,38 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useApi } from "../../hooks/useApi";
 import {
   Sparkles,
   MessageCircle,
   User,
   Phone,
+  Calendar,
   CheckCircle2,
   X,
   ChevronRight,
   Plus,
-  Minus,
 } from "lucide-react";
 import { totalsForSelectedServiceIds } from "../../utils/appointmentServices";
+
+const SWIPE_REVEAL_PX = 88;
+
+/** True for phones / touch-first devices (swipe row). Desktop uses explicit "Quitar". */
+function useTouchPrimaryUi() {
+  const [touchPrimary, setTouchPrimary] = useState(false);
+  useEffect(() => {
+    const coarse = window.matchMedia("(pointer: coarse)");
+    const noHover = window.matchMedia("(hover: none)");
+    const apply = () =>
+      setTouchPrimary(coarse.matches || noHover.matches);
+    apply();
+    coarse.addEventListener("change", apply);
+    noHover.addEventListener("change", apply);
+    return () => {
+      coarse.removeEventListener("change", apply);
+      noHover.removeEventListener("change", apply);
+    };
+  }, []);
+  return touchPrimary;
+}
 
 /**
  * Digits-only international number for wa.me (no leading +).
@@ -102,6 +123,69 @@ const AppointmentForm = ({
     () => totalsForSelectedServiceIds(selectedServiceIds, services),
     [selectedServiceIds, services],
   );
+
+  const selectedServicesKey = selectedServiceIds.join(",");
+
+  const touchPrimaryUi = useTouchPrimaryUi();
+  const touchDragRef = useRef(null);
+  const swipeXRef = useRef({});
+  const [swipeXByIndex, setSwipeXByIndex] = useState({});
+  const [swipeDraggingIndex, setSwipeDraggingIndex] = useState(null);
+
+  swipeXRef.current = swipeXByIndex;
+
+  useEffect(() => {
+    setSwipeXByIndex({});
+  }, [selectedServicesKey]);
+
+  const handleSwipeTouchStart = (index, e) => {
+    if (disabledReason || selectedServiceIds.length <= 1) return;
+    const t = e.touches[0];
+    if (!t) return;
+    setSwipeDraggingIndex(index);
+    touchDragRef.current = {
+      index,
+      startX: t.clientX,
+      startOffset: swipeXRef.current[index] ?? -SWIPE_REVEAL_PX,
+    };
+  };
+
+  const handleSwipeTouchMove = (index, e) => {
+    const d = touchDragRef.current;
+    if (!d || d.index !== index) return;
+    const t = e.touches[0];
+    if (!t) return;
+    const delta = t.clientX - d.startX;
+    const next = Math.min(
+      0,
+      Math.max(-SWIPE_REVEAL_PX, d.startOffset + delta),
+    );
+    setSwipeXByIndex((s) => ({ ...s, [index]: next }));
+  };
+
+  const handleSwipeTouchEnd = (index) => {
+    touchDragRef.current = null;
+    setSwipeDraggingIndex(null);
+    setSwipeXByIndex((s) => {
+      const cur = s[index] ?? -SWIPE_REVEAL_PX;
+      const snap = cur > -SWIPE_REVEAL_PX / 2 ? 0 : -SWIPE_REVEAL_PX;
+      const next = {};
+      selectedServiceIds.forEach((_, i) => {
+        next[i] = i === index ? snap : -SWIPE_REVEAL_PX;
+      });
+      return next;
+    });
+  };
+
+  const removeServiceLine = (index) => {
+    setSelectedServiceIds((prev) =>
+      prev.length <= 1 ? prev : prev.filter((_, i) => i !== index),
+    );
+    setSwipeXByIndex({});
+  };
+
+  const selectClassName =
+    "w-full min-w-0 border-0 bg-transparent py-5 text-base font-bold tracking-wider text-[#5d5045] outline-none focus:ring-0 cursor-pointer";
 
   useEffect(() => {
     if (formData.client_name.length > 1) {
@@ -368,13 +452,18 @@ const AppointmentForm = ({
             </button>
           </div>
           <div className="space-y-2 min-w-0">
-            {selectedServiceIds.map((sid, index) => (
-              <div
-                key={`${sid}-${index}`}
-                className="flex min-w-0 w-full max-w-full items-stretch gap-2"
-              >
+            {touchPrimaryUi && selectedServiceIds.length > 1 && (
+              <p className="px-2 text-[9px] font-bold uppercase tracking-widest text-[#a39485]">
+                Desliza el servicio hacia la derecha para eliminarlo
+              </p>
+            )}
+            {selectedServiceIds.map((sid, index) => {
+              const offset = swipeXByIndex[index] ?? -SWIPE_REVEAL_PX;
+              const canRemove = selectedServiceIds.length > 1 && !disabledReason;
+
+              const selectEl = (
                 <select
-                  className="min-w-0 flex-1 max-w-full box-border px-4 py-5 sm:px-6 bg-[#FAF9F6] border border-[#eaddcf] rounded-2xl outline-none cursor-pointer text-base font-bold tracking-wider text-[#5d5045] appearance-none focus:border-[#5d5045] transition-all"
+                  className={`${selectClassName} px-4 sm:px-6 ${touchPrimaryUi && canRemove ? "pr-4" : ""}`}
                   value={sid}
                   onChange={(e) => {
                     const v = e.target.value;
@@ -396,25 +485,71 @@ const AppointmentForm = ({
                     ))
                   )}
                 </select>
-                <button
-                  type="button"
-                  disabled={
-                    !!disabledReason || selectedServiceIds.length <= 1
-                  }
-                  onClick={() =>
-                    setSelectedServiceIds((prev) =>
-                      prev.length <= 1
-                        ? prev
-                        : prev.filter((_, i) => i !== index),
-                    )
-                  }
-                  className="shrink-0 flex h-auto w-11 items-center justify-center rounded-2xl border border-[#eaddcf] bg-white text-[#a39485] hover:border-red-200 hover:text-red-500 disabled:opacity-40"
-                  title="Quitar servicio"
+              );
+
+              if (!touchPrimaryUi && canRemove) {
+                return (
+                  <div
+                    key={`${sid}-${index}`}
+                    className="flex min-w-0 w-full max-w-full items-stretch gap-2 rounded-2xl border border-[#eaddcf] bg-[#FAF9F6] focus-within:border-[#5d5045] focus-within:bg-white"
+                  >
+                    <div className="min-w-0 flex-1">{selectEl}</div>
+                    <button
+                      type="button"
+                      onClick={() => removeServiceLine(index)}
+                      className="shrink-0 self-stretch px-4 text-[9px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 rounded-r-2xl"
+                    >
+                      Quitar
+                    </button>
+                  </div>
+                );
+              }
+
+              if (!canRemove) {
+                return (
+                  <div
+                    key={`${sid}-${index}`}
+                    className="min-w-0 w-full rounded-2xl border border-[#eaddcf] bg-[#FAF9F6] focus-within:border-[#5d5045] focus-within:bg-white"
+                  >
+                    {selectEl}
+                  </div>
+                );
+              }
+
+              return (
+                <div
+                  key={`${sid}-${index}`}
+                  className="relative min-w-0 w-full max-w-full touch-pan-x overflow-hidden rounded-2xl border border-[#eaddcf] bg-[#FAF9F6]"
                 >
-                  <Minus className="w-4 h-4" strokeWidth={2.5} />
-                </button>
-              </div>
-            ))}
+                  <div
+                    className="flex min-w-0 will-change-transform"
+                    style={{
+                      width: `calc(100% + ${SWIPE_REVEAL_PX}px)`,
+                      transform: `translateX(${offset}px)`,
+                      transition:
+                        swipeDraggingIndex === index
+                          ? "none"
+                          : "transform 0.2s ease-out",
+                    }}
+                    onTouchStart={(e) => handleSwipeTouchStart(index, e)}
+                    onTouchMove={(e) => handleSwipeTouchMove(index, e)}
+                    onTouchEnd={() => handleSwipeTouchEnd(index)}
+                    onTouchCancel={() => handleSwipeTouchEnd(index)}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => removeServiceLine(index)}
+                      className="flex w-[88px] shrink-0 items-center justify-center bg-red-500 px-1 text-[9px] font-black uppercase leading-tight tracking-tight text-white active:bg-red-600"
+                    >
+                      Eliminar
+                    </button>
+                    <div className="min-w-0 flex-1 border-l border-[#eaddcf] bg-[#FAF9F6]">
+                      {selectEl}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
           {selectedServiceIds.length > 0 && services.length > 0 && (
             <p className="px-2 text-[10px] font-bold uppercase tracking-widest text-[#c4a484]">
@@ -424,21 +559,24 @@ const AppointmentForm = ({
           )}
         </div>
 
-        {/* Horario: ancho completo, mismo padding que el resto (iOS / Safari) */}
-        <div className="min-w-0 w-full max-w-full space-y-3 overflow-x-clip">
+        {/* Horario: misma cáscara que Cliente / Teléfono (icono + pl-14) */}
+        <div className="space-y-3">
           <label className="px-2 text-[10px] font-black text-[#8c857d] uppercase tracking-[0.2em]">
             Horario
           </label>
-          <input
-            required
-            type="datetime-local"
-            className="block box-border w-full min-w-0 max-w-full px-4 py-5 sm:px-6 bg-[#FAF9F6] border border-[#eaddcf] rounded-2xl outline-none text-base font-bold tracking-wide text-[#5d5045] focus:border-[#5d5045] transition-all [color-scheme:light]"
-            style={{ fontSize: "16px" }}
-            value={formData.start_time}
-            onChange={(e) =>
-              setFormData({ ...formData, start_time: e.target.value })
-            }
-          />
+          <div className="relative min-w-0 w-full">
+            <Calendar className="pointer-events-none absolute left-5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-[#c4bdb5]" />
+            <input
+              required
+              type="datetime-local"
+              className="box-border w-full min-w-0 max-w-full pl-14 pr-6 py-5 bg-[#FAF9F6] border border-[#eaddcf] rounded-2xl outline-none focus:border-[#5d5045] focus:bg-white transition-all text-base font-bold tracking-wider text-[#5d5045] [color-scheme:light] max-w-full [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-4 [&::-webkit-calendar-picker-indicator]:top-1/2 [&::-webkit-calendar-picker-indicator]:h-5 [&::-webkit-calendar-picker-indicator]:w-5 [&::-webkit-calendar-picker-indicator]:-translate-y-1/2 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-datetime-edit]:m-0 [&::-webkit-datetime-edit]:p-0 [&::-webkit-datetime-edit-fields-wrapper]:p-0"
+              style={{ fontSize: "16px" }}
+              value={formData.start_time}
+              onChange={(e) =>
+                setFormData({ ...formData, start_time: e.target.value })
+              }
+            />
+          </div>
         </div>
 
         {/* Botón de Acción Principal */}
