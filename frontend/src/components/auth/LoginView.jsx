@@ -173,7 +173,7 @@ export default function LoginView({ onLogin, onGoToRegister }) {
                   required
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="w-full bg-[#FAF9F6] border border-[#eaddcf] py-5 pl-12 pr-4 rounded-2xl text-[11px] font-black tracking-widest focus:outline-none focus:border-[#5d5045] text-[#5d5045]"
+                  className="w-full bg-[#FAF9F6] border border-[#eaddcf] py-5 pl-12 pr-4 rounded-2xl text-base font-black tracking-widest focus:outline-none focus:border-[#5d5045] text-[#5d5045] placeholder:uppercase"
                 />
               </div>
               <div className="relative group">
@@ -184,7 +184,7 @@ export default function LoginView({ onLogin, onGoToRegister }) {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-[#FAF9F6] border border-[#eaddcf] py-5 pl-12 pr-4 rounded-2xl text-[11px] font-black tracking-widest focus:outline-none focus:border-[#5d5045] text-[#5d5045]"
+                  className="w-full bg-[#FAF9F6] border border-[#eaddcf] py-5 pl-12 pr-4 rounded-2xl text-base font-black tracking-widest focus:outline-none focus:border-[#5d5045] text-[#5d5045] placeholder:uppercase"
                 />
               </div>
             </div>

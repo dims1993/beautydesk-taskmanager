@@ -200,6 +200,13 @@ function App() {
   };
 
   useEffect(() => {
+    const so = window.screen?.orientation;
+    if (so && typeof so.lock === "function") {
+      so.lock("portrait").catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
     if (isLoggedIn) fetchInitialData();
   }, [isLoggedIn]);
 

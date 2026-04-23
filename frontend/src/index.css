@@ -1,7 +1,20 @@
 @import "tailwindcss";
 
-/* iOS (y móviles) hacen zoom al enfocar inputs con fuente < 16px. Mínimo 1rem en controles. */
+/*
+  iOS Safari hace zoom al enfocar inputs con fuente computada < 16px.
+  Las utilidades Tailwind (p. ej. text-[11px]) pisan @layer base sin !important;
+  forzamos 16px en controles editables para no romper el layout al enfocar.
+*/
 @layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    overflow-x: clip;
+  }
+
   @media (max-width: 1280px) {
     input:not(
         [type="button"],
@@ -15,7 +28,7 @@
       ),
     select,
     textarea {
-      font-size: 1rem;
+      font-size: 16px !important;
       line-height: 1.5;
     }
   }
