@@ -1,0 +1,19 @@
+{
+  "name": "BeautyDesk",
+  "short_name": "BeautyDesk",
+  "description": "App para salones: citas, calendario, clientes y equipo.",
+  "lang": "es",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#faf9f7",
+  "theme_color": "#5d5045",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

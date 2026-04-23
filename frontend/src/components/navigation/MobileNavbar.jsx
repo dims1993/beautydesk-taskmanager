@@ -16,7 +16,7 @@ const MobileNavbar = ({
   return (
     <nav
       id="app-nav-mobile"
-      className={`fixed bottom-8 left-1/2 -translate-x-1/2 md:hidden w-auto ${guidedTourActive ? "z-[210]" : "z-50"}`}
+      className={`fixed bottom-[max(2rem,env(safe-area-inset-bottom,0px))] left-1/2 -translate-x-1/2 md:hidden w-auto ${guidedTourActive ? "z-[210]" : "z-50"}`}
     >
       <div className="flex items-center gap-2 px-3 py-2 bg-white/40 backdrop-blur-md rounded-full border border-white/40 shadow-[0_8px_32px_rgba(93,80,69,0.1)]">
         {APP_MAIN_NAV_TABS.map((tab) => {

@@ -125,3 +125,31 @@ Despliega. La URL final será `https://<proyecto>.vercel.app` o tu dominio custo
 - **Render:** Settings del Web Service → Custom Domain para la API.
 - **Vercel:** Project → Domains para el front.
 - Actualiza de nuevo `CORS_ORIGINS`, `FRONTEND_URL`, orígenes de Google y, si aplica, la URL del webhook en Stripe.
+
+---
+
+## 9. Piloto: uso real con el equipo (fase de pruebas mientras se itera en “producción”)
+
+Queremos que el personal use la app de verdad (móvil o escritorio) **antes** de dar el corte final; el stack (Render + Vercel) ya sirve. Esta lista evita sorpresas y alinea expectativas.
+
+### Antes de repartir el enlace
+
+1. **Una sola URL pública** del front (Vercel) que todos compartáis: `https://…vercel.app` o dominio propio. Asegura que en Render, `CORS_ORIGINS` y `FRONTEND_URL` usan **exactamente** esa base.
+2. **API estable:** anota la URL de Render (por hibernación en plan gratuito: el primer acceso del día puede tardar ~1 min; en plan de pago no hiberna). Decidid si aceptáis eso o subís de plan.
+3. **Stripe y expectativas de cobro**
+   - **Modo test** (claves `sk_test_` / webhooks de test): adecuado para pilotos con tarjeta de prueba; el dinero no es real.
+   - **Modo live:** solo cuando estéis listos. Con `ENFORCE_ORG_STRIPE_SUBSCRIPTION=true` cada org nueva **debe** completar el checkout (prueba o pago) para desbloquear tráfico: comunicadlo al equipo.
+4. **Correo (registro con código):** en Render, `MAIL_*` correcta (Gmail = contraseña de aplicación). Si falla, el API puede responder **503**; no mandéis a nadie a registrarse el mismo día que depuréis SMTP.
+5. **Google (login / Calendar):** en Google Cloud, orígenes y callbacks deben coincidir con Vercel y la API. Si alguien solo usa **email+contraseña**, depende menos de Google.
+6. **Comunicación al equipo (plantilla mínima):**
+   - “Es una **versión de trabajo**; puede haber cortes puntuales y mejoras frecuentes.”
+   - Cómo pedir ayuda: por ejemplo enlace a **Contacto** de la app o WhatsApp de negocio (`VITE_BUSINESS_WHATSAPP`).
+   - Cómo **añadir a inicio** en móvil: en Chrome/ Safari, *Añadir a la pantalla de inicio* / *Compartir → Añadir a pantalla de inicio* (la app publica un `manifest` en `/manifest.webmanifest`).
+
+### Cada pocos días en piloto
+
+- Revisar **logs** en Render si hay errores 5xx; revisar entregas de **webhook** en Stripe.
+- Aviso si hacéis **redeploy** del front: hay que explicar que pueden refrescar o cerrar y volver a abrir.
+- Respaldo: con PostgreSQL en Render, valorad **backups** del plan o export periódico según carga de datos críticos.
+
+Con esto la experiencia móvil/escritorio es la misma build; el diseño (`MobileNavbar`, etc.) ya apunta a uso táctil. Los iconos 512px opcionales para el manifest se pueden añadir en `public/` si queréis un icono de marca (ahora se usa el `vite.svg` del proyecto).

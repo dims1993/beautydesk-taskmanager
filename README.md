@@ -9,6 +9,8 @@ The backend it will be deployed by render: https://beautydesk-taskmanager.onrend
 
 **Despliegue (Render + Vercel):** guía con variables, Stripe, CORS y orden de pasos en [`docs/DEPLOY_RENDER_VERCEL.md`](docs/DEPLOY_RENDER_VERCEL.md).
 
+**Piloto con el equipo (uso real mientras seguís iterando):** checklist y expectativas (hibernación, Stripe test/live, Añadir a inicio) en la **sección 9** de [`docs/DEPLOY_RENDER_VERCEL.md`](docs/DEPLOY_RENDER_VERCEL.md). El manifiesto web en `frontend/public/manifest.webmanifest` mejora título, color de tema e “instalación” en la pantalla de inicio en móvil.
+
 ---
 
 ## Tech Stack
