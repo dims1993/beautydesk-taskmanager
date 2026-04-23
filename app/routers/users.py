@@ -203,6 +203,8 @@ def read_users_me(
     org = None
     org_name = None
     org_city = None
+    org_billing_line1 = None
+    org_billing_line2 = None
     cash_close_configured = False
     subscription_plan = None
     payment_method = None
@@ -218,6 +220,8 @@ def read_users_me(
         if org:
             org_name = (org.name or "").strip() or None
             org_city = (org.city or "").strip() or None
+            org_billing_line1 = (org.billing_address_line1 or "").strip() or None
+            org_billing_line2 = (org.billing_address_line2 or "").strip() or None
             h = org.cash_close_password_hash
             cash_close_configured = bool(h and str(h).strip())
             subscription_plan, payment_method = org_subscription_and_payment_str(org)
@@ -242,6 +246,8 @@ def read_users_me(
         **base,
         organization_name=org_name,
         organization_city=org_city,
+        organization_billing_address_line1=org_billing_line1,
+        organization_billing_address_line2=org_billing_line2,
         cash_close_password_configured=cash_close_configured,
         subscription_plan=subscription_plan,
         payment_method=payment_method,

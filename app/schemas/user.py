@@ -166,6 +166,8 @@ class UserMeOut(UserOut):
 
     organization_name: Optional[str] = None
     organization_city: Optional[str] = None
+    organization_billing_address_line1: Optional[str] = None
+    organization_billing_address_line2: Optional[str] = None
     cash_close_password_configured: bool = False
     # Plan de la organización (suscripción) y permisos efectivos según ese plan
     subscription_plan: Optional[str] = None

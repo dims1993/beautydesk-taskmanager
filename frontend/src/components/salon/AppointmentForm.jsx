@@ -10,6 +10,34 @@ import {
   ChevronRight,
 } from "lucide-react";
 
+/** Text for wa.me after creating an appointment (salon + billing address from profile). */
+function buildAppointmentWhatsAppText(clientName, startAt, currentUser) {
+  const d = new Date(startAt);
+  if (Number.isNaN(d.getTime())) return "";
+  const datePart = d.toLocaleDateString("es-ES", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  const timePart = d.toLocaleTimeString("es-ES", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const salon = (currentUser?.organization_name || "").trim();
+  const address = [
+    currentUser?.organization_billing_address_line1,
+    currentUser?.organization_billing_address_line2,
+    currentUser?.organization_city,
+  ]
+    .map((s) => (s || "").trim())
+    .filter(Boolean)
+    .join(", ");
+  const where = [salon, address].filter(Boolean).join(" ").trim();
+  const at = where || "nuestro salón";
+  return `Hola ${clientName}, te confirmo tu cita en ${at} para el ${datePart}, ${timePart}. ¡Te esperamos!`;
+}
+
 const AppointmentForm = ({
   services,
   currentUser,
@@ -116,21 +144,10 @@ const AppointmentForm = ({
 
       await apiRequest("/appointments/", "POST", payload);
 
-      const formattedDate = new Date(formData.start_time).toLocaleString(
-        "es-ES",
-        {
-          weekday: "long",
-          day: "numeric",
-          month: "long",
-          hour: "2-digit",
-          minute: "2-digit",
-        },
-      );
-
       setLastCreated({
         name: formData.client_name,
         phone: formData.client_phone,
-        date: formattedDate,
+        startAt: formData.start_time,
       });
 
       setFormData({
@@ -198,7 +215,11 @@ const AppointmentForm = ({
             <button
               type="button"
               onClick={() => {
-                const msg = `Hola ${lastCreated.name}, te confirmo tu cita en BeautyTask 💇‍♀️ para el ${lastCreated.date}. ¡Te esperamos!`;
+                const msg = buildAppointmentWhatsAppText(
+                  lastCreated.name,
+                  lastCreated.startAt,
+                  currentUser,
+                );
                 window.open(
                   `https://wa.me/34${lastCreated.phone.replace(/\s+/g, "")}?text=${encodeURIComponent(msg)}`,
                   "_blank",
