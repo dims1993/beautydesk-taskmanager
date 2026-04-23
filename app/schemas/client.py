@@ -21,3 +21,29 @@ class ClientOut(ClientCreate):
 
     class Config:
         from_attributes = True
+
+
+class ClientImportItem(BaseModel):
+    """Fila para importación / sincronización desde agenda o fichero vCard."""
+
+    nombre: str = ""
+    apellidos: Optional[str] = None
+    telefono: str
+    email: Optional[EmailStr] = None
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def empty_email_to_none_import(cls, v):
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return None
+        return v
+
+
+class ClientImportRequest(BaseModel):
+    clients: list[ClientImportItem]
+
+
+class ClientImportResult(BaseModel):
+    created: int
+    updated: int
+    skipped: int

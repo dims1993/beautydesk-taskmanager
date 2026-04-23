@@ -1,7 +1,14 @@
 import React, { useState, useCallback, useRef } from "react";
-import { Trash2, Pencil } from "lucide-react";
+import { Trash2, Pencil, Smartphone, Upload, Download } from "lucide-react";
 import { useApi } from "../../hooks/useApi";
 import { DeleteClientConfirmModal } from "../modals/AppointmentModals.jsx";
+import {
+  pickContactsFromDevice,
+  contactsPickerSupported,
+  parseVcfToClients,
+  buildClientsVcf,
+  downloadVcf,
+} from "../../utils/contactSync";
 
 /**
  * Directorio de clientes del salón (CRM): buscar, alta, edición y baja.
@@ -21,6 +28,10 @@ const SalonClientsView = ({
   const [clientPendingDelete, setClientPendingDelete] = useState(null);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
   const deleteInFlightRef = useRef(false);
+  const vcfInputRef = useRef(null);
+
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [syncMessage, setSyncMessage] = useState(null);
 
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState(null);
@@ -117,6 +128,86 @@ const SalonClientsView = ({
     ? `${clientPendingDelete.nombre} ${clientPendingDelete.apellidos || ""}`.trim()
     : "";
 
+  const runContactImport = async (rows) => {
+    setSyncMessage(null);
+    if (!rows?.length) {
+      setSyncMessage(
+        "No hay contactos con teléfono para importar. Prueba otro archivo o selecciona otras fichas.",
+      );
+      return;
+    }
+    setSyncBusy(true);
+    try {
+      const payload = {
+        clients: rows.map((r) => ({
+          nombre: r.nombre || "Cliente",
+          apellidos: r.apellidos ?? null,
+          telefono: r.telefono,
+          email: r.email || null,
+        })),
+      };
+      const res = await apiRequest("/clients/import", "POST", payload);
+      if (res) {
+        const parts = [
+          `${res.created} nuevos`,
+          `${res.updated} actualizados`,
+        ];
+        if (res.skipped) parts.push(`${res.skipped} omitidos`);
+        setSyncMessage(`Listo: ${parts.join(", ")}.`);
+        onRefresh?.();
+      }
+    } catch (err) {
+      console.error(err);
+      setSyncMessage("No se pudo completar la importación. Revisa tu conexión o los datos.");
+      onError?.("Error al importar contactos.");
+    } finally {
+      setSyncBusy(false);
+    }
+  };
+
+  const handlePickDeviceContacts = async () => {
+    try {
+      const rows = await pickContactsFromDevice();
+      await runContactImport(rows);
+    } catch (e) {
+      if (e?.code === "CONTACTS_UNSUPPORTED" || e?.message === "CONTACTS_UNSUPPORTED") {
+        setSyncMessage(
+          "Tu navegador no permite elegir contactos. Usa «Importar .vcf» (exporta contactos desde la app Contactos del teléfono).",
+        );
+      } else {
+        console.error(e);
+        setSyncMessage("Selección cancelada o no disponible.");
+      }
+    }
+  };
+
+  const handleVcfFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const rows = parseVcfToClients(text);
+      await runContactImport(rows);
+    } catch (err) {
+      console.error(err);
+      setSyncMessage("No se pudo leer el archivo. Usa un .vcf exportado desde tu agenda.");
+    }
+  };
+
+  const handleExportVcf = () => {
+    setSyncMessage(null);
+    if (!clients.length) {
+      setSyncMessage("Aún no hay clientes para exportar.");
+      return;
+    }
+    const vcf = buildClientsVcf(clients);
+    downloadVcf("beautydesk-clientes.vcf", vcf);
+    setSyncMessage(
+      "Archivo descargado. Ábrelo en el móvil y elige «Crear contactos» o compártelo a Contactos.",
+    );
+  };
+
   return (
     <div className="space-y-6 animate-fadeIn">
       <DeleteClientConfirmModal
@@ -150,6 +241,63 @@ const SalonClientsView = ({
             Aún no hay clientes. Usa el botón + para dar de alta el primero en
             tu espacio.
           </p>
+        )}
+        {!blockedMessage && (
+          <div className="rounded-2xl border border-[#e8dfd6] bg-[#faf7f4] p-4 space-y-3">
+            <p className="text-[9px] font-black uppercase tracking-[0.15em] text-[#a39485]">
+              Sincronizar con tu agenda
+            </p>
+            <p className="text-[10px] text-[#8c857d] leading-relaxed">
+              Importa desde el teléfono o un archivo .vcf, o exporta tus clientes para
+              añadirlos a Contactos. Los duplicados se unen por número de teléfono.
+            </p>
+            <input
+              ref={vcfInputRef}
+              type="file"
+              accept=".vcf,.vcard,text/vcard"
+              className="hidden"
+              onChange={handleVcfFile}
+            />
+            <div className="flex flex-wrap gap-2">
+              {contactsPickerSupported() && (
+                <button
+                  type="button"
+                  disabled={syncBusy}
+                  onClick={handlePickDeviceContacts}
+                  className="inline-flex items-center gap-2 rounded-xl bg-white border border-[#eee8e2] px-3 py-2 text-[9px] font-black uppercase tracking-widest text-[#5d5045] hover:border-[#dcc7b1] disabled:opacity-50"
+                >
+                  <Smartphone className="w-3.5 h-3.5" strokeWidth={2} />
+                  Elegir contactos
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={syncBusy}
+                onClick={() => vcfInputRef.current?.click()}
+                className="inline-flex items-center gap-2 rounded-xl bg-white border border-[#eee8e2] px-3 py-2 text-[9px] font-black uppercase tracking-widest text-[#5d5045] hover:border-[#dcc7b1] disabled:opacity-50"
+              >
+                <Upload className="w-3.5 h-3.5" strokeWidth={2} />
+                Importar .vcf
+              </button>
+              <button
+                type="button"
+                disabled={syncBusy || !clients.length}
+                onClick={handleExportVcf}
+                className="inline-flex items-center gap-2 rounded-xl bg-[#5d5045] text-white px-3 py-2 text-[9px] font-black uppercase tracking-widest hover:opacity-95 disabled:opacity-40"
+              >
+                <Download className="w-3.5 h-3.5" strokeWidth={2} />
+                Exportar .vcf
+              </button>
+            </div>
+            {syncBusy && (
+              <p className="text-[10px] font-bold text-[#dcc7b1]">Importando…</p>
+            )}
+            {syncMessage && !syncBusy && (
+              <p className="text-[10px] font-medium text-[#5d5045] leading-relaxed">
+                {syncMessage}
+              </p>
+            )}
+          </div>
         )}
         <input
           type="text"
