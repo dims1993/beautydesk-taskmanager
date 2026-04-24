@@ -21,8 +21,7 @@ function useTouchPrimaryUi() {
   useEffect(() => {
     const coarse = window.matchMedia("(pointer: coarse)");
     const noHover = window.matchMedia("(hover: none)");
-    const apply = () =>
-      setTouchPrimary(coarse.matches || noHover.matches);
+    const apply = () => setTouchPrimary(coarse.matches || noHover.matches);
     apply();
     coarse.addEventListener("change", apply);
     noHover.addEventListener("change", apply);
@@ -156,10 +155,7 @@ const AppointmentForm = ({
     const t = e.touches[0];
     if (!t) return;
     const delta = t.clientX - d.startX;
-    const next = Math.min(
-      0,
-      Math.max(-SWIPE_REVEAL_PX, d.startOffset + delta),
-    );
+    const next = Math.min(0, Math.max(-SWIPE_REVEAL_PX, d.startOffset + delta));
     setSwipeXByIndex((s) => ({ ...s, [index]: next }));
   };
 
@@ -440,10 +436,7 @@ const AppointmentForm = ({
               onClick={() => {
                 const fallback = services[0]?.id;
                 if (fallback == null) return;
-                setSelectedServiceIds((prev) => [
-                  ...prev,
-                  String(fallback),
-                ]);
+                setSelectedServiceIds((prev) => [...prev, String(fallback)]);
               }}
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#eaddcf] bg-[#FAF9F6] text-[#5d5045] hover:border-[#5d5045] disabled:opacity-40"
               title="Añadir otro servicio"
@@ -459,7 +452,8 @@ const AppointmentForm = ({
             )}
             {selectedServiceIds.map((sid, index) => {
               const offset = swipeXByIndex[index] ?? -SWIPE_REVEAL_PX;
-              const canRemove = selectedServiceIds.length > 1 && !disabledReason;
+              const canRemove =
+                selectedServiceIds.length > 1 && !disabledReason;
 
               const selectEl = (
                 <select
@@ -569,8 +563,11 @@ const AppointmentForm = ({
             <input
               required
               type="datetime-local"
-              className="box-border w-full min-w-0 max-w-full pl-14 pr-6 py-5 bg-[#FAF9F6] border border-[#eaddcf] rounded-2xl outline-none focus:border-[#5d5045] focus:bg-white transition-all text-base font-bold tracking-wider text-[#5d5045] [color-scheme:light] max-w-full [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-4 [&::-webkit-calendar-picker-indicator]:top-1/2 [&::-webkit-calendar-picker-indicator]:h-5 [&::-webkit-calendar-picker-indicator]:w-5 [&::-webkit-calendar-picker-indicator]:-translate-y-1/2 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-datetime-edit]:m-0 [&::-webkit-datetime-edit]:p-0 [&::-webkit-datetime-edit-fields-wrapper]:p-0"
-              style={{ fontSize: "16px" }}
+              className="appearance-none block w-full bg-[#FAF9F6] border border-[#eaddcf] rounded-2xl outline-none focus:border-[#5d5045] focus:bg-white transition-all text-base font-bold tracking-wider text-[#5d5045] [color-scheme:light] pl-14 pr-4 py-5 m-0 box-border [&::-webkit-datetime-edit]:flex [&::-webkit-datetime-edit-fields-wrapper]:p-0 [&::-webkit-datetime-edit-text]:p-0"
+              style={{
+                fontSize: "16px", // Evita el zoom automático en iOS
+                minWidth: "0", // Fuerza a que pueda encogerse
+              }}
               value={formData.start_time}
               onChange={(e) =>
                 setFormData({ ...formData, start_time: e.target.value })

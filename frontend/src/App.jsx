@@ -444,12 +444,42 @@ function App() {
 
                       <section className="space-y-5">
                         {activeTab === "agenda" && (
-                          <AppointmentList
-                            appointments={agendaWeekAppointments(appointments)}
-                            services={services}
-                            onUpdateStatus={handleUpdateStatus}
-                            onRefresh={fetchInitialData}
-                          />
+                          <>
+                            <div className="rounded-[2.5rem] border border-[#eaddcf] bg-gradient-to-br from-[#faf8f5] to-[#f5f0ea] px-6 py-6 md:px-8 md:py-7 shadow-sm shadow-[#5d5045]/5">
+                              <p className="font-serif text-xl md:text-2xl text-[#5d5045] tracking-tight">
+                                Citas próximas
+                              </p>
+                              <p className="mt-3 max-w-xl text-[11px] md:text-xs font-medium leading-relaxed text-[#8c857d]">
+                                En este apartado solo se muestran las citas de la{" "}
+                                <span className="font-bold text-[#5d5045]">
+                                  semana actual
+                                </span>
+                                . Para revisar el mes completo, mover citas o
+                                añadirlas desde el calendario, entra en{" "}
+                                <span className="font-bold text-[#5d5045]">
+                                  Calendario
+                                </span>
+                                .
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setActiveTabFromNavbar("calendario")
+                                }
+                                className="mt-5 inline-flex items-center rounded-full border border-[#5d5045]/20 bg-white px-5 py-2.5 text-[9px] font-black uppercase tracking-[0.2em] text-[#5d5045] transition hover:border-[#dcc7b1] hover:bg-[#faf8f5]"
+                              >
+                                Ir a Calendario
+                              </button>
+                            </div>
+                            <AppointmentList
+                              appointments={agendaWeekAppointments(
+                                appointments,
+                              )}
+                              services={services}
+                              onUpdateStatus={handleUpdateStatus}
+                              onRefresh={fetchInitialData}
+                            />
+                          </>
                         )}
                         {activeTab === "calendario" && (
                           <CalendarView
