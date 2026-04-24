@@ -39,6 +39,8 @@ def appointment_to_out(a: Appointment) -> AppointmentOut:
     return AppointmentOut(
         id=a.id,
         client_name=a.client_name,
+        client_phone=a.client_phone,
+        client_email=a.client_email,
         start_time=a.start_time,
         end_time=a.end_time,
         status=a.status,

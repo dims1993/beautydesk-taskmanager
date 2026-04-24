@@ -23,6 +23,8 @@ class AppointmentUpdate(BaseModel):
 class AppointmentOut(BaseModel):
     id: int
     client_name: str
+    client_phone: Optional[str] = None
+    client_email: Optional[str] = None
     start_time: datetime
     end_time: Optional[datetime] = None
     status: str

@@ -50,6 +50,11 @@ function normalizePhoneForWhatsApp(raw) {
   return d;
 }
 
+function normalizePhoneDigits(raw) {
+  if (raw == null) return "";
+  return String(raw).replace(/\D/g, "");
+}
+
 /** Text for wa.me after creating an appointment (salon + billing address from profile). */
 function buildAppointmentWhatsAppText(clientName, startAt, currentUser) {
   const d = new Date(startAt);
@@ -217,11 +222,25 @@ const AppointmentForm = ({
     setLastCreated(null);
 
     try {
-      const existingClient = clients.find(
-        (c) =>
-          `${c.nombre} ${c.apellidos || ""}`.trim().toLowerCase() ===
-          formData.client_name.toLowerCase(),
-      );
+      const inputNameKey = (formData.client_name || "").trim().toLowerCase();
+      const inputPhoneKey = normalizePhoneDigits(formData.client_phone);
+
+      const existingClientByPhone = inputPhoneKey
+        ? clients.find(
+            (c) => normalizePhoneDigits(c?.telefono) === inputPhoneKey,
+          )
+        : null;
+
+      const existingClientByName = inputNameKey
+        ? clients.find(
+            (c) =>
+              `${c.nombre} ${c.apellidos || ""}`
+                .trim()
+                .toLowerCase() === inputNameKey,
+          )
+        : null;
+
+      const existingClient = existingClientByPhone || existingClientByName;
 
       let finalClientId = existingClient?.id || null;
       const phoneForWhatsApp = (
@@ -245,6 +264,24 @@ const AppointmentForm = ({
         });
 
         finalClientId = newClient.id;
+      } else if (existingClientByPhone && inputNameKey) {
+        // If phone matches an existing client, keep data consistent (best-effort).
+        const currentName = `${existingClient.nombre} ${existingClient.apellidos || ""}`
+          .trim()
+          .toLowerCase();
+        if (currentName !== inputNameKey) {
+          try {
+            const nameParts = (formData.client_name || "").trim().split(" ");
+            const nombre = nameParts[0] || existingClient.nombre;
+            const apellidos = nameParts.slice(1).join(" ");
+            await apiRequest(`/clients/${existingClient.id}`, "PATCH", {
+              nombre,
+              apellidos,
+            });
+          } catch {
+            // Ignore: appointment creation must still proceed.
+          }
+        }
       }
 
       const payload = {
@@ -283,13 +320,20 @@ const AppointmentForm = ({
     }
   };
 
-  const isNewClient =
-    formData.client_name.length > 2 &&
-    !clients.some(
+  const isNewClient = (() => {
+    const nameKey = (formData.client_name || "").trim().toLowerCase();
+    const phoneKey = normalizePhoneDigits(formData.client_phone);
+    if (phoneKey) {
+      return !clients.some(
+        (c) => normalizePhoneDigits(c?.telefono) === phoneKey,
+      );
+    }
+    if (nameKey.length <= 2) return false;
+    return !clients.some(
       (c) =>
-        `${c.nombre} ${c.apellidos || ""}`.trim().toLowerCase() ===
-        formData.client_name.toLowerCase(),
+        `${c.nombre} ${c.apellidos || ""}`.trim().toLowerCase() === nameKey,
     );
+  })();
 
   return (
     <div className="min-w-0 max-w-full bg-white rounded-[3rem] shadow-2xl shadow-[#5d5045]/10 border border-[#eaddcf] overflow-x-clip overflow-y-visible sticky top-8 z-40 transition-all duration-500">

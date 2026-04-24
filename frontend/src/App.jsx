@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { useApi } from "./hooks/useApi";
+/* eslint-disable react-hooks/set-state-in-effect */
 import {
   BrowserRouter as Router,
   Routes,
@@ -32,6 +33,7 @@ import SuperAdminPanel from "./components/salon/SuperAdminPanel";
 import SettingsView from "./components/salon/SettingsView";
 import BillingSubscriptionPanel from "./components/salon/BillingSubscriptionPanel";
 import FirstVisitGuide from "./components/onboarding/FirstVisitGuide";
+import MorningWhatsAppRemindersModal from "./components/modals/MorningWhatsAppRemindersModal";
 
 const ONBOARDING_STORAGE_KEY = "beautydesk_onboarding_v2";
 
@@ -103,6 +105,22 @@ function App() {
   const [isRegistering, setIsRegistering] = useState(false);
   const [showFirstVisitGuide, setShowFirstVisitGuide] = useState(false);
   const [guidedTourActive, setGuidedTourActive] = useState(false);
+  const [showMorningWhatsApp, setShowMorningWhatsApp] = useState(false);
+
+  function handleLogout() {
+    localStorage.removeItem("token");
+    setIsLoggedIn(false);
+  }
+
+  const MORNING_WHATSAPP_KEY = useMemo(() => {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const dateKey = `${yyyy}-${mm}-${dd}`;
+    const uid = currentUser?.id != null ? String(currentUser.id) : "anon";
+    return `beautydesk_morning_whatsapp_${uid}_${dateKey}`;
+  }, [currentUser?.id]);
 
   /** Main nav (mobile/desktop pill): switch tab and show content from the top. */
   const setActiveTabFromNavbar = useCallback((tabId) => {
@@ -112,22 +130,21 @@ function App() {
     }
   }, []);
 
-  const agendaWeekAppointments = (apps) => {
+  const todaysAppointments = useMemo(() => {
     const now = new Date();
     const start = new Date(now);
     start.setHours(0, 0, 0, 0);
-
     const end = new Date(start);
-    end.setDate(end.getDate() + 7);
+    end.setDate(end.getDate() + 1);
 
-    return (Array.isArray(apps) ? apps : [])
+    return (Array.isArray(appointments) ? appointments : [])
       .filter((a) => a?.status === "scheduled")
       .filter((a) => {
         const d = new Date(a.start_time);
         return !Number.isNaN(d.getTime()) && d >= start && d < end;
       })
       .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
-  };
+  }, [appointments]);
 
   const fetchInitialData = async () => {
     try {
@@ -202,7 +219,7 @@ function App() {
           apps.sort((a, b) => new Date(a.start_time) - new Date(b.start_time)),
         );
       }
-    } catch (err) {
+    } catch {
       handleLogout();
     }
   };
@@ -232,6 +249,20 @@ function App() {
   }, [isLoggedIn]);
 
   useEffect(() => {
+    if (!isLoggedIn || !currentUser || currentUser.app_access_locked) return;
+    if (!todaysAppointments.length) return;
+    const now = new Date();
+    const hour = now.getHours();
+    if (hour < 6) return;
+    try {
+      if (localStorage.getItem(MORNING_WHATSAPP_KEY)) return;
+      setShowMorningWhatsApp(true);
+    } catch {
+      // If storage is blocked, just don't show it.
+    }
+  }, [isLoggedIn, currentUser, todaysAppointments.length, MORNING_WHATSAPP_KEY]);
+
+  useEffect(() => {
     if (!isLoggedIn || !currentUser || currentUser.app_access_locked) {
       setShowFirstVisitGuide(false);
       setGuidedTourActive(false);
@@ -256,11 +287,6 @@ function App() {
     setShowFirstVisitGuide(false);
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    setIsLoggedIn(false);
-  };
-
   const handleUpdateStatus = async (id, newStatus, extra = null) => {
     try {
       await apiRequest(`/appointments/${id}/status`, "PATCH", {
@@ -269,7 +295,7 @@ function App() {
         payment_method: extra?.method || "ninguno",
       });
       fetchInitialData();
-    } catch (err) {
+    } catch {
       setErrorMessage("No se pudo actualizar la cita");
     }
   };
@@ -350,6 +376,21 @@ function App() {
                       </div>
                     </div>
                   )}
+
+                  <MorningWhatsAppRemindersModal
+                    isOpen={showMorningWhatsApp}
+                    onClose={() => {
+                      try {
+                        localStorage.setItem(MORNING_WHATSAPP_KEY, "1");
+                      } catch {
+                        /* ignore */
+                      }
+                      setShowMorningWhatsApp(false);
+                    }}
+                    appointmentsToday={todaysAppointments}
+                    services={services}
+                    currentUser={currentUser}
+                  />
 
                   {currentUser?.app_access_locked && (
                     <div className="max-w-2xl mx-auto space-y-6 py-4">
@@ -450,31 +491,29 @@ function App() {
                                 Citas próximas
                               </p>
                               <p className="mt-3 max-w-xl text-[11px] md:text-xs font-medium leading-relaxed text-[#8c857d]">
-                                En este apartado solo se muestran las citas de la{" "}
+                                Aquí se muestran las{" "}
                                 <span className="font-bold text-[#5d5045]">
-                                  semana actual
+                                  citas del día de hoy
                                 </span>
-                                . Para revisar el mes completo, mover citas o
-                                añadirlas desde el calendario, entra en{" "}
+                                . Con el botón de{" "}
                                 <span className="font-bold text-[#5d5045]">
-                                  Calendario
-                                </span>
-                                .
+                                  Recordatorios
+                                </span>{" "}
+                                puedes preparar y enviar mensajes por WhatsApp (se
+                                abrirá WhatsApp con el texto listo para que tú
+                                confirmes el envío).
                               </p>
                               <button
                                 type="button"
-                                onClick={() =>
-                                  setActiveTabFromNavbar("calendario")
-                                }
+                                onClick={() => setShowMorningWhatsApp(true)}
+                                disabled={!todaysAppointments.length}
                                 className="mt-5 inline-flex items-center rounded-full border border-[#5d5045]/20 bg-white px-5 py-2.5 text-[9px] font-black uppercase tracking-[0.2em] text-[#5d5045] transition hover:border-[#dcc7b1] hover:bg-[#faf8f5]"
                               >
-                                Ir a Calendario
+                                Recordatorios
                               </button>
                             </div>
                             <AppointmentList
-                              appointments={agendaWeekAppointments(
-                                appointments,
-                              )}
+                              appointments={todaysAppointments}
                               services={services}
                               onUpdateStatus={handleUpdateStatus}
                               onRefresh={fetchInitialData}
