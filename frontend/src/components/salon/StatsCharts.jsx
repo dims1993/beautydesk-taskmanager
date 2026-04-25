@@ -9,6 +9,8 @@ import {
 import * as XLSX from "xlsx/xlsx.mjs";
 import { useApi } from "../../hooks/useApi";
 
+const CASH_PASSWORD_MODAL_SESSION_KEY = "beautydesk_open_cash_password_modal_v1";
+
 function formatApiErr(err) {
   if (!err) return "Error";
   if (typeof err.detail === "string") return err.detail;
@@ -74,6 +76,18 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
     setClosedDayKeys(loadClosedDayKeys(currentStaffId));
     setCajaHydrated(true);
   }, [currentStaffId]);
+
+  useEffect(() => {
+    try {
+      const shouldOpen = sessionStorage.getItem(CASH_PASSWORD_MODAL_SESSION_KEY);
+      if (shouldOpen) {
+        sessionStorage.removeItem(CASH_PASSWORD_MODAL_SESSION_KEY);
+        setShowPasswordModal(true);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   useEffect(() => {
     if (currentStaffId == null || !cajaHydrated) return;

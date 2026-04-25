@@ -33,10 +33,12 @@ import SuperAdminPanel from "./components/salon/SuperAdminPanel";
 import SettingsView from "./components/salon/SettingsView";
 import BillingSubscriptionPanel from "./components/salon/BillingSubscriptionPanel";
 import FirstVisitGuide from "./components/onboarding/FirstVisitGuide";
+import PendingSetupTasksModal from "./components/onboarding/PendingSetupTasksModal";
 import MorningWhatsAppRemindersModal from "./components/modals/MorningWhatsAppRemindersModal";
 
 const ONBOARDING_STORAGE_KEY = "beautydesk_onboarding_v2";
 const SETUP_SESSION_DISMISS_KEY = "beautydesk_setup_dismiss_session_v1";
+const CASH_PASSWORD_MODAL_SESSION_KEY = "beautydesk_open_cash_password_modal_v1";
 const IMPERSONATION_ORIGINAL_TOKEN_KEY = "impersonation_original_token";
 const IMPERSONATION_TARGET_EMAIL_KEY = "impersonation_target_email";
 
@@ -107,6 +109,7 @@ function App() {
   const [teamMembers, setTeamMembers] = useState([]);
   const [isRegistering, setIsRegistering] = useState(false);
   const [showFirstVisitGuide, setShowFirstVisitGuide] = useState(false);
+  const [showPendingSetup, setShowPendingSetup] = useState(false);
   const [guidedTourActive, setGuidedTourActive] = useState(false);
   const [showMorningWhatsApp, setShowMorningWhatsApp] = useState(false);
   const [impersonationTargetEmail, setImpersonationTargetEmail] = useState(null);
@@ -115,6 +118,7 @@ function App() {
     localStorage.removeItem("token");
     try {
       sessionStorage.removeItem(SETUP_SESSION_DISMISS_KEY);
+      sessionStorage.removeItem(CASH_PASSWORD_MODAL_SESSION_KEY);
     } catch {
       /* ignore */
     }
@@ -306,56 +310,61 @@ function App() {
   useEffect(() => {
     if (!isLoggedIn || !currentUser || currentUser.app_access_locked) {
       setShowFirstVisitGuide(false);
+      setShowPendingSetup(false);
       setGuidedTourActive(false);
       return;
     }
-    const isOwner = String(currentUser?.role || "").toUpperCase() === "OWNER";
-    const missingCash = !currentUser?.cash_close_password_configured;
-    const missingServices = !currentUser?.has_services_configured;
-    const missingHours = !currentUser?.salon_hours_configured;
-    const hasPendingSetup = isOwner && (missingCash || missingServices || missingHours);
-
-    // Requirement: if setup tasks are pending, show on every login.
-    // If the user closes it, hide for this session only (but show again next login).
     try {
-      const dismissedThisSession = sessionStorage.getItem(
-        `${SETUP_SESSION_DISMISS_KEY}_${String(currentUser?.id ?? "anon")}`,
-      );
-      if (hasPendingSetup && !dismissedThisSession) {
+      // Guide: only show once ever (first login after registration).
+      const guideSeen = !!localStorage.getItem(ONBOARDING_STORAGE_KEY);
+      if (!guideSeen) {
         setShowFirstVisitGuide(true);
-        return;
+      } else {
+        setShowFirstVisitGuide(false);
       }
-      if (!hasPendingSetup && !localStorage.getItem(ONBOARDING_STORAGE_KEY)) {
-        // If everything is already configured, we can mark onboarding as done once.
-        localStorage.setItem(ONBOARDING_STORAGE_KEY, "1");
-      }
-      setShowFirstVisitGuide(false);
-    } catch {
-      // If storage is blocked, default to showing guide when pending setup.
-      setShowFirstVisitGuide(hasPendingSetup);
-    }
-  }, [isLoggedIn, currentUser]);
 
-  const completeFirstVisitGuide = () => {
-    try {
-      sessionStorage.setItem(
-        `${SETUP_SESSION_DISMISS_KEY}_${String(currentUser?.id ?? "anon")}`,
-        "1",
-      );
+      // Pending tasks modal: show from 2nd login onwards until completed.
       const isOwner = String(currentUser?.role || "").toUpperCase() === "OWNER";
       const hasPendingSetup =
         isOwner &&
         (!currentUser?.cash_close_password_configured ||
           !currentUser?.has_services_configured ||
           !currentUser?.salon_hours_configured);
-      if (!hasPendingSetup) {
-        localStorage.setItem(ONBOARDING_STORAGE_KEY, "1");
+      const dismissedThisSession = sessionStorage.getItem(
+        `${SETUP_SESSION_DISMISS_KEY}_${String(currentUser?.id ?? "anon")}`,
+      );
+      if (guideSeen && hasPendingSetup && !dismissedThisSession) {
+        setShowPendingSetup(true);
+      } else {
+        setShowPendingSetup(false);
       }
+    } catch {
+      setShowFirstVisitGuide(false);
+      setShowPendingSetup(false);
+    }
+  }, [isLoggedIn, currentUser]);
+
+  const completeFirstVisitGuide = () => {
+    try {
+      // Mark guide as seen forever.
+      localStorage.setItem(ONBOARDING_STORAGE_KEY, "1");
     } catch {
       /* ignore */
     }
     setGuidedTourActive(false);
     setShowFirstVisitGuide(false);
+  };
+
+  const dismissPendingSetupForSession = () => {
+    try {
+      sessionStorage.setItem(
+        `${SETUP_SESSION_DISMISS_KEY}_${String(currentUser?.id ?? "anon")}`,
+        "1",
+      );
+    } catch {
+      /* ignore */
+    }
+    setShowPendingSetup(false);
   };
 
   const handleUpdateStatus = async (id, newStatus, extra = null) => {
@@ -695,6 +704,46 @@ function App() {
                       onComplete={completeFirstVisitGuide}
                       setActiveTab={setActiveTab}
                       onTourOpenChange={setGuidedTourActive}
+                    />
+                  )}
+
+                  {showPendingSetup && (
+                    <PendingSetupTasksModal
+                      currentUser={currentUser}
+                      onClose={dismissPendingSetupForSession}
+                      onGoCash={() => {
+                        try {
+                          sessionStorage.setItem(CASH_PASSWORD_MODAL_SESSION_KEY, "1");
+                        } catch {
+                          /* ignore */
+                        }
+                        setActiveTab("stats");
+                        dismissPendingSetupForSession();
+                      }}
+                      onGoServices={() => {
+                        try {
+                          const u = new URL(window.location.href);
+                          u.searchParams.set("tab", "ajustes");
+                          u.searchParams.set("focus", "services");
+                          window.history.replaceState({}, "", u.toString());
+                        } catch {
+                          /* ignore */
+                        }
+                        setActiveTab("ajustes");
+                        dismissPendingSetupForSession();
+                      }}
+                      onGoHours={() => {
+                        try {
+                          const u = new URL(window.location.href);
+                          u.searchParams.set("tab", "ajustes");
+                          u.searchParams.set("focus", "hours");
+                          window.history.replaceState({}, "", u.toString());
+                        } catch {
+                          /* ignore */
+                        }
+                        setActiveTab("ajustes");
+                        dismissPendingSetupForSession();
+                      }}
                     />
                   )}
                     </>

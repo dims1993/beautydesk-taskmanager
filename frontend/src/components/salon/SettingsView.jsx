@@ -105,6 +105,10 @@ export default function SettingsView({
     return Boolean(getPendingPlanFromSession());
   });
   const { apiRequest } = useApi();
+
+  const focus = String(searchParams.get("focus") || "").toLowerCase();
+  const focusServices = focus === "services";
+  const focusHours = focus === "hours";
   const needsFiscal =
     String(currentUser?.role || "").toUpperCase() === "OWNER" &&
     (currentUser?.organization_id == null ||
@@ -522,7 +526,7 @@ export default function SettingsView({
               : "Añade los servicios que ofreces para poder crear citas."
           }
           icon={Scissors}
-          defaultOpen={false}
+          defaultOpen={focusServices}
         >
           <p className="text-[10px] text-[#8c857d] leading-relaxed mb-4">
             Tu cuenta solo ve los servicios de tu organización.
@@ -768,7 +772,7 @@ export default function SettingsView({
           title="Horario del salón"
           description="Define a qué horas está abierto el negocio para calcular huecos disponibles y automatizar reservas."
           icon={Clock}
-          defaultOpen={false}
+          defaultOpen={focusHours}
         >
           <div className="flex items-center justify-between gap-3 mb-4">
             <p className="text-[10px] text-[#8c857d] leading-relaxed">
