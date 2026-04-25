@@ -76,3 +76,8 @@ class Organization(SQLModel, table=True):
 
     # Cierre de caja (solo el titular la define; todo el personal la usa para validar)
     cash_close_password_hash: Optional[str] = Field(default=None)
+
+    # Agent API key (stored hashed). Used by external orchestrators (WhatsApp/IG) to call /agent/*
+    agent_key_hash: Optional[str] = Field(default=None, index=True)
+    agent_key_last4: Optional[str] = Field(default=None)
+    agent_key_created_at: Optional[datetime] = Field(default=None)

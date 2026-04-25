@@ -9,6 +9,8 @@ import {
   Trash2,
   LogIn,
   ChevronDown,
+  KeyRound,
+  Copy,
 } from "lucide-react";
 
 const SuperAdminPanel = () => {
@@ -21,6 +23,8 @@ const SuperAdminPanel = () => {
   const [impersonateEmail, setImpersonateEmail] = useState("");
   const [organizations, setOrganizations] = useState([]);
   const [openOrgId, setOpenOrgId] = useState(null);
+  const [rotatingOrgId, setRotatingOrgId] = useState(null);
+  const [freshAgentKeyByOrg, setFreshAgentKeyByOrg] = useState({});
   const [status, setStatus] = useState({ type: "", message: "" });
   const [isLoading, setIsLoading] = useState(false);
   const [impersonateLoading, setImpersonateLoading] = useState(false);
@@ -122,6 +126,44 @@ const SuperAdminPanel = () => {
       });
     } finally {
       setImpersonateLoading(false);
+    }
+  };
+
+  const rotateAgentKey = async (orgId) => {
+    setRotatingOrgId(orgId);
+    setStatus({ type: "", message: "" });
+    try {
+      const res = await apiRequest(
+        `/users/organizations/${orgId}/agent-key/rotate`,
+        "POST",
+        {},
+      );
+      if (!res?.agent_key) throw { detail: "No se recibió la clave" };
+      setFreshAgentKeyByOrg((prev) => ({ ...prev, [orgId]: res.agent_key }));
+      await fetchOrgs();
+      setStatus({
+        type: "success",
+        message: "Clave de agente generada. Cópiala ahora (solo se muestra una vez).",
+      });
+    } catch (err) {
+      setStatus({
+        type: "error",
+        message: err?.detail || "No se pudo rotar la clave del agente",
+      });
+    } finally {
+      setRotatingOrgId(null);
+    }
+  };
+
+  const copyText = async (txt) => {
+    try {
+      await navigator.clipboard.writeText(txt);
+      setStatus({ type: "success", message: "Copiado al portapapeles" });
+    } catch {
+      setStatus({
+        type: "error",
+        message: "No se pudo copiar. Selecciona y copia manualmente.",
+      });
     }
   };
   return (
@@ -314,6 +356,71 @@ const SuperAdminPanel = () => {
 
                 {openOrgId === org.id && (
                   <div className="bg-white/90 rounded-[2rem] border border-[#eee8e2] px-6 py-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#a39485]">
+                          Agent Key (WhatsApp/IG)
+                        </p>
+                        <p className="mt-2 text-[10px] text-[#8c857d] font-medium leading-relaxed">
+                          Esta clave se usa en integraciones externas para llamar a{" "}
+                          <span className="font-black text-[#5d5045]">/agent/*</span>{" "}
+                          con el header{" "}
+                          <span className="font-black text-[#5d5045]">
+                            X-Agent-Key
+                          </span>
+                          .
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => rotateAgentKey(org.id)}
+                        disabled={rotatingOrgId === org.id}
+                        className="shrink-0 inline-flex items-center gap-2 rounded-2xl border border-[#eaddcf] bg-white px-4 py-3 text-[9px] font-black uppercase tracking-widest text-[#5d5045] hover:border-[#dcc7b1] disabled:opacity-50"
+                      >
+                        <KeyRound className="w-4 h-4" strokeWidth={2.5} />
+                        {rotatingOrgId === org.id ? "Generando..." : "Generar"}
+                      </button>
+                    </div>
+
+                    {org.has_agent_key && (
+                      <div className="mt-4 rounded-2xl border border-[#f1ebe6] bg-[#faf8f5] px-4 py-3 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[9px] font-black uppercase tracking-widest text-[#a39485]">
+                            Clave activa
+                          </p>
+                          <p className="text-[10px] font-black tracking-widest text-[#5d5045] truncate">
+                            ••••{org.agent_key_last4 || "????"}
+                          </p>
+                        </div>
+                        <span className="text-[9px] font-bold text-[#8c857d]">
+                          (no se muestra completa)
+                        </span>
+                      </div>
+                    )}
+
+                    {freshAgentKeyByOrg[org.id] && (
+                      <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-amber-900">
+                          Clave nueva (copiar ahora)
+                        </p>
+                        <div className="mt-2 flex items-stretch gap-2">
+                          <input
+                            readOnly
+                            value={freshAgentKeyByOrg[org.id]}
+                            className="min-w-0 flex-1 rounded-xl bg-white border border-amber-200 px-3 py-2 text-[10px] font-bold text-[#5d5045] outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => copyText(freshAgentKeyByOrg[org.id])}
+                            className="shrink-0 inline-flex items-center gap-2 rounded-xl bg-white border border-amber-200 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-amber-900 hover:bg-amber-100"
+                          >
+                            <Copy className="w-4 h-4" strokeWidth={2.5} />
+                            Copiar
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#a39485]">
                       Usuarios (emails)
                     </p>

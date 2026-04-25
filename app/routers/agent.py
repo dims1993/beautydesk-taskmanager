@@ -1,14 +1,16 @@
+import hashlib
 import json
 from datetime import datetime, timedelta, time
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlmodel import Session, select
 
 from app.core.db.session import get_session
-from app.dependencies import get_current_user_for_app
+from app.dependencies import get_current_user_for_app, get_current_user_optional
 from app.models.appointment import Appointment
 from app.models.client import Client
+from app.models.organization import Organization
 from app.models.service import Service
 from app.models.user import User, UserRole
 from app.schemas.agent import (
@@ -23,16 +25,46 @@ from app.schemas.agent import (
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
+def _org_from_agent_key(db: Session, key: str) -> Organization | None:
+    raw = (key or "").strip()
+    if not raw:
+        return None
+    h = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+    return db.exec(select(Organization).where(Organization.agent_key_hash == h)).first()
+
+
+def _get_org_context(
+    db: Session,
+    x_agent_key: str | None,
+    current_user: User | None,
+) -> Organization:
+    # Prefer explicit agent key (for WhatsApp/IG orchestrators)
+    if x_agent_key:
+        org = _org_from_agent_key(db, x_agent_key)
+        if not org:
+            raise HTTPException(status_code=401, detail="Invalid agent key")
+        return org
+
+    # Fallback: allow authenticated org users (owner/staff) to call /agent/*
+    if current_user and current_user.organization_id:
+        org = db.get(Organization, current_user.organization_id)
+        if org:
+            return org
+
+    raise HTTPException(status_code=401, detail="Missing authentication")
+
 @router.get("/services")
 def agent_services(
     db: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user_for_app),
+    x_agent_key: str | None = Header(default=None, alias="X-Agent-Key"),
+    current_user: User | None = Depends(get_current_user_optional),
 ):
     """
     Returns the live service catalog for the current salon/org.
     Intended for the conversational agent to suggest valid services.
     """
-    org_id = _org_id_or_400(current_user)
+    org = _get_org_context(db, x_agent_key, current_user)
+    org_id = int(org.id)
     rows = db.exec(select(Service).where(Service.organization_id == org_id)).all()
     return [
         {
@@ -133,9 +165,11 @@ def _has_collision(db: Session, org_id: int, staff_id: int, start: datetime, end
 def agent_quote(
     body: QuoteRequest,
     db: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user_for_app),
+    x_agent_key: str | None = Header(default=None, alias="X-Agent-Key"),
+    current_user: User | None = Depends(get_current_user_optional),
 ):
-    org_id = _org_id_or_400(current_user)
+    org = _get_org_context(db, x_agent_key, current_user)
+    org_id = int(org.id)
     services = _services_for_org(db, org_id, list(body.service_ids))
     minutes = _total_minutes(services)
     price = _total_price(services)
@@ -151,9 +185,11 @@ def agent_quote(
 def agent_availability(
     body: AvailabilityRequest,
     db: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user_for_app),
+    x_agent_key: str | None = Header(default=None, alias="X-Agent-Key"),
+    current_user: User | None = Depends(get_current_user_optional),
 ):
-    org_id = _org_id_or_400(current_user)
+    org = _get_org_context(db, x_agent_key, current_user)
+    org_id = int(org.id)
     services = _services_for_org(db, org_id, list(body.service_ids))
     minutes = _total_minutes(services)
     step = int(body.slot_step_minutes)
@@ -202,9 +238,11 @@ def agent_availability(
 def agent_book(
     body: BookRequest,
     db: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user_for_app),
+    x_agent_key: str | None = Header(default=None, alias="X-Agent-Key"),
+    current_user: User | None = Depends(get_current_user_optional),
 ):
-    org_id = _org_id_or_400(current_user)
+    org = _get_org_context(db, x_agent_key, current_user)
+    org_id = int(org.id)
     tz = _tz()
 
     start = body.start_time

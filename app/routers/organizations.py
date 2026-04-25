@@ -1,3 +1,7 @@
+import hashlib
+import secrets
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
@@ -132,9 +136,66 @@ async def get_all_organizations(
                     }
                 )
             ),
+            "has_agent_key": bool((getattr(org, "agent_key_hash", "") or "").strip()),
+            "agent_key_last4": getattr(org, "agent_key_last4", None),
+            "agent_key_created_at": getattr(org, "agent_key_created_at", None),
             "business_type": org.business_type.value,
             "subscription_plan": sp,
             "payment_method": pm,
         })
     
     return org_list
+
+
+@router.post("/organizations/{org_id}/agent-key/rotate")
+def rotate_agent_key(
+    org_id: int,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user_for_app),
+):
+    """
+    SUPER_ADMIN only.
+    Generates a new agent key for the organization and returns the plaintext once.
+    """
+    if current_user.role != UserRole.SUPER_ADMIN:
+        raise HTTPException(status_code=403, detail="No autorizado")
+    org = db.get(Organization, org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+
+    key_plain = secrets.token_urlsafe(32)
+    key_hash = hashlib.sha256(key_plain.encode("utf-8")).hexdigest()
+    org.agent_key_hash = key_hash
+    org.agent_key_last4 = key_plain[-4:]
+    org.agent_key_created_at = datetime.now(timezone.utc)
+    db.add(org)
+    db.commit()
+    db.refresh(org)
+    return {
+        "organization_id": org.id,
+        "agent_key": key_plain,
+        "agent_key_last4": org.agent_key_last4,
+        "agent_key_created_at": org.agent_key_created_at,
+    }
+
+
+@router.get("/organizations/{org_id}/agent-key")
+def get_agent_key_status(
+    org_id: int,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user_for_app),
+):
+    """
+    SUPER_ADMIN only. Never returns plaintext key.
+    """
+    if current_user.role != UserRole.SUPER_ADMIN:
+        raise HTTPException(status_code=403, detail="No autorizado")
+    org = db.get(Organization, org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+    return {
+        "organization_id": org.id,
+        "has_agent_key": bool((org.agent_key_hash or "").strip()),
+        "agent_key_last4": org.agent_key_last4,
+        "agent_key_created_at": org.agent_key_created_at,
+    }
