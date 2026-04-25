@@ -16,6 +16,19 @@ from app.models.service import Service
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
 
+def _public_url_for_signature(request: Request) -> str:
+    """
+    Twilio signature validation is sensitive to the exact URL.
+    Behind proxies (Render), request.url may not match the public https URL Twilio used.
+    """
+    proto = (request.headers.get("x-forwarded-proto") or request.url.scheme or "https").split(",")[0].strip()
+    host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.hostname or "").split(",")[0].strip()
+    path = request.url.path
+    qs = request.url.query
+    base = f"{proto}://{host}{path}"
+    return f"{base}?{qs}" if qs else base
+
+
 def _twilio_signature_valid(
     *,
     url: str,
@@ -48,9 +61,21 @@ def _twiml(message: str) -> str:
 def _pick_org_for_twilio(db: Session) -> Organization:
     """
     Sandbox/early-stage helper:
+    - If TWILIO_DEFAULT_ORG_ID is set, route to that org.
     - If exactly 1 org has an agent key configured, use it.
     - Otherwise require multi-tenant routing (to be implemented once you have 1 WA number per org).
     """
+    env_org_id = (os.getenv("TWILIO_DEFAULT_ORG_ID") or "").strip()
+    if env_org_id:
+        try:
+            oid = int(env_org_id)
+        except ValueError:
+            raise HTTPException(status_code=500, detail="TWILIO_DEFAULT_ORG_ID must be an integer")
+        org = db.get(Organization, oid)
+        if not org:
+            raise HTTPException(status_code=500, detail="TWILIO_DEFAULT_ORG_ID org not found")
+        return org
+
     orgs = db.exec(
         select(Organization).where(Organization.agent_key_hash.is_not(None))
     ).all()
@@ -59,7 +84,7 @@ def _pick_org_for_twilio(db: Session) -> Organization:
         return orgs[0]
     raise HTTPException(
         status_code=409,
-        detail="Multiple organizations detected. Configure per-org WhatsApp number routing first.",
+        detail="Unable to pick organization for Twilio. Set TWILIO_DEFAULT_ORG_ID or configure per-org WhatsApp number routing.",
     )
 
 
@@ -76,16 +101,22 @@ async def twilio_whatsapp_inbound(
     incoming_text = (form.get("Body") or "").strip()
 
     auth_token = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
-    if auth_token:
+    validate_sig = (os.getenv("TWILIO_VALIDATE_SIGNATURE", "true").strip().lower() not in ("0", "false", "no"))
+    if auth_token and validate_sig:
         sig = request.headers.get("X-Twilio-Signature")
         # Twilio uses the full URL (scheme + host + path) as it sees it.
         # Use request.url (includes querystring if any).
-        if not _twilio_signature_valid(
-            url=str(request.url),
-            form=form,
-            twilio_signature=sig,
-            auth_token=auth_token,
-        ):
+        candidates = [str(request.url), _public_url_for_signature(request)]
+        ok = any(
+            _twilio_signature_valid(
+                url=u,
+                form=form,
+                twilio_signature=sig,
+                auth_token=auth_token,
+            )
+            for u in candidates
+        )
+        if not ok:
             raise HTTPException(status_code=403, detail="Invalid Twilio signature")
 
     org = _pick_org_for_twilio(db)
