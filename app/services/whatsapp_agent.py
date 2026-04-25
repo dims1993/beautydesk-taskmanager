@@ -79,6 +79,23 @@ def _list_services(db: Session, org_id: int) -> list[Service]:
     return db.exec(select(Service).where(Service.organization_id == org_id)).all()
 
 
+def _service_cache_from_services(services: list[Service]) -> list[dict]:
+    return [{"id": int(s.id), "name": s.name} for s in services if s.id is not None][:30]
+
+
+def _filter_services_by_keyword(services: list[Service], keyword: str) -> list[Service]:
+    raw = _strip_accents((keyword or "").strip().lower())
+    if not raw:
+        return services
+    out: list[Service] = []
+    for s in services:
+        name = _strip_accents((s.name or "").strip().lower())
+        desc = _strip_accents((getattr(s, "description", "") or "").strip().lower())
+        if raw in name or (desc and raw in desc):
+            out.append(s)
+    return out
+
+
 def _format_services_menu(services: list[Service]) -> str:
     lines: list[str] = []
     for idx, s in enumerate(services[:30], start=1):
@@ -267,6 +284,91 @@ def _compute_slots(
     return slots
 
 
+def _compute_slots_near_preferred_time(
+    db: Session,
+    *,
+    org_id: int,
+    org: Organization,
+    service_ids: list[int],
+    day: date,
+    preferred: time,
+    step_minutes: int = 15,
+    min_notice_minutes: int = 30,
+    limit: int = 3,
+) -> list[tuple[datetime, int]]:
+    """
+    Try to honor a requested start time; otherwise propose nearest alternatives.
+    Returns naive local datetimes (see _compute_slots).
+    """
+    services = _services_for_org(db, org_id, service_ids)
+    minutes = _total_minutes(services)
+    if minutes <= 0:
+        return []
+
+    dow = day.weekday()
+    open_t = time(9, 0)
+    close_t = time(20, 0)
+    is_open = True
+    raw = (getattr(org, "salon_hours_json", None) or "").strip()
+    if raw:
+        try:
+            days = json.loads(raw)
+            row = next((d for d in days if int(d.get("day_of_week", -1)) == dow), None)
+            if row:
+                is_open = bool(row.get("is_open", True))
+                if is_open:
+                    oh, om = [int(x) for x in str(row.get("open_time", "09:00")).split(":")]
+                    ch, cm = [int(x) for x in str(row.get("close_time", "20:00")).split(":")]
+                    open_t = time(oh, om)
+                    close_t = time(ch, cm)
+        except Exception:
+            pass
+    if not is_open:
+        return []
+
+    day_open = datetime.combine(day, open_t)
+    day_close = datetime.combine(day, close_t)
+    requested = datetime.combine(day, preferred)
+
+    now_local = datetime.now(TZ).replace(tzinfo=None)
+    min_start = now_local + timedelta(minutes=min_notice_minutes)
+    if requested < min_start:
+        requested = min_start
+
+    staff_ids = _staff_ids_for_org(db, org_id)
+
+    def fits(start_dt: datetime) -> tuple[datetime, int] | None:
+        end_dt = start_dt + timedelta(minutes=minutes)
+        if start_dt < day_open or end_dt > day_close:
+            return None
+        for staff_id in staff_ids:
+            if not _has_collision(db, org_id, staff_id, start_dt, end_dt):
+                return (start_dt, staff_id)
+        return None
+
+    # 1) Exact (rounded to step)
+    # round down to nearest step
+    base_minutes = (requested.hour * 60 + requested.minute)
+    step = max(5, int(step_minutes))
+    rounded = (base_minutes // step) * step
+    exact = datetime.combine(day, time(rounded // 60, rounded % 60))
+    hit = fits(exact)
+    if hit:
+        return [hit]
+
+    # 2) Nearest alternatives around exact
+    out: list[tuple[datetime, int]] = []
+    for delta_steps in range(1, 16):  # search up to ~4h each side (15m * 16)
+        for sign in (-1, 1):
+            cand = exact + timedelta(minutes=sign * delta_steps * step)
+            h = fits(cand)
+            if h:
+                out.append(h)
+                if len(out) >= limit:
+                    return out
+    return out
+
+
 def _book_appointment(
     db: Session,
     *,
@@ -383,6 +485,17 @@ def handle_inbound_whatsapp(
         services = _list_services(db, int(org.id))
         if not services:
             return "Aún no hay servicios configurados."
+        # allow: "SERVICIOS uñas" -> filtered list
+        parts = txt.split(maxsplit=1)
+        if len(parts) == 2 and parts[1].strip():
+            filtered = _filter_services_by_keyword(services, parts[1])
+            if not filtered:
+                return "No encuentro servicios con esa palabra. Escribe SERVICIOS para ver el catálogo completo."
+            return (
+                "Servicios encontrados:\n"
+                + "\n".join(f"- {s.name}" for s in filtered[:30])
+                + "\n\nDi: CITA"
+            )
         return "Servicios disponibles:\n" + "\n".join(f"- {s.name}" for s in services[:30]) + "\n\nDi: CITA"
 
     step = state.get("step") or "idle"
@@ -402,15 +515,22 @@ def handle_inbound_whatsapp(
         if any(k in state for k in ("preferred_day", "preferred_time", "service_ids")):
             if not state.get("service_ids"):
                 services = _list_services(db, int(org.id))
-                state["services_cache"] = [
-                    {"id": int(s.id), "name": s.name} for s in services if s.id is not None
-                ][:30]
+                # If the message contains a keyword, show a filtered menu instead of full list
+                keyword_hits = _filter_services_by_keyword(services, txt)
+                shown = keyword_hits if 0 < len(keyword_hits) < len(services) else services
+                state["services_cache"] = _service_cache_from_services(shown)
                 state["step"] = "awaiting_service"
             else:
                 state["step"] = "awaiting_date"
             _save_state(db, conv, state)
             if state["step"] == "awaiting_service":
                 services = _list_services(db, int(org.id))
+                shown = _filter_services_by_keyword(services, txt)
+                if 0 < len(shown) < len(services):
+                    return (
+                        "He encontrado estos servicios relacionados. Responde con el número o el nombre:\n"
+                        + _format_services_menu(shown)
+                    )
                 return (
                     "Entendido. Para reservar necesito el servicio.\n"
                     + _format_services_menu(services)
@@ -445,9 +565,12 @@ def handle_inbound_whatsapp(
             # ensure cache exists for next attempt
             if not cached:
                 services = _list_services(db, int(org.id))
-                state["services_cache"] = [
-                    {"id": int(s.id), "name": s.name} for s in services if s.id is not None
-                ][:30]
+                # If user typed a keyword (not just a number), filter the menu
+                shown = _filter_services_by_keyword(services, txt)
+                if 0 < len(shown) < len(services):
+                    state["services_cache"] = _service_cache_from_services(shown)
+                else:
+                    state["services_cache"] = _service_cache_from_services(services)
                 _save_state(db, conv, state)
             return (
                 "No te he entendido.\n"
@@ -505,7 +628,27 @@ def handle_inbound_whatsapp(
         # If the user previously sent "hoy/mañana" in a natural message, we keep it but
         # still require an explicit YYYY-MM-DD to avoid misunderstandings.
         service_ids = [int(x) for x in (state.get("service_ids") or [])]
-        slots = _compute_slots(db, org_id=int(org.id), org=org, service_ids=service_ids, day=d)
+        pref = (state.get("preferred_time") or "").strip()
+        pref_t = _parse_time_hhmm_es(pref) if pref else None
+        if pref_t:
+            slots = _compute_slots_near_preferred_time(
+                db,
+                org_id=int(org.id),
+                org=org,
+                service_ids=service_ids,
+                day=d,
+                preferred=pref_t,
+            )
+            # If exact time was available we might get 1; fill up to 3 with general slots after it
+            if len(slots) < 3:
+                more = _compute_slots(db, org_id=int(org.id), org=org, service_ids=service_ids, day=d)
+                for s in more:
+                    if s not in slots:
+                        slots.append(s)
+                    if len(slots) >= 3:
+                        break
+        else:
+            slots = _compute_slots(db, org_id=int(org.id), org=org, service_ids=service_ids, day=d)
         if not slots:
             return "No encuentro huecos ese día dentro del horario del salón. Prueba con otra fecha (YYYY-MM-DD)."
         # store options
