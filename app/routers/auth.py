@@ -8,6 +8,7 @@ from google_auth_oauthlib.flow import Flow
 from requests_oauthlib import OAuth2Session
 from app.core.db.session import get_session
 from app.models import User
+from app.models.user import UserRole
 from app.models.organization import Organization
 from app.billing.subscription import integrations_access_effective
 from app.schemas.token import Token 
@@ -137,7 +138,7 @@ async def auth_google(data: dict, db: Session = Depends(get_session)):
         return {
             "access_token": access_token,
             "token_type": "bearer",
-            "role": user.role,
+            "role": user.role.value if hasattr(user.role, "value") else str(user.role),
             "organization_id": user.organization_id
         }
 
@@ -149,6 +150,46 @@ async def auth_google(data: dict, db: Session = Depends(get_session)):
     except Exception as e:
         print(f"❌ Error inesperado en Auth: {str(e)}")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+
+@router.post("/impersonate", response_model=Token)
+def impersonate_user(
+    body: dict,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user_for_app),
+):
+    """
+    SUPER_ADMIN only. Returns a JWT for the target user.
+    Frontend should store the original token and provide a clear exit path.
+    """
+    if current_user.role != UserRole.SUPER_ADMIN:
+        raise HTTPException(status_code=403, detail="No autorizado")
+
+    email_raw = (body.get("email") or "").strip().lower()
+    if not email_raw:
+        raise HTTPException(status_code=400, detail="Missing email")
+
+    target = db.exec(select(User).where(User.email == email_raw)).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    token = create_access_token(
+        data={
+            "sub": target.email,
+            "impersonated": True,
+            "actor_sub": current_user.email,
+        }
+    )
+    org = db.get(Organization, target.organization_id) if target.organization_id else None
+    integrations = integrations_access_effective(target, org)
+
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "role": target.role.value if hasattr(target.role, "value") else str(target.role),
+        "organization_id": target.organization_id,
+        "integrations_access": integrations,
+    }
 
 
 @router.get("/google/calendar/connect")

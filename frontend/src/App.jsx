@@ -36,6 +36,8 @@ import FirstVisitGuide from "./components/onboarding/FirstVisitGuide";
 import MorningWhatsAppRemindersModal from "./components/modals/MorningWhatsAppRemindersModal";
 
 const ONBOARDING_STORAGE_KEY = "beautydesk_onboarding_v2";
+const IMPERSONATION_ORIGINAL_TOKEN_KEY = "impersonation_original_token";
+const IMPERSONATION_TARGET_EMAIL_KEY = "impersonation_target_email";
 
 /** One-shot replay: first session after deploy clears “completed” for this account only. Bump suffix to replay again. */
 const ONBOARDING_REPLAY_ONCE_KEY = "beautydesk_onboarding_replay_2026_04_david_v1";
@@ -106,11 +108,26 @@ function App() {
   const [showFirstVisitGuide, setShowFirstVisitGuide] = useState(false);
   const [guidedTourActive, setGuidedTourActive] = useState(false);
   const [showMorningWhatsApp, setShowMorningWhatsApp] = useState(false);
+  const [impersonationTargetEmail, setImpersonationTargetEmail] = useState(null);
 
   function handleLogout() {
     localStorage.removeItem("token");
     setIsLoggedIn(false);
   }
+
+  const exitImpersonation = () => {
+    try {
+      const original = localStorage.getItem(IMPERSONATION_ORIGINAL_TOKEN_KEY);
+      if (original) {
+        localStorage.setItem("token", original);
+      }
+      localStorage.removeItem(IMPERSONATION_ORIGINAL_TOKEN_KEY);
+      localStorage.removeItem(IMPERSONATION_TARGET_EMAIL_KEY);
+    } catch {
+      /* ignore */
+    }
+    window.location.href = "/app";
+  };
 
   const MORNING_WHATSAPP_KEY = useMemo(() => {
     const d = new Date();
@@ -249,6 +266,24 @@ function App() {
   }, [isLoggedIn]);
 
   useEffect(() => {
+    if (!isLoggedIn) {
+      setImpersonationTargetEmail(null);
+      return;
+    }
+    try {
+      const original = localStorage.getItem(IMPERSONATION_ORIGINAL_TOKEN_KEY);
+      const target = localStorage.getItem(IMPERSONATION_TARGET_EMAIL_KEY);
+      if (original && target) {
+        setImpersonationTargetEmail(target);
+      } else {
+        setImpersonationTargetEmail(null);
+      }
+    } catch {
+      setImpersonationTargetEmail(null);
+    }
+  }, [isLoggedIn, currentUser?.id]);
+
+  useEffect(() => {
     if (!isLoggedIn || !currentUser || currentUser.app_access_locked) return;
     if (!todaysAppointments.length) return;
     const now = new Date();
@@ -358,6 +393,26 @@ function App() {
             element={
               isLoggedIn ? (
                 <div className="min-h-screen bg-[#f8f5f2] pb-24 md:pb-12 pt-6 md:pt-12 px-4 md:px-6 font-sans text-[#5d5045]">
+                  {impersonationTargetEmail && (
+                    <div className="max-w-6xl mx-auto mb-4 px-1">
+                      <div className="rounded-2xl border border-purple-200 bg-purple-50/95 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-[10px] font-bold text-purple-950">
+                        <span>
+                          Estás viendo la cuenta de{" "}
+                          <span className="font-black">
+                            {impersonationTargetEmail}
+                          </span>
+                          .
+                        </span>
+                        <button
+                          type="button"
+                          onClick={exitImpersonation}
+                          className="shrink-0 bg-white border border-purple-200 text-purple-950 px-4 py-2 rounded-full uppercase tracking-widest text-[9px] font-black hover:border-purple-300"
+                        >
+                          Volver a mi cuenta
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   {!currentUser && (
                     <div className="max-w-6xl mx-auto py-20 text-center text-[10px] text-[#8c857d] font-bold uppercase tracking-widest">
                       Cargando tu cuenta…

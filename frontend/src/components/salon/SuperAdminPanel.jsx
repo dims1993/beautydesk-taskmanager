@@ -7,6 +7,7 @@ import {
   Building2,
   Users,
   Trash2,
+  LogIn,
 } from "lucide-react";
 
 const SuperAdminPanel = () => {
@@ -16,16 +17,18 @@ const SuperAdminPanel = () => {
     email: "",
     username: "",
   });
+  const [impersonateEmail, setImpersonateEmail] = useState("");
   const [organizations, setOrganizations] = useState([]);
   const [status, setStatus] = useState({ type: "", message: "" });
   const [isLoading, setIsLoading] = useState(false);
+  const [impersonateLoading, setImpersonateLoading] = useState(false);
 
   const fetchOrgs = async () => {
     try {
       const data = await apiRequest("/users/organizations");
       setOrganizations(data);
-    } catch (err) {
-      console.error("Error cargando organizaciones", err);
+    } catch (e) {
+      console.error("Error cargando organizaciones", e);
     }
   };
 
@@ -71,12 +74,51 @@ const SuperAdminPanel = () => {
           type: "success",
           message: "Organización eliminada correctamente",
         });
-      } catch (err) {
+      } catch {
         setStatus({
           type: "error",
           message: "No se pudo eliminar la organización",
         });
       }
+    }
+  };
+
+  const handleImpersonate = async (e) => {
+    e.preventDefault();
+    const email = (impersonateEmail || "").trim().toLowerCase();
+    if (!email) return;
+    setImpersonateLoading(true);
+    setStatus({ type: "", message: "" });
+    try {
+      const originalToken = localStorage.getItem("token");
+      if (originalToken) {
+        localStorage.setItem("impersonation_original_token", originalToken);
+      }
+      localStorage.setItem("impersonation_target_email", email);
+
+      const res = await apiRequest("/auth/impersonate", "POST", { email });
+      if (!res?.access_token) {
+        throw { detail: "No se pudo impersonar (sin token)" };
+      }
+      localStorage.setItem("token", res.access_token);
+      if (res.role) localStorage.setItem("role", res.role);
+      if (res.organization_id != null) {
+        localStorage.setItem("organization_id", String(res.organization_id));
+      }
+      setStatus({
+        type: "success",
+        message: `Entrando como ${email}…`,
+      });
+      window.location.href = "/app";
+    } catch (err) {
+      setStatus({
+        type: "error",
+        message:
+          err?.detail ||
+          "No se pudo entrar como ese usuario. Revisa el email.",
+      });
+    } finally {
+      setImpersonateLoading(false);
     }
   };
   return (
@@ -164,6 +206,35 @@ const SuperAdminPanel = () => {
                 {isLoading ? "Creando..." : "Alta de Organización"}
               </button>
             </form>
+
+            <div className="mt-8 pt-8 border-t border-[#f3ede7] relative z-10">
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-[#5d5045] mb-4">
+                Soporte — Entrar como usuario
+              </h3>
+              <form onSubmit={handleImpersonate} className="space-y-4">
+                <div>
+                  <label className="text-[9px] font-black uppercase tracking-[0.2em] text-[#a39485] ml-4 mb-2 block">
+                    Email del usuario
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="usuario@correo.com"
+                    className="w-full px-6 py-4 rounded-2xl bg-[#f8f5f2] border-2 border-transparent focus:border-[#dcc7b1] focus:bg-white transition-all outline-none text-sm font-medium"
+                    value={impersonateEmail}
+                    onChange={(e) => setImpersonateEmail(e.target.value)}
+                    required
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={impersonateLoading}
+                  className="w-full bg-white border border-[#eaddcf] text-[#5d5045] font-black py-4 rounded-2xl hover:border-[#5d5045]/30 hover:bg-[#faf8f5] transition-all shadow-sm disabled:opacity-50 uppercase tracking-widest text-[10px] inline-flex items-center justify-center gap-2"
+                >
+                  <LogIn size={16} strokeWidth={2.5} />
+                  {impersonateLoading ? "Entrando..." : "Entrar como"}
+                </button>
+              </form>
+            </div>
 
             {status.message && (
               <div
