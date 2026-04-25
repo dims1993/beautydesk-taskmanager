@@ -166,6 +166,37 @@ def _match_service_ids_from_text(db: Session, org_id: int, txt: str) -> list[int
     return [sid for _, sid in hits[:3]]
 
 
+def _best_service_id_from_text_or_number(
+    db: Session,
+    org_id: int,
+    txt: str,
+    services_cache: list[dict] | None,
+) -> int | None:
+    """
+    Resolve a service either by numeric menu choice or by fuzzy-ish name match.
+    Falls back to live service list when cache is missing.
+    """
+    raw = (txt or "").strip()
+    if not raw:
+        return None
+
+    cache = services_cache or []
+    if not cache:
+        services = _list_services(db, org_id)
+        cache = [{"id": int(s.id), "name": s.name} for s in services if s.id is not None][:30]
+
+    # numeric choice (1..N)
+    choice = _parse_choice_number(raw, len(cache))
+    if choice:
+        return int(cache[choice - 1]["id"])
+
+    # name match
+    hits = _match_service_ids_from_text(db, org_id, raw)
+    if hits:
+        return int(hits[0])
+    return None
+
+
 def _parse_yes_no(txt: str) -> bool | None:
     raw = (txt or "").strip().lower()
     if not raw:
@@ -369,7 +400,14 @@ def handle_inbound_whatsapp(
         if svc_ids:
             state["service_ids"] = [int(svc_ids[0])]
         if any(k in state for k in ("preferred_day", "preferred_time", "service_ids")):
-            state["step"] = "awaiting_service" if not state.get("service_ids") else "awaiting_date"
+            if not state.get("service_ids"):
+                services = _list_services(db, int(org.id))
+                state["services_cache"] = [
+                    {"id": int(s.id), "name": s.name} for s in services if s.id is not None
+                ][:30]
+                state["step"] = "awaiting_service"
+            else:
+                state["step"] = "awaiting_date"
             _save_state(db, conv, state)
             if state["step"] == "awaiting_service":
                 services = _list_services(db, int(org.id))
@@ -400,10 +438,21 @@ def handle_inbound_whatsapp(
 
     if step == "awaiting_service":
         cached = state.get("services_cache") or []
-        choice = _parse_choice_number(txt, len(cached))
-        if not choice:
-            return "No te he entendido. Escribe el número del servicio (ej: 1)."
-        service_id = int(cached[choice - 1]["id"])
+        service_id = _best_service_id_from_text_or_number(
+            db, int(org.id), txt, cached
+        )
+        if not service_id:
+            # ensure cache exists for next attempt
+            if not cached:
+                services = _list_services(db, int(org.id))
+                state["services_cache"] = [
+                    {"id": int(s.id), "name": s.name} for s in services if s.id is not None
+                ][:30]
+                _save_state(db, conv, state)
+            return (
+                "No te he entendido.\n"
+                "Responde con el número del servicio (ej: 1) o escribe su nombre (ej: 'manicura')."
+            )
         state["service_ids"] = [service_id]
         state["step"] = "awaiting_more_services"
         _save_state(db, conv, state)
