@@ -184,6 +184,31 @@ def update_client(
         if client.organization_id != current_user.organization_id:
             raise HTTPException(status_code=403, detail="No autorizado")
 
+    # Prevent phone collisions (DB may enforce unique phone).
+    if "telefono" in client_data and client_data.get("telefono") is not None:
+        new_phone_raw = str(client_data.get("telefono") or "").strip()
+        if new_phone_raw and new_phone_raw != (client.telefono or ""):
+            key = _norm_phone(new_phone_raw)
+            if key:
+                org_id = client.organization_id
+                if org_id is not None:
+                    siblings = db.exec(
+                        select(Client).where(
+                            Client.organization_id == org_id,
+                            Client.id != client_id,
+                        )
+                    ).all()
+                else:
+                    siblings = db.exec(
+                        select(Client).where(Client.id != client_id)
+                    ).all()
+                for other in siblings:
+                    if _norm_phone(other.telefono) == key:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="Este teléfono ya está registrado en otro cliente.",
+                        )
+
     for key, value in client_data.items():
         if key != "id":
             setattr(client, key, value)
