@@ -123,6 +123,15 @@ async def get_all_organizations(
             "id": org.id,
             "name": org.name,
             "user_count": len(users_in_org),
+            "user_emails": sorted(
+                list(
+                    {
+                        (u.email or "").strip().lower()
+                        for u in users_in_org
+                        if (u.email or "").strip()
+                    }
+                )
+            ),
             "business_type": org.business_type.value,
             "subscription_plan": sp,
             "payment_method": pm,

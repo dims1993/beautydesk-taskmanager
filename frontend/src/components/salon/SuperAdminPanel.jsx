@@ -8,6 +8,7 @@ import {
   Users,
   Trash2,
   LogIn,
+  ChevronDown,
 } from "lucide-react";
 
 const SuperAdminPanel = () => {
@@ -19,6 +20,7 @@ const SuperAdminPanel = () => {
   });
   const [impersonateEmail, setImpersonateEmail] = useState("");
   const [organizations, setOrganizations] = useState([]);
+  const [openOrgId, setOpenOrgId] = useState(null);
   const [status, setStatus] = useState({ type: "", message: "" });
   const [isLoading, setIsLoading] = useState(false);
   const [impersonateLoading, setImpersonateLoading] = useState(false);
@@ -34,6 +36,7 @@ const SuperAdminPanel = () => {
 
   useEffect(() => {
     fetchOrgs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // --- FUNCIÓN PARA CREAR (CORREGIDA) ---
@@ -261,44 +264,86 @@ const SuperAdminPanel = () => {
 
           <div className="grid grid-cols-1 gap-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
             {organizations.map((org) => (
-              <div
-                key={org.id}
-                className="bg-white p-6 rounded-[2rem] border border-[#eee8e2] flex justify-between items-center group hover:shadow-md transition-all hover:border-[#dcc7b1]"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-[#f8f5f2] rounded-2xl text-[#dcc7b1] group-hover:bg-[#5d5045] group-hover:text-white transition-colors">
-                    <Building2 size={20} />
-                  </div>
+              <div key={org.id} className="space-y-2">
+                <div className="bg-white p-6 rounded-[2rem] border border-[#eee8e2] flex justify-between items-center group hover:shadow-md transition-all hover:border-[#dcc7b1]">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setOpenOrgId((prev) => (prev === org.id ? null : org.id))
+                    }
+                    className="flex items-center gap-4 min-w-0 text-left"
+                    title="Ver usuarios"
+                  >
+                    <div className="p-3 bg-[#f8f5f2] rounded-2xl text-[#dcc7b1] group-hover:bg-[#5d5045] group-hover:text-white transition-colors shrink-0">
+                      <Building2 size={20} />
+                    </div>
 
-                  <div className="space-y-1">
-                    <p className="font-black text-[#5d5045] text-base tracking-tighter uppercase">
-                      {org.name}
-                    </p>
-                    <div className="flex items-center gap-3">
-                      <span className="text-[9px] bg-[#f8f5f2] text-[#a39485] px-2 py-1 rounded-md font-bold uppercase">
-                        ID: {org.id.toString().slice(0, 8)}
-                      </span>
-                      <div className="flex items-center gap-1 text-[9px] text-[#dcc7b1] font-black uppercase italic">
-                        <Users size={10} />
-                        <span>{org.user_count} Usuarios</span>
+                    <div className="space-y-1 min-w-0">
+                      <p className="font-black text-[#5d5045] text-base tracking-tighter uppercase truncate">
+                        {org.name}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span className="text-[9px] bg-[#f8f5f2] text-[#a39485] px-2 py-1 rounded-md font-bold uppercase">
+                          ID: {org.id.toString().slice(0, 8)}
+                        </span>
+                        <div className="flex items-center gap-1 text-[9px] text-[#dcc7b1] font-black uppercase italic">
+                          <Users size={10} />
+                          <span>{org.user_count} Usuarios</span>
+                        </div>
                       </div>
                     </div>
+                  </button>
+
+                  <div className="flex items-center gap-3 shrink-0">
+                    <ChevronDown
+                      className={`w-4 h-4 text-[#a39485] transition-transform ${
+                        openOrgId === org.id ? "rotate-180" : ""
+                      }`}
+                      strokeWidth={2.5}
+                    />
+                    <div className="h-2 w-2 rounded-full bg-green-400 shadow-[0_0_10px_rgba(74,222,128,0.4)]" />
+                    <button
+                      onClick={() => handleDelete(org.id, org.name)}
+                      className="p-2.5 text-[#a39485] hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                      title="Eliminar Organización"
+                    >
+                      <Trash2 size={16} strokeWidth={2.5} />
+                    </button>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4">
-                  {/* PUNTO DE ESTADO */}
-                  <div className="h-2 w-2 rounded-full bg-green-400 shadow-[0_0_10px_rgba(74,222,128,0.4)]" />
-
-                  {/* BOTÓN ELIMINAR */}
-                  <button
-                    onClick={() => handleDelete(org.id, org.name)}
-                    className="p-2.5 text-[#a39485] hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"
-                    title="Eliminar Organización"
-                  >
-                    <Trash2 size={16} strokeWidth={2.5} />
-                  </button>
-                </div>
+                {openOrgId === org.id && (
+                  <div className="bg-white/90 rounded-[2rem] border border-[#eee8e2] px-6 py-5">
+                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#a39485]">
+                      Usuarios (emails)
+                    </p>
+                    <div className="mt-3 space-y-2">
+                      {(org.user_emails || []).length === 0 ? (
+                        <p className="text-[10px] text-[#8c857d] font-medium">
+                          No hay usuarios asociados.
+                        </p>
+                      ) : (
+                        (org.user_emails || []).map((em) => (
+                          <div
+                            key={em}
+                            className="flex items-center justify-between gap-3 rounded-2xl border border-[#f1ebe6] bg-[#faf8f5] px-4 py-3"
+                          >
+                            <span className="min-w-0 truncate text-[10px] font-black tracking-widest text-[#5d5045]">
+                              {em}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setImpersonateEmail(em)}
+                              className="shrink-0 rounded-full border border-[#eaddcf] bg-white px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-[#5d5045] hover:border-[#dcc7b1]"
+                            >
+                              Usar
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
 
