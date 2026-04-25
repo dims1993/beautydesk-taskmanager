@@ -10,6 +10,7 @@ import {
   Pencil,
   Phone,
   Scissors,
+  Clock,
   Shield,
   Trash2,
   User,
@@ -138,6 +139,48 @@ export default function SettingsView({
   const [svcEditSaving, setSvcEditSaving] = useState(false);
   const [svcDeletingId, setSvcDeletingId] = useState(null);
   const [serviceToDelete, setServiceToDelete] = useState(null);
+
+  const [hours, setHours] = useState(null);
+  const [hoursLoading, setHoursLoading] = useState(false);
+  const [hoursSaving, setHoursSaving] = useState(false);
+  const [hoursMsg, setHoursMsg] = useState("");
+
+  const dayLabel = (dow) =>
+    ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"][
+      Number(dow) || 0
+    ];
+
+  const loadHours = async () => {
+    if (!isOwnerWithOrg) return;
+    setHoursLoading(true);
+    setHoursMsg("");
+    try {
+      const r = await apiRequest("/users/me/organization/salon-hours", "GET");
+      setHours(Array.isArray(r?.days) ? r.days : []);
+    } catch (err) {
+      onError?.(formatErr(err));
+    } finally {
+      setHoursLoading(false);
+    }
+  };
+
+  const saveHours = async () => {
+    if (!Array.isArray(hours) || hours.length !== 7) return;
+    setHoursSaving(true);
+    setHoursMsg("");
+    try {
+      await apiRequest("/users/me/organization/salon-hours", "PATCH", {
+        days: hours,
+      });
+      setHoursMsg("Horario guardado.");
+      await onRefresh?.();
+    } catch (err) {
+      setHoursMsg(formatErr(err));
+      onError?.(formatErr(err));
+    } finally {
+      setHoursSaving(false);
+    }
+  };
 
   const isOwnerWithOrg =
     String(currentUser?.role || "").toUpperCase() === "OWNER" &&
@@ -717,6 +760,126 @@ export default function SettingsView({
               {svcSaving ? "Guardando…" : "Añadir servicio"}
             </button>
           </form>
+        </SettingsAccordion>
+      )}
+
+      {isOwnerWithOrg && (
+        <SettingsAccordion
+          title="Horario del salón"
+          description="Define a qué horas está abierto el negocio para calcular huecos disponibles y automatizar reservas."
+          icon={Clock}
+          defaultOpen={false}
+        >
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <p className="text-[10px] text-[#8c857d] leading-relaxed">
+              Recomendación: configura el horario antes de usar el agente de WhatsApp.
+            </p>
+            <button
+              type="button"
+              onClick={loadHours}
+              disabled={hoursLoading}
+              className="shrink-0 rounded-full border border-[#eaddcf] bg-white px-4 py-2 text-[9px] font-black uppercase tracking-widest text-[#5d5045] disabled:opacity-50"
+            >
+              {hoursLoading ? "Cargando…" : "Cargar"}
+            </button>
+          </div>
+
+          {hoursMsg && (
+            <p
+              className={`mb-3 text-[10px] font-bold ${
+                hoursMsg === "Horario guardado."
+                  ? "text-green-700"
+                  : "text-red-600"
+              }`}
+            >
+              {hoursMsg}
+            </p>
+          )}
+
+          {!hours && (
+            <p className="text-[10px] text-[#8c857d]">
+              Pulsa <strong>Cargar</strong> para ver tu horario actual.
+            </p>
+          )}
+
+          {Array.isArray(hours) && hours.length === 7 && (
+            <div className="space-y-3">
+              {hours.map((d, idx) => (
+                <div
+                  key={d.day_of_week ?? idx}
+                  className="rounded-2xl border border-[#eee8e2] bg-[#FAF9F6] p-4"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[10px] font-black tracking-widest text-[#5d5045]">
+                      {dayLabel(d.day_of_week)}
+                    </p>
+                    <label className="inline-flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-[#8c857d]">
+                      <input
+                        type="checkbox"
+                        checked={!!d.is_open}
+                        onChange={(e) =>
+                          setHours((prev) =>
+                            prev.map((x, i) =>
+                              i === idx ? { ...x, is_open: e.target.checked } : x,
+                            ),
+                          )
+                        }
+                      />
+                      Abierto
+                    </label>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[8px] font-black uppercase text-[#8c857d] mb-1">
+                        Apertura
+                      </label>
+                      <input
+                        type="time"
+                        value={d.open_time || "09:00"}
+                        disabled={!d.is_open}
+                        onChange={(e) =>
+                          setHours((prev) =>
+                            prev.map((x, i) =>
+                              i === idx ? { ...x, open_time: e.target.value } : x,
+                            ),
+                          )
+                        }
+                        className="w-full rounded-xl border border-[#eaddcf] bg-white px-3 py-2 text-[10px] font-black text-[#5d5045] disabled:opacity-50"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[8px] font-black uppercase text-[#8c857d] mb-1">
+                        Cierre
+                      </label>
+                      <input
+                        type="time"
+                        value={d.close_time || "20:00"}
+                        disabled={!d.is_open}
+                        onChange={(e) =>
+                          setHours((prev) =>
+                            prev.map((x, i) =>
+                              i === idx
+                                ? { ...x, close_time: e.target.value }
+                                : x,
+                            ),
+                          )
+                        }
+                        className="w-full rounded-xl border border-[#eaddcf] bg-white px-3 py-2 text-[10px] font-black text-[#5d5045] disabled:opacity-50"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={saveHours}
+                disabled={hoursSaving}
+                className="w-full rounded-full bg-[#5d5045] py-3 text-[10px] font-black uppercase tracking-widest text-[#f5ebe0] disabled:opacity-50"
+              >
+                {hoursSaving ? "Guardando…" : "Guardar horario"}
+              </button>
+            </div>
+          )}
         </SettingsAccordion>
       )}
 

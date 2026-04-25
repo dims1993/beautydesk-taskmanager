@@ -14,6 +14,8 @@ import {
   Sparkles,
   UserSquare2,
   X,
+  Scissors,
+  CircleCheck,
 } from "lucide-react";
 import { useApi } from "../../hooks/useApi";
 
@@ -363,6 +365,65 @@ export default function FirstVisitGuide({
                 Te llevamos por cada sección: cambiaremos de pestaña y te
                 explicamos qué hacer en cada una.
               </h2>
+
+              <div className="w-full max-w-md rounded-[1.5rem] border border-[#eaddcf] bg-white/80 px-5 py-4 text-left mb-8">
+                <p className="text-[9px] font-black uppercase tracking-[0.35em] text-[#8c857d]">
+                  Tareas pendientes recomendadas
+                </p>
+                <div className="mt-3 space-y-2">
+                  {[
+                    {
+                      key: "cash",
+                      icon: Lock,
+                      label: "Configura la clave de cierre de caja",
+                      done: !!currentUser?.cash_close_password_configured,
+                    },
+                    {
+                      key: "services",
+                      icon: Scissors,
+                      label: "Añade tu primer servicio",
+                      done: !!currentUser?.has_services_configured,
+                    },
+                    {
+                      key: "hours",
+                      icon: Clock,
+                      label: "Define el horario del salón",
+                      done: !!currentUser?.salon_hours_configured,
+                    },
+                  ].map((t) => {
+                    const Icon2 = t.icon;
+                    return (
+                      <div
+                        key={t.key}
+                        className="flex items-center justify-between gap-3 rounded-2xl border border-[#eee8e2] bg-[#faf8f5] px-4 py-3"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-white ring-1 ring-[#eaddcf] text-[#5d5045]">
+                            <Icon2 className="h-4 w-4" strokeWidth={2} />
+                          </div>
+                          <p className="min-w-0 truncate text-[10px] font-black tracking-widest text-[#5d5045]">
+                            {t.label}
+                          </p>
+                        </div>
+                        {t.done ? (
+                          <CircleCheck
+                            className="h-5 w-5 text-green-600 shrink-0"
+                            strokeWidth={2}
+                          />
+                        ) : (
+                          <span className="shrink-0 text-[9px] font-black uppercase tracking-widest text-[#a39485]">
+                            Pendiente
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="mt-3 text-[10px] text-[#8c857d] leading-relaxed">
+                  Consejo: configura el <strong>horario</strong> para que el agente
+                  de WhatsApp pueda proponerte huecos reales según el día.
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={startTour}

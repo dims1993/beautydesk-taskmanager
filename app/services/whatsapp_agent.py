@@ -115,10 +115,9 @@ def _compute_slots(
     db: Session,
     *,
     org_id: int,
+    org: Organization,
     service_ids: list[int],
     day: date,
-    open_time: time = time(9, 0),
-    close_time: time = time(20, 0),
     step_minutes: int = 15,
     min_notice_minutes: int = 30,
     limit: int = 3,
@@ -128,8 +127,29 @@ def _compute_slots(
     if minutes <= 0:
         raise HTTPException(status_code=400, detail="Invalid service duration")
 
-    day_open = datetime.combine(day, open_time, tzinfo=TZ)
-    day_close = datetime.combine(day, close_time, tzinfo=TZ)
+    dow = day.weekday()  # Mon=0 .. Sun=6
+    open_t = time(9, 0)
+    close_t = time(20, 0)
+    is_open = True
+    raw = (getattr(org, "salon_hours_json", None) or "").strip()
+    if raw:
+        try:
+            days = json.loads(raw)
+            row = next((d for d in days if int(d.get("day_of_week", -1)) == dow), None)
+            if row:
+                is_open = bool(row.get("is_open", True))
+                if is_open:
+                    oh, om = [int(x) for x in str(row.get("open_time", "09:00")).split(":")]
+                    ch, cm = [int(x) for x in str(row.get("close_time", "20:00")).split(":")]
+                    open_t = time(oh, om)
+                    close_t = time(ch, cm)
+        except Exception:
+            pass
+    if not is_open:
+        return []
+
+    day_open = datetime.combine(day, open_t, tzinfo=TZ)
+    day_close = datetime.combine(day, close_t, tzinfo=TZ)
     now = datetime.now(TZ)
     min_start = now + timedelta(minutes=min_notice_minutes)
     cursor = max(day_open, min_start)
@@ -278,9 +298,9 @@ def handle_inbound_whatsapp(
         if not d:
             return "Formato de fecha inválido. Ejemplo: 2026-04-30"
         service_ids = [int(x) for x in (state.get("service_ids") or [])]
-        slots = _compute_slots(db, org_id=int(org.id), service_ids=service_ids, day=d)
+        slots = _compute_slots(db, org_id=int(org.id), org=org, service_ids=service_ids, day=d)
         if not slots:
-            return "No encuentro huecos ese día. Prueba con otra fecha (YYYY-MM-DD)."
+            return "No encuentro huecos ese día dentro del horario del salón. Prueba con otra fecha (YYYY-MM-DD)."
         # store options
         options = []
         for s, staff_id in slots:

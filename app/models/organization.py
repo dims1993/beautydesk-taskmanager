@@ -74,6 +74,9 @@ class Organization(SQLModel, table=True):
     salon_category_primary: Optional[str] = Field(default=None)
     salon_categories_json: Optional[str] = Field(default=None)
 
+    # Salon opening hours (JSON, 7 days). Used by booking agent and availability.
+    salon_hours_json: Optional[str] = Field(default=None)
+
     # Cierre de caja (solo el titular la define; todo el personal la usa para validar)
     cash_close_password_hash: Optional[str] = Field(default=None)
 

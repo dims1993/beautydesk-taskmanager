@@ -199,6 +199,11 @@ def init_db():
             )
             conn.execute(
                 text(
+                    'ALTER TABLE "organization" ADD COLUMN IF NOT EXISTS salon_hours_json TEXT'
+                )
+            )
+            conn.execute(
+                text(
                     'ALTER TABLE "organization" ADD COLUMN IF NOT EXISTS cash_close_password_hash TEXT'
                 )
             )

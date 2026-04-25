@@ -169,6 +169,8 @@ class UserMeOut(UserOut):
     organization_billing_address_line1: Optional[str] = None
     organization_billing_address_line2: Optional[str] = None
     cash_close_password_configured: bool = False
+    has_services_configured: bool = False
+    salon_hours_configured: bool = False
     # Plan de la organización (suscripción) y permisos efectivos según ese plan
     subscription_plan: Optional[str] = None
     payment_method: Optional[str] = None
@@ -200,3 +202,46 @@ class SetCashClosePasswordBody(BaseModel):
 
 class VerifyCashCloseBody(BaseModel):
     password: str
+
+
+class SalonHoursDay(BaseModel):
+    day_of_week: int  # 0=Mon ... 6=Sun
+    is_open: bool = True
+    open_time: str = "09:00"  # HH:MM
+    close_time: str = "20:00"  # HH:MM
+
+    @model_validator(mode="after")
+    def validate_times(self):
+        if self.day_of_week < 0 or self.day_of_week > 6:
+            raise ValueError("day_of_week must be 0..6")
+        if not self.is_open:
+            return self
+        for f in ("open_time", "close_time"):
+            v = (getattr(self, f) or "").strip()
+            parts = v.split(":")
+            if len(parts) != 2:
+                raise ValueError("Time must be HH:MM")
+            hh = int(parts[0])
+            mm = int(parts[1])
+            if hh < 0 or hh > 23 or mm < 0 or mm > 59:
+                raise ValueError("Time must be HH:MM")
+        if self.open_time >= self.close_time:
+            raise ValueError("open_time must be before close_time")
+        return self
+
+
+class SetSalonHoursBody(BaseModel):
+    days: list[SalonHoursDay]
+
+    @model_validator(mode="after")
+    def validate_days(self):
+        if len(self.days) != 7:
+            raise ValueError("days must have 7 entries (Mon..Sun)")
+        seen = set()
+        for d in self.days:
+            if d.day_of_week in seen:
+                raise ValueError("Duplicate day_of_week")
+            seen.add(d.day_of_week)
+        if seen != set(range(7)):
+            raise ValueError("days must include day_of_week 0..6")
+        return self

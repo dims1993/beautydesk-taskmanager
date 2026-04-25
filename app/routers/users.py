@@ -10,8 +10,11 @@ from typing import List
 from sqlalchemy import or_
 
 from app.core.db.session import get_session
+import json
+
 from app.models.user import User, UserRole
 from app.models.organization import Organization
+from app.models.service import Service
 from app.core.notifications import send_registration_verification_email
 from app.schemas.user import (
     RegisterAccountRequest,
@@ -22,6 +25,7 @@ from app.schemas.user import (
     UserMeOut,
     UserOut,
     VerifyCashCloseBody,
+    SetSalonHoursBody,
 )
 from app.schemas.token import Token
 from app.billing.org_access import organization_blocks_app_access
@@ -206,6 +210,8 @@ def read_users_me(
     org_billing_line1 = None
     org_billing_line2 = None
     cash_close_configured = False
+    has_services_configured = False
+    salon_hours_configured = False
     subscription_plan = None
     payment_method = None
     plan_entitlements = None
@@ -224,6 +230,16 @@ def read_users_me(
             org_billing_line2 = (org.billing_address_line2 or "").strip() or None
             h = org.cash_close_password_hash
             cash_close_configured = bool(h and str(h).strip())
+            has_services_configured = (
+                db.exec(
+                    select(Service.id).where(Service.organization_id == org.id).limit(1)
+                ).first()
+                is not None
+            )
+            salon_hours_configured = bool(
+                getattr(org, "salon_hours_json", None)
+                and str(getattr(org, "salon_hours_json", "")).strip()
+            )
             subscription_plan, payment_method = org_subscription_and_payment_str(org)
             plan_entitlements = entitlements_to_dict(entitlements_for_organization(org))
             has_stripe_subscription = bool(
@@ -249,6 +265,8 @@ def read_users_me(
         organization_billing_address_line1=org_billing_line1,
         organization_billing_address_line2=org_billing_line2,
         cash_close_password_configured=cash_close_configured,
+        has_services_configured=has_services_configured,
+        salon_hours_configured=salon_hours_configured,
         subscription_plan=subscription_plan,
         payment_method=payment_method,
         plan_entitlements=plan_entitlements,
@@ -259,6 +277,61 @@ def read_users_me(
         stripe_current_period_ends_at=stripe_current_period_ends_at,
         app_access_locked=app_access_locked,
     )
+
+
+@router.get("/me/organization/salon-hours")
+def get_salon_hours(
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user_for_app),
+):
+    if not current_user.organization_id:
+        raise HTTPException(status_code=400, detail="No perteneces a una organización.")
+    org = db.get(Organization, current_user.organization_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+    raw = getattr(org, "salon_hours_json", None)
+    if raw and str(raw).strip():
+        try:
+            return {"days": json.loads(raw)}
+        except Exception:
+            return {"days": []}
+    # Default: Mon-Sat open 09:00-20:00, Sun closed
+    days = []
+    for dow in range(7):
+        is_open = dow != 6
+        days.append(
+            {
+                "day_of_week": dow,
+                "is_open": is_open,
+                "open_time": "09:00",
+                "close_time": "20:00",
+            }
+        )
+    if days:
+        days[-1]["is_open"] = False
+    return {"days": days}
+
+
+@router.patch("/me/organization/salon-hours")
+def set_salon_hours(
+    body: SetSalonHoursBody,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user_for_app),
+):
+    if current_user.role != UserRole.OWNER:
+        raise HTTPException(status_code=403, detail="Solo el titular puede configurar el horario.")
+    if not current_user.organization_id:
+        raise HTTPException(status_code=400, detail="No perteneces a una organización.")
+    org = db.get(Organization, current_user.organization_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+    org.salon_hours_json = json.dumps(
+        [d.model_dump() for d in body.days],
+        ensure_ascii=False,
+    )
+    db.add(org)
+    db.commit()
+    return {"success": True}
 
 
 @router.patch("/me/organization/cash-close-password")
