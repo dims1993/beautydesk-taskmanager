@@ -111,6 +111,17 @@ def _parse_date_yyyy_mm_dd(txt: str) -> date | None:
         return None
 
 
+def _parse_yes_no(txt: str) -> bool | None:
+    raw = (txt or "").strip().lower()
+    if not raw:
+        return None
+    if raw in ("si", "sí", "s", "ok", "vale", "confirmar", "confirmo", "yes", "y"):
+        return True
+    if raw in ("no", "n", "cancelar", "cancelo", "stop"):
+        return False
+    return None
+
+
 def _compute_slots(
     db: Session,
     *,
@@ -254,6 +265,14 @@ def handle_inbound_whatsapp(
         _save_state(db, conv, state)
         return "Listo. Empezamos de cero. Escribe CITA para reservar o SERVICIOS para ver el catálogo."
 
+    if txt_upper in ("CAMBIAR FECHA", "FECHA", "OTRO DIA", "OTRO DÍA"):
+        service_ids = [int(x) for x in (state.get("service_ids") or [])]
+        if not service_ids:
+            return "Primero dime qué quieres reservar: escribe CITA."
+        state["step"] = "awaiting_date"
+        _save_state(db, conv, state)
+        return "Perfecto. Dime la fecha (YYYY-MM-DD)."
+
     if txt_upper in ("HI", "HOLA", "HELP", "AYUDA", "MENU", "MENÚ", "START"):
         return (
             f"Hola, soy el asistente de {org.name}.\n"
@@ -288,10 +307,50 @@ def handle_inbound_whatsapp(
         if not choice:
             return "No te he entendido. Escribe el número del servicio (ej: 1)."
         service_id = int(cached[choice - 1]["id"])
-        state["step"] = "awaiting_date"
         state["service_ids"] = [service_id]
+        state["step"] = "awaiting_more_services"
         _save_state(db, conv, state)
-        return "Perfecto. ¿Qué día quieres? Escribe la fecha en formato YYYY-MM-DD (ej: 2026-04-30)."
+        return (
+            "Perfecto. ¿Quieres añadir otro servicio a la misma cita?\n"
+            "Responde: SI / NO"
+        )
+
+    if step == "awaiting_more_services":
+        yn = _parse_yes_no(txt)
+        if yn is None:
+            return "Responde SI o NO. (También puedes escribir RESET para empezar de cero)."
+        if yn is False:
+            state["step"] = "awaiting_date"
+            _save_state(db, conv, state)
+            return "Genial. ¿Qué día quieres? Escribe la fecha en formato YYYY-MM-DD (ej: 2026-04-30)."
+
+        # yes -> show menu again to pick an additional service
+        services = _list_services(db, int(org.id))
+        if not services:
+            state["step"] = "awaiting_date"
+            _save_state(db, conv, state)
+            return "No veo servicios para añadir. Dime la fecha (YYYY-MM-DD)."
+        state["step"] = "awaiting_additional_service"
+        state["services_cache"] = [{"id": int(s.id), "name": s.name} for s in services if s.id is not None][:30]
+        _save_state(db, conv, state)
+        return "Elige el servicio adicional escribiendo el número:\n" + "\n".join(
+            f"{i}) {s.name}" for i, s in enumerate(services[:30], start=1)
+        )
+
+    if step == "awaiting_additional_service":
+        cached = state.get("services_cache") or []
+        choice = _parse_choice_number(txt, len(cached))
+        if not choice:
+            return "No te he entendido. Escribe el número del servicio adicional (ej: 2)."
+        service_id = int(cached[choice - 1]["id"])
+        service_ids = [int(x) for x in (state.get("service_ids") or [])]
+        if service_id in service_ids:
+            return "Ese servicio ya está añadido. Elige otro número o responde RESET."
+        service_ids.append(service_id)
+        state["service_ids"] = service_ids
+        state["step"] = "awaiting_more_services"
+        _save_state(db, conv, state)
+        return "Añadido. ¿Quieres añadir otro servicio?\nResponde: SI / NO"
 
     if step == "awaiting_date":
         d = _parse_date_yyyy_mm_dd(txt)
@@ -307,6 +366,7 @@ def handle_inbound_whatsapp(
             options.append({"start": s.isoformat(), "staff_id": int(staff_id)})
         state["step"] = "awaiting_slot_choice"
         state["slot_options"] = options
+        state["slot_day"] = d.isoformat()
         _save_state(db, conv, state)
         lines = []
         for idx, opt in enumerate(options, start=1):
@@ -326,6 +386,39 @@ def handle_inbound_whatsapp(
         opt = options[choice - 1]
         start = datetime.fromisoformat(opt["start"])
         staff_id = int(opt["staff_id"])
+        service_ids = [int(x) for x in (state.get("service_ids") or [])]
+        state["step"] = "awaiting_booking_confirmation"
+        state["selected_slot"] = {"start": opt["start"], "staff_id": staff_id}
+        _save_state(db, conv, state)
+        # Build service summary
+        svcs = _services_for_org(db, int(org.id), service_ids)
+        svc_names = ", ".join([s.name for s in svcs]) if svcs else "Servicio"
+        return (
+            "Perfecto, voy a reservar esto:\n"
+            f"- Servicio(s): {svc_names}\n"
+            f"- Día/hora: {start.strftime('%Y-%m-%d %H:%M')}\n\n"
+            "¿Confirmas la cita?\nResponde: SI / NO"
+        )
+
+    if step == "awaiting_booking_confirmation":
+        yn = _parse_yes_no(txt)
+        if yn is None:
+            return "Responde SI o NO. (También puedes escribir CAMBIAR FECHA o RESET)."
+        if yn is False:
+            # Keep selected services but allow choosing a new date
+            state["step"] = "awaiting_date"
+            state.pop("selected_slot", None)
+            state.pop("slot_options", None)
+            _save_state(db, conv, state)
+            return "Vale. Dime otra fecha (YYYY-MM-DD) y te doy huecos disponibles."
+
+        selected = state.get("selected_slot") or {}
+        if not selected.get("start") or not selected.get("staff_id"):
+            state["step"] = "awaiting_date"
+            _save_state(db, conv, state)
+            return "He perdido el horario seleccionado. Dime la fecha (YYYY-MM-DD) y lo intentamos de nuevo."
+        start = datetime.fromisoformat(str(selected["start"]))
+        staff_id = int(selected["staff_id"])
         service_ids = [int(x) for x in (state.get("service_ids") or [])]
         appo = _book_appointment(
             db,
