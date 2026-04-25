@@ -622,11 +622,21 @@ def handle_inbound_whatsapp(
         return "Añadido. ¿Quieres añadir otro servicio?\nResponde: SI / NO"
 
     if step == "awaiting_date":
-        d = _parse_date_yyyy_mm_dd(txt)
+        d = _parse_date_yyyy_mm_dd(txt) or _parse_relative_date_es(txt)
         if not d:
-            return "Formato de fecha inválido. Ejemplo: 2026-04-30"
-        # If the user previously sent "hoy/mañana" in a natural message, we keep it but
-        # still require an explicit YYYY-MM-DD to avoid misunderstandings.
+            return (
+                "Formato de fecha inválido.\n"
+                "Ejemplos válidos:\n"
+                "- 2026-04-30\n"
+                "- mañana\n"
+                "- mañana a las 15:00"
+            )
+
+        # If the user provided a time in this same message, capture it as preferred_time
+        t_in_msg = _parse_time_hhmm_es(txt)
+        if t_in_msg:
+            state["preferred_time"] = t_in_msg.strftime("%H:%M")
+
         service_ids = [int(x) for x in (state.get("service_ids") or [])]
         pref = (state.get("preferred_time") or "").strip()
         pref_t = _parse_time_hhmm_es(pref) if pref else None
