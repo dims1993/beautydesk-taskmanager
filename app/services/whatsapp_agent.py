@@ -208,6 +208,10 @@ def _book_appointment(
         db.commit()
         db.refresh(client)
 
+    client_name = (getattr(client, "nombre", None) or "").strip() or "Cliente WhatsApp"
+    client_phone = (getattr(client, "telefono", None) or "").strip() or (phone_digits or None)
+    client_email = (getattr(client, "email", None) or "").strip() or None
+
     services = _services_for_org(db, int(org.id), service_ids)
     total_minutes = _total_minutes(services)
     end_time = start_time + timedelta(minutes=total_minutes)
@@ -218,6 +222,9 @@ def _book_appointment(
     appo = Appointment(
         organization_id=int(org.id),
         client_id=int(client.id),
+        client_name=client_name,
+        client_phone=client_phone,
+        client_email=client_email,
         staff_id=int(staff_id),
         service_id=primary_id,
         additional_service_ids_json=json.dumps(additional) if additional else None,
@@ -431,7 +438,7 @@ def handle_inbound_whatsapp(
         state = {"step": "idle"}
         _save_state(db, conv, state)
         return (
-            "Reserva confirmada.\n"
+            "¡Gracias! Tu cita ha sido agendada.\n"
             f"- Cita #{int(appo.id)}\n"
             f"- Día/hora: {start.strftime('%Y-%m-%d %H:%M')}\n"
             "Si quieres otra cita, escribe CITA."
