@@ -225,6 +225,53 @@ def _parse_yes_no(txt: str) -> bool | None:
     return None
 
 
+def _local_now_naive() -> datetime:
+    """Local Europe/Madrid time but stored as naive in DB."""
+    return datetime.now(TZ).replace(tzinfo=None)
+
+
+def _greeting(org: Organization) -> str:
+    return f"Hola, soy el asistente personal de {org.name}."
+
+
+def _staff_display_name(u: User) -> str:
+    parts = [getattr(u, "first_name", None), getattr(u, "last_name", None)]
+    raw = " ".join([p for p in parts if p and str(p).strip()]).strip()
+    if raw:
+        return raw
+    return (
+        (getattr(u, "nombre", None) or getattr(u, "username", None) or getattr(u, "email", "") or "Profesional")
+        .strip()
+    )
+
+
+def _list_staff_for_org(db: Session, org_id: int) -> list[User]:
+    ids = _staff_ids_for_org(db, org_id)
+    if not ids:
+        return []
+    rows = db.exec(select(User).where(User.id.in_(ids))).all()
+    rows.sort(key=lambda u: int(u.id or 0))
+    return rows
+
+
+def _format_staff_menu(staff: list[User]) -> tuple[str, list[dict]]:
+    cache: list[dict] = []
+    lines: list[str] = []
+    for idx, u in enumerate(staff[:10], start=1):
+        if u.id is None:
+            continue
+        cache.append({"id": int(u.id), "name": _staff_display_name(u)})
+        lines.append(f"{idx}) {cache[-1]['name']}")
+    return "¿Con quién te gustaría la cita? Responde con el número:\n" + "\n".join(lines), cache
+
+
+def _parse_staff_choice(txt: str, staff_cache: list[dict]) -> int | None:
+    choice = _parse_choice_number(txt, len(staff_cache))
+    if not choice:
+        return None
+    return int(staff_cache[choice - 1]["id"])
+
+
 def _compute_slots(
     db: Session,
     *,
@@ -266,7 +313,7 @@ def _compute_slots(
     # If we pass tz-aware datetimes, Postgres will convert to UTC and we end up with a 2h shift.
     day_open = datetime.combine(day, open_t)
     day_close = datetime.combine(day, close_t)
-    now_local = datetime.now(TZ).replace(tzinfo=None)
+    now_local = _local_now_naive()
     min_start = now_local + timedelta(minutes=min_notice_minutes)
     cursor = max(day_open, min_start)
 
@@ -330,7 +377,7 @@ def _compute_slots_near_preferred_time(
     day_close = datetime.combine(day, close_t)
     requested = datetime.combine(day, preferred)
 
-    now_local = datetime.now(TZ).replace(tzinfo=None)
+    now_local = _local_now_naive()
     min_start = now_local + timedelta(minutes=min_notice_minutes)
     if requested < min_start:
         requested = min_start
@@ -364,6 +411,80 @@ def _compute_slots_near_preferred_time(
             h = fits(cand)
             if h:
                 out.append(h)
+                if len(out) >= limit:
+                    return out
+    return out
+
+
+def _compute_slots_for_specific_staff_near_time(
+    db: Session,
+    *,
+    org_id: int,
+    org: Organization,
+    staff_id: int,
+    service_ids: list[int],
+    day: date,
+    preferred: time,
+    step_minutes: int = 15,
+    min_notice_minutes: int = 30,
+    limit: int = 3,
+) -> list[datetime]:
+    """Try requested time first, then nearest alternatives, for a specific staff."""
+    services = _services_for_org(db, org_id, service_ids)
+    minutes = _total_minutes(services)
+    if minutes <= 0:
+        return []
+
+    dow = day.weekday()
+    open_t = time(9, 0)
+    close_t = time(20, 0)
+    is_open = True
+    raw = (getattr(org, "salon_hours_json", None) or "").strip()
+    if raw:
+        try:
+            days = json.loads(raw)
+            row = next((d for d in days if int(d.get("day_of_week", -1)) == dow), None)
+            if row:
+                is_open = bool(row.get("is_open", True))
+                if is_open:
+                    oh, om = [int(x) for x in str(row.get("open_time", "09:00")).split(":")]
+                    ch, cm = [int(x) for x in str(row.get("close_time", "20:00")).split(":")]
+                    open_t = time(oh, om)
+                    close_t = time(ch, cm)
+        except Exception:
+            pass
+    if not is_open:
+        return []
+
+    day_open = datetime.combine(day, open_t)
+    day_close = datetime.combine(day, close_t)
+    requested = datetime.combine(day, preferred)
+
+    min_start = _local_now_naive() + timedelta(minutes=min_notice_minutes)
+    if requested < min_start:
+        requested = min_start
+
+    def fits(start_dt: datetime) -> bool:
+        end_dt = start_dt + timedelta(minutes=minutes)
+        if start_dt < day_open or end_dt > day_close:
+            return False
+        return not _has_collision(db, org_id, staff_id, start_dt, end_dt)
+
+    base_minutes = requested.hour * 60 + requested.minute
+    step = max(5, int(step_minutes))
+    rounded = (base_minutes // step) * step
+    exact = datetime.combine(day, time(rounded // 60, rounded % 60))
+
+    out: list[datetime] = []
+    if fits(exact):
+        out.append(exact)
+        return out
+
+    for delta_steps in range(1, 16):
+        for sign in (-1, 1):
+            cand = exact + timedelta(minutes=sign * delta_steps * step)
+            if fits(cand):
+                out.append(cand)
                 if len(out) >= limit:
                     return out
     return out
@@ -464,6 +585,39 @@ def handle_inbound_whatsapp(
         _save_state(db, conv, state)
         return "Listo. Empezamos de cero. Escribe CITA para reservar o SERVICIOS para ver el catálogo."
 
+    if txt_upper in ("CANCELAR", "CANCEL", "ANULAR"):
+        # Policy: allow cancelling only within 24h prior to appointment.
+        phone_digits = _norm_phone_es(_digits_only(from_addr))
+        if not phone_digits:
+            return "Para cancelar necesito que me escribas desde el mismo WhatsApp de la reserva."
+        client = db.exec(
+            select(Client).where(
+                Client.organization_id == org.id,
+                Client.telefono == phone_digits,
+            )
+        ).first()
+        if not client or client.id is None:
+            return "No encuentro ninguna cita asociada a este número."
+        now_local = _local_now_naive()
+        appo = db.exec(
+            select(Appointment)
+            .where(
+                Appointment.organization_id == org.id,
+                Appointment.client_id == int(client.id),
+                Appointment.status == "scheduled",
+                Appointment.start_time >= now_local,
+            )
+            .order_by(Appointment.start_time.asc())
+        ).first()
+        if not appo:
+            return "No tienes ninguna cita pendiente para cancelar."
+        if (appo.start_time - now_local) > timedelta(hours=24):
+            return "Solo puedes cancelar dentro de las 24 horas previas a la cita."
+        appo.status = "cancelled"
+        db.add(appo)
+        db.commit()
+        return f"Tu cita ha sido cancelada. (Cita #{int(appo.id)})"
+
     if txt_upper in ("CAMBIAR FECHA", "FECHA", "OTRO DIA", "OTRO DÍA"):
         service_ids = [int(x) for x in (state.get("service_ids") or [])]
         if not service_ids:
@@ -474,10 +628,11 @@ def handle_inbound_whatsapp(
 
     if txt_upper in ("HI", "HOLA", "HELP", "AYUDA", "MENU", "MENÚ", "START"):
         return (
-            f"Hola, soy el asistente de {org.name}.\n"
+            f"{_greeting(org)}\n"
             "Comandos:\n"
             "- SERVICIOS\n"
             "- CITA\n"
+            "- CANCELAR\n"
             "- RESET\n"
         )
 
@@ -554,7 +709,7 @@ def handle_inbound_whatsapp(
             "services_cache": [{"id": int(s.id), "name": s.name} for s in services if s.id is not None][:30],
         }
         _save_state(db, conv, state)
-        return _format_services_menu(services)
+        return f"{_greeting(org)}\n" + _format_services_menu(services)
 
     if step == "awaiting_service":
         cached = state.get("services_cache") or []
@@ -622,6 +777,15 @@ def handle_inbound_whatsapp(
         return "Añadido. ¿Quieres añadir otro servicio?\nResponde: SI / NO"
 
     if step == "awaiting_date":
+        # Enforce: we must know the service(s) before offering availability.
+        service_ids = [int(x) for x in (state.get("service_ids") or [])]
+        if not service_ids:
+            services = _list_services(db, int(org.id))
+            state["step"] = "awaiting_service"
+            state["services_cache"] = _service_cache_from_services(services)
+            _save_state(db, conv, state)
+            return "Antes necesito el servicio para calcular la duración.\n" + _format_services_menu(services)
+
         d = _parse_date_yyyy_mm_dd(txt) or _parse_relative_date_es(txt)
         if not d:
             return (
@@ -637,34 +801,43 @@ def handle_inbound_whatsapp(
         if t_in_msg:
             state["preferred_time"] = t_in_msg.strftime("%H:%M")
 
-        service_ids = [int(x) for x in (state.get("service_ids") or [])]
         pref = (state.get("preferred_time") or "").strip()
         pref_t = _parse_time_hhmm_es(pref) if pref else None
-        if pref_t:
-            slots = _compute_slots_near_preferred_time(
-                db,
-                org_id=int(org.id),
-                org=org,
-                service_ids=service_ids,
-                day=d,
-                preferred=pref_t,
-            )
-            # If exact time was available we might get 1; fill up to 3 with general slots after it
-            if len(slots) < 3:
-                more = _compute_slots(db, org_id=int(org.id), org=org, service_ids=service_ids, day=d)
-                for s in more:
-                    if s not in slots:
-                        slots.append(s)
-                    if len(slots) >= 3:
-                        break
-        else:
-            slots = _compute_slots(db, org_id=int(org.id), org=org, service_ids=service_ids, day=d)
-        if not slots:
-            return "No encuentro huecos ese día dentro del horario del salón. Prueba con otra fecha (YYYY-MM-DD)."
-        # store options
-        options = []
-        for s, staff_id in slots:
-            options.append({"start": s.isoformat(), "staff_id": int(staff_id)})
+        if not pref_t:
+            state["step"] = "awaiting_time"
+            state["preferred_day"] = d.isoformat()
+            _save_state(db, conv, state)
+            return "Perfecto. ¿A qué hora te gustaría? (ej: 15:00)"
+
+        state["preferred_day"] = d.isoformat()
+
+        staff = _list_staff_for_org(db, int(org.id))
+        if len(staff) > 1:
+            menu, cache = _format_staff_menu(staff)
+            state["step"] = "awaiting_staff"
+            state["staff_cache"] = cache
+            _save_state(db, conv, state)
+            return menu
+
+        # 0 or 1 staff -> pick automatically
+        staff_id = int(staff[0].id) if staff and staff[0].id is not None else None
+        if not staff_id:
+            return "No encuentro profesionales disponibles. Revisa el equipo del salón."
+
+        options_dt = _compute_slots_for_specific_staff_near_time(
+            db,
+            org_id=int(org.id),
+            org=org,
+            staff_id=staff_id,
+            service_ids=service_ids,
+            day=d,
+            preferred=pref_t,
+            limit=3,
+        )
+        if not options_dt:
+            return "Ese profesional está ocupado a esa hora. Prueba con otra hora o fecha."
+
+        options = [{"start": dt.isoformat(), "staff_id": staff_id} for dt in options_dt]
         state["step"] = "awaiting_slot_choice"
         state["slot_options"] = options
         state["slot_day"] = d.isoformat()
@@ -674,7 +847,60 @@ def handle_inbound_whatsapp(
             dt = datetime.fromisoformat(opt["start"])
             lines.append(f"{idx}) {dt.strftime('%H:%M')}")
         return (
-            f"Estos son los primeros huecos disponibles para {d.isoformat()}:\n"
+            f"Huecos disponibles para {d.isoformat()}:\n"
+            + "\n".join(lines)
+            + "\n\nElige una opción (1, 2, 3)."
+        )
+
+    if step == "awaiting_time":
+        t = _parse_time_hhmm_es(txt)
+        if not t:
+            return "Hora inválida. Ejemplo: 15:00"
+        state["preferred_time"] = t.strftime("%H:%M")
+        state["step"] = "awaiting_date"
+        _save_state(db, conv, state)
+        return "Perfecto. Ahora dime el día (hoy/mañana o YYYY-MM-DD)."
+
+    if step == "awaiting_staff":
+        cache = state.get("staff_cache") or []
+        sid = _parse_staff_choice(txt, cache)
+        if not sid:
+            return "No te he entendido. Responde con el número del profesional."
+        state["staff_id"] = int(sid)
+        # Reuse the flow by re-entering date step with stored preferred day/time
+        d_raw = (state.get("preferred_day") or "").strip()
+        t_raw = (state.get("preferred_time") or "").strip()
+        d = _parse_date_yyyy_mm_dd(d_raw) or _parse_relative_date_es(d_raw)
+        pref_t = _parse_time_hhmm_es(t_raw) if t_raw else None
+        service_ids = [int(x) for x in (state.get("service_ids") or [])]
+        if not d or not pref_t or not service_ids:
+            state["step"] = "awaiting_date"
+            _save_state(db, conv, state)
+            return "Perfecto. Dime el día (hoy/mañana o YYYY-MM-DD)."
+
+        options_dt = _compute_slots_for_specific_staff_near_time(
+            db,
+            org_id=int(org.id),
+            org=org,
+            staff_id=int(sid),
+            service_ids=service_ids,
+            day=d,
+            preferred=pref_t,
+            limit=3,
+        )
+        if not options_dt:
+            return "Ese profesional está ocupado a esa hora. Prueba con otra hora o fecha."
+        options = [{"start": dt.isoformat(), "staff_id": int(sid)} for dt in options_dt]
+        state["step"] = "awaiting_slot_choice"
+        state["slot_options"] = options
+        state["slot_day"] = d.isoformat()
+        _save_state(db, conv, state)
+        lines = []
+        for idx, opt in enumerate(options, start=1):
+            dt = datetime.fromisoformat(opt["start"])
+            lines.append(f"{idx}) {dt.strftime('%H:%M')}")
+        return (
+            f"Huecos disponibles para {d.isoformat()} con ese profesional:\n"
             + "\n".join(lines)
             + "\n\nElige una opción (1, 2, 3)."
         )
