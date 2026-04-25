@@ -36,6 +36,7 @@ import FirstVisitGuide from "./components/onboarding/FirstVisitGuide";
 import MorningWhatsAppRemindersModal from "./components/modals/MorningWhatsAppRemindersModal";
 
 const ONBOARDING_STORAGE_KEY = "beautydesk_onboarding_v2";
+const SETUP_SESSION_DISMISS_KEY = "beautydesk_setup_dismiss_session_v1";
 const IMPERSONATION_ORIGINAL_TOKEN_KEY = "impersonation_original_token";
 const IMPERSONATION_TARGET_EMAIL_KEY = "impersonation_target_email";
 
@@ -112,6 +113,11 @@ function App() {
 
   function handleLogout() {
     localStorage.removeItem("token");
+    try {
+      sessionStorage.removeItem(SETUP_SESSION_DISMISS_KEY);
+    } catch {
+      /* ignore */
+    }
     setIsLoggedIn(false);
   }
 
@@ -303,18 +309,48 @@ function App() {
       setGuidedTourActive(false);
       return;
     }
+    const isOwner = String(currentUser?.role || "").toUpperCase() === "OWNER";
+    const missingCash = !currentUser?.cash_close_password_configured;
+    const missingServices = !currentUser?.has_services_configured;
+    const missingHours = !currentUser?.salon_hours_configured;
+    const hasPendingSetup = isOwner && (missingCash || missingServices || missingHours);
+
+    // Requirement: if setup tasks are pending, show on every login.
+    // If the user closes it, hide for this session only (but show again next login).
     try {
-      if (!localStorage.getItem(ONBOARDING_STORAGE_KEY)) {
+      const dismissedThisSession = sessionStorage.getItem(
+        `${SETUP_SESSION_DISMISS_KEY}_${String(currentUser?.id ?? "anon")}`,
+      );
+      if (hasPendingSetup && !dismissedThisSession) {
         setShowFirstVisitGuide(true);
+        return;
       }
-    } catch {
+      if (!hasPendingSetup && !localStorage.getItem(ONBOARDING_STORAGE_KEY)) {
+        // If everything is already configured, we can mark onboarding as done once.
+        localStorage.setItem(ONBOARDING_STORAGE_KEY, "1");
+      }
       setShowFirstVisitGuide(false);
+    } catch {
+      // If storage is blocked, default to showing guide when pending setup.
+      setShowFirstVisitGuide(hasPendingSetup);
     }
   }, [isLoggedIn, currentUser]);
 
   const completeFirstVisitGuide = () => {
     try {
-      localStorage.setItem(ONBOARDING_STORAGE_KEY, "1");
+      sessionStorage.setItem(
+        `${SETUP_SESSION_DISMISS_KEY}_${String(currentUser?.id ?? "anon")}`,
+        "1",
+      );
+      const isOwner = String(currentUser?.role || "").toUpperCase() === "OWNER";
+      const hasPendingSetup =
+        isOwner &&
+        (!currentUser?.cash_close_password_configured ||
+          !currentUser?.has_services_configured ||
+          !currentUser?.salon_hours_configured);
+      if (!hasPendingSetup) {
+        localStorage.setItem(ONBOARDING_STORAGE_KEY, "1");
+      }
     } catch {
       /* ignore */
     }
