@@ -1,4 +1,6 @@
 import json
+import re
+import unicodedata
 from datetime import datetime, timedelta, date, time
 from zoneinfo import ZoneInfo
 
@@ -19,6 +21,8 @@ from app.routers.agent import (
 
 
 TZ = ZoneInfo("Europe/Madrid")
+
+TIME_RE = re.compile(r"\b([01]?\d|2[0-3])(?::([0-5]\d))\b")
 
 
 def _digits_only(raw: str | None) -> str:
@@ -111,6 +115,57 @@ def _parse_date_yyyy_mm_dd(txt: str) -> date | None:
         return None
 
 
+def _strip_accents(s: str) -> str:
+    return "".join(
+        c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn"
+    )
+
+
+def _parse_relative_date_es(txt: str) -> date | None:
+    raw = _strip_accents((txt or "").strip().lower())
+    today = datetime.now(TZ).date()
+    if "pasado manana" in raw:
+        return today + timedelta(days=2)
+    if "manana" in raw:
+        return today + timedelta(days=1)
+    if "hoy" in raw:
+        return today
+    return None
+
+
+def _parse_time_hhmm_es(txt: str) -> time | None:
+    raw = _strip_accents((txt or "").strip().lower())
+    m = TIME_RE.search(raw)
+    if not m:
+        # allow "a las 20"
+        m2 = re.search(r"\b([01]?\d|2[0-3])\b", raw)
+        if not m2:
+            return None
+        hh = int(m2.group(1))
+        return time(hh, 0)
+    hh = int(m.group(1))
+    mm = int(m.group(2) or "0")
+    return time(hh, mm)
+
+
+def _match_service_ids_from_text(db: Session, org_id: int, txt: str) -> list[int]:
+    raw = _strip_accents((txt or "").strip().lower())
+    if not raw:
+        return []
+    services = _list_services(db, org_id)
+    hits: list[tuple[int, int]] = []
+    for s in services:
+        if s.id is None:
+            continue
+        name = _strip_accents((s.name or "").strip().lower())
+        if not name:
+            continue
+        if name in raw:
+            hits.append((len(name), int(s.id)))
+    hits.sort(reverse=True)
+    return [sid for _, sid in hits[:3]]
+
+
 def _parse_yes_no(txt: str) -> bool | None:
     raw = (txt or "").strip().lower()
     if not raw:
@@ -159,10 +214,12 @@ def _compute_slots(
     if not is_open:
         return []
 
-    day_open = datetime.combine(day, open_t, tzinfo=TZ)
-    day_close = datetime.combine(day, close_t, tzinfo=TZ)
-    now = datetime.now(TZ)
-    min_start = now + timedelta(minutes=min_notice_minutes)
+    # IMPORTANT: Appointment.start_time is stored as naive local time in DB (timestamp without tz).
+    # If we pass tz-aware datetimes, Postgres will convert to UTC and we end up with a 2h shift.
+    day_open = datetime.combine(day, open_t)
+    day_close = datetime.combine(day, close_t)
+    now_local = datetime.now(TZ).replace(tzinfo=None)
+    min_start = now_local + timedelta(minutes=min_notice_minutes)
     cursor = max(day_open, min_start)
 
     staff_ids = _staff_ids_for_org(db, org_id)
@@ -214,7 +271,9 @@ def _book_appointment(
 
     services = _services_for_org(db, int(org.id), service_ids)
     total_minutes = _total_minutes(services)
-    end_time = start_time + timedelta(minutes=total_minutes)
+    # Store as naive local time (see note in _compute_slots)
+    start_time_local = start_time.replace(tzinfo=None)
+    end_time = start_time_local + timedelta(minutes=total_minutes)
 
     primary_id = int(service_ids[0])
     additional = [int(x) for x in service_ids[1:]]
@@ -228,7 +287,7 @@ def _book_appointment(
         staff_id=int(staff_id),
         service_id=primary_id,
         additional_service_ids_json=json.dumps(additional) if additional else None,
-        start_time=start_time,
+        start_time=start_time_local,
         end_time=end_time,
         status="scheduled",
         notes="Creada por agente WhatsApp (Twilio).",
@@ -297,6 +356,37 @@ def handle_inbound_whatsapp(
 
     step = state.get("step") or "idle"
 
+    # Natural language assist: capture date/time/service from free text when idle.
+    if step == "idle" and txt and txt_upper not in ("CITA", "SERVICIOS"):
+        rel_d = _parse_relative_date_es(txt)
+        abs_d = _parse_date_yyyy_mm_dd(txt)
+        t = _parse_time_hhmm_es(txt)
+        svc_ids = _match_service_ids_from_text(db, int(org.id), txt)
+        if rel_d or abs_d:
+            state["preferred_day"] = (abs_d or rel_d).isoformat()
+        if t:
+            state["preferred_time"] = t.strftime("%H:%M")
+        if svc_ids:
+            state["service_ids"] = [int(svc_ids[0])]
+        if any(k in state for k in ("preferred_day", "preferred_time", "service_ids")):
+            state["step"] = "awaiting_service" if not state.get("service_ids") else "awaiting_date"
+            _save_state(db, conv, state)
+            if state["step"] == "awaiting_service":
+                services = _list_services(db, int(org.id))
+                return (
+                    "Entendido. Para reservar necesito el servicio.\n"
+                    + _format_services_menu(services)
+                )
+            # If we already have a service, ask date (or use captured date)
+            if state.get("preferred_day"):
+                state["step"] = "awaiting_date"
+                _save_state(db, conv, state)
+                return (
+                    "Perfecto. He entendido la fecha.\n"
+                    "Confírmame el día escribiendo YYYY-MM-DD (por ejemplo 2026-04-30)."
+                )
+            return "Perfecto. ¿Qué día quieres? Escribe la fecha en formato YYYY-MM-DD (ej: 2026-04-30)."
+
     if txt_upper == "CITA" or step == "idle":
         services = _list_services(db, int(org.id))
         if not services:
@@ -363,6 +453,8 @@ def handle_inbound_whatsapp(
         d = _parse_date_yyyy_mm_dd(txt)
         if not d:
             return "Formato de fecha inválido. Ejemplo: 2026-04-30"
+        # If the user previously sent "hoy/mañana" in a natural message, we keep it but
+        # still require an explicit YYYY-MM-DD to avoid misunderstandings.
         service_ids = [int(x) for x in (state.get("service_ids") or [])]
         slots = _compute_slots(db, org_id=int(org.id), org=org, service_ids=service_ids, day=d)
         if not slots:
