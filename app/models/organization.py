@@ -81,3 +81,6 @@ class Organization(SQLModel, table=True):
     agent_key_hash: Optional[str] = Field(default=None, index=True)
     agent_key_last4: Optional[str] = Field(default=None)
     agent_key_created_at: Optional[datetime] = Field(default=None)
+
+    # WhatsApp inbound routing (multi-tenant). Store digits-only E.164 without '+' (e.g. "14155238886").
+    whatsapp_to_digits: Optional[str] = Field(default=None, index=True)

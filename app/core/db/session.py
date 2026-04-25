@@ -217,6 +217,11 @@ def init_db():
                     'ALTER TABLE "organization" ADD COLUMN IF NOT EXISTS agent_key_created_at TIMESTAMP WITH TIME ZONE'
                 )
             )
+            conn.execute(
+                text(
+                    'ALTER TABLE "organization" ADD COLUMN IF NOT EXISTS whatsapp_to_digits TEXT'
+                )
+            )
             _normalize_org_plan_payment_enums_to_varchar(conn)
             conn.execute(
                 text(

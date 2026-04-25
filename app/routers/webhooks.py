@@ -10,7 +10,7 @@ from sqlmodel import Session, select
 
 from app.core.db.session import get_session
 from app.models.organization import Organization
-from app.models.service import Service
+from app.services.whatsapp_agent import handle_inbound_whatsapp
 
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
@@ -65,6 +65,16 @@ def _pick_org_for_twilio(db: Session) -> Organization:
     - If exactly 1 org has an agent key configured, use it.
     - Otherwise require multi-tenant routing (to be implemented once you have 1 WA number per org).
     """
+    # Prefer routing by inbound 'To' number if orgs are configured with whatsapp_to_digits.
+    # In Twilio WhatsApp, To is typically like "whatsapp:+14155238886"
+    # (Sandbox uses the shared sandbox number).
+    # Caller passes the To digits via env for now; production should configure org.whatsapp_to_digits per org.
+
+    orgs = db.exec(
+        select(Organization).where(Organization.agent_key_hash.is_not(None))
+    ).all()
+    orgs = [o for o in orgs if (o.agent_key_hash or "").strip()]
+
     env_org_id = (os.getenv("TWILIO_DEFAULT_ORG_ID") or "").strip()
     if env_org_id:
         try:
@@ -76,10 +86,6 @@ def _pick_org_for_twilio(db: Session) -> Organization:
             raise HTTPException(status_code=500, detail="TWILIO_DEFAULT_ORG_ID org not found")
         return org
 
-    orgs = db.exec(
-        select(Organization).where(Organization.agent_key_hash.is_not(None))
-    ).all()
-    orgs = [o for o in orgs if (o.agent_key_hash or "").strip()]
     if len(orgs) == 1:
         return orgs[0]
     raise HTTPException(
@@ -99,6 +105,8 @@ async def twilio_whatsapp_inbound(
     """
     form = dict(await request.form())
     incoming_text = (form.get("Body") or "").strip()
+    from_addr = (form.get("From") or "").strip()
+    to_addr = (form.get("To") or "").strip()
 
     auth_token = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
     validate_sig = (os.getenv("TWILIO_VALIDATE_SIGNATURE", "true").strip().lower() not in ("0", "false", "no"))
@@ -120,45 +128,12 @@ async def twilio_whatsapp_inbound(
             raise HTTPException(status_code=403, detail="Invalid Twilio signature")
 
     org = _pick_org_for_twilio(db)
-
-    # MVP commands
-    txt_upper = incoming_text.upper()
-    if txt_upper in ("HI", "HOLA", "HELP", "AYUDA", "MENU", "MENÚ", "START"):
-        msg = (
-            f"Hola, soy el asistente de {org.name}.\n"
-            "Escribe:\n"
-            "- SERVICIOS (ver catálogo)\n"
-            "- CITA (empezar una reserva)\n"
-        )
-        return Response(content=_twiml(msg), media_type="application/xml")
-
-    if txt_upper.startswith("SERVICIOS"):
-        rows = db.exec(select(Service).where(Service.organization_id == org.id)).all()
-        if not rows:
-            return Response(
-                content=_twiml("Aún no hay servicios configurados en el salón."),
-                media_type="application/xml",
-            )
-        lines = []
-        for s in rows[:30]:
-            price = getattr(s, "price", None)
-            mins = getattr(s, "duration_minutes", None)
-            meta = []
-            if mins is not None:
-                meta.append(f"{mins}min")
-            if price is not None:
-                meta.append(f"{price}€")
-            suffix = f" ({' · '.join(meta)})" if meta else ""
-            lines.append(f"- {s.name}{suffix}")
-        msg = "Servicios disponibles:\n" + "\n".join(lines) + "\n\nDi: CITA"
-        return Response(content=_twiml(msg), media_type="application/xml")
-
-    # Placeholder until we implement full booking conversation
-    return Response(
-        content=_twiml(
-            "Te leo. Para empezar, escribe SERVICIOS o AYUDA.\n"
-            "En breve podrás reservar directamente por aquí."
-        ),
-        media_type="application/xml",
+    reply = handle_inbound_whatsapp(
+        db,
+        org=org,
+        from_addr=from_addr,
+        to_addr=to_addr,
+        body=incoming_text,
     )
+    return Response(content=_twiml(reply), media_type="application/xml")
 

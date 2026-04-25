@@ -3,3 +3,4 @@ from .service import Service
 from .appointment import Appointment
 from .organization import Organization, BusinessType
 from .pending_registration import PendingRegistration
+from .conversation import Conversation
