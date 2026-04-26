@@ -1,4 +1,15 @@
-from . import agent, appointments, auth, billing, clients, organizations, services, users, webhooks
+from . import (
+    agent,
+    appointments,
+    auth,
+    billing,
+    clients,
+    geocode,
+    organizations,
+    services,
+    users,
+    webhooks,
+)
 
 __all__ = [
     "agent",
@@ -6,6 +17,7 @@ __all__ = [
     "auth",
     "billing",
     "clients",
+    "geocode",
     "organizations",
     "services",
     "users",

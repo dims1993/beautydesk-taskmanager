@@ -6,6 +6,7 @@ import {
   CreditCard,
   ChevronRight,
   Loader2,
+  LocateFixed,
   MapPin,
   Scissors,
   Sparkles,
@@ -90,6 +91,8 @@ const RegisterOwnerWizard = ({
   const codeRefs = useRef([]);
 
   const [error, setError] = useState("");
+  const [geoHint, setGeoHint] = useState("");
+  const [geoFillBusy, setGeoFillBusy] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [acceptTrialPayment, setAcceptTrialPayment] = useState(false);
   const [checkoutBusy, setCheckoutBusy] = useState(false);
@@ -199,6 +202,67 @@ const RegisterOwnerWizard = ({
       return next;
     });
   }, []);
+
+  const fillAddressFromDeviceLocation = useCallback(async () => {
+    setError("");
+    setGeoHint("");
+    if (!navigator.geolocation) {
+      setError(
+        "Tu navegador no permite obtener la ubicación. Escribe la dirección manualmente.",
+      );
+      return;
+    }
+    setGeoFillBusy(true);
+    try {
+      const pos = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 18_000,
+          maximumAge: 0,
+        });
+      });
+      const { latitude, longitude } = pos.coords;
+      const q = new URLSearchParams({
+        lat: String(latitude),
+        lon: String(longitude),
+      });
+      const parts = await apiRequest(
+        `/public/reverse-geocode?${q.toString()}`,
+        "GET",
+        null,
+        { skipAuthRedirect: true },
+      );
+      setBusiness((b) => ({
+        ...b,
+        address: (parts.address || "").trim() || b.address,
+        city: (parts.city || "").trim() || b.city,
+        postal_code: (parts.postal_code || "").trim() || b.postal_code,
+        country: (parts.country || "").trim() ? parts.country.trim() : b.country,
+      }));
+      setGeoHint(
+        "Hemos rellenado calle, ciudad y código postal según tu posición. Revísalo: debe coincidir con la del negocio.",
+      );
+    } catch (err) {
+      const code = err && typeof err.code === "number" ? err.code : null;
+      if (code === 1) {
+        setError(
+          "Ubicación denegada. Activa el permiso en el navegador o escribe la dirección a mano.",
+        );
+      } else if (code === 2) {
+        setError(
+          "No se pudo determinar la posición. Prueba en exterior o escribe la dirección.",
+        );
+      } else if (code === 3) {
+        setError(
+          "Tiempo agotado al pedir la ubicación. Inténtalo de nuevo o escribe la dirección.",
+        );
+      } else {
+        setError(formatRegisterError(err));
+      }
+    } finally {
+      setGeoFillBusy(false);
+    }
+  }, [apiRequest]);
 
   const canNextStep1 = useMemo(() => {
     return (
@@ -465,6 +529,28 @@ const RegisterOwnerWizard = ({
                   Busca o introduce el nombre de tu empresa y la ubicación.
                 </p>
               </div>
+              <button
+                type="button"
+                disabled={geoFillBusy}
+                onClick={fillAddressFromDeviceLocation}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-[#dcc7b1] bg-[#faf8f5] py-3.5 px-4 text-[9px] font-black uppercase tracking-widest text-[#5d5045] transition-all hover:border-[#5d5045]/50 hover:bg-[#f5ebe0] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {geoFillBusy ? (
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+                ) : (
+                  <LocateFixed className="h-4 w-4 shrink-0" aria-hidden />
+                )}
+                Usar mi ubicación actual (dirección)
+              </button>
+              <p className="text-[9px] leading-snug text-[#8c857d] px-1 -mt-1">
+                El navegador pedirá permiso. Solo rellenamos ubicación del local,
+                no el nombre del negocio.
+              </p>
+              {geoHint && (
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/90 px-3 py-2.5 text-[9px] font-semibold leading-snug text-emerald-900">
+                  {geoHint}
+                </div>
+              )}
               <input
                 type="text"
                 placeholder="NOMBRE DEL NEGOCIO"
