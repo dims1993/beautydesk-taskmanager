@@ -50,7 +50,7 @@ Añade al menos lo siguiente. Los nombres coinciden con `.env.example` en la ra�
 | `GOOGLE_OAUTH_REDIRECT_URI` | `https://TU-SERVICIO-API.onrender.com/auth/google/calendar/callback` (sustituye por tu host real de Render). Debe **coincidir** con lo añadido en Google Cloud Console. |
 | `MAIL_*` | Obligatorio para el **registro owner-wizard** (código por email). `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`. Gmail: [contraseña de aplicación](https://support.google.com/accounts/answer/185833). Si falta o es inválida, el endpoint puede devolver **503** con detalle (antes 500). Sin `MAIL_*` el backend **no envía** correo pero imprime el código en **logs** (solo para depuración). |
 | `SUPER_ADMIN_REGISTRATION_SECRET` | Opcional; solo para crear cuentas SUPER_ADMIN por el flujo de registro. |
-| `ALLOWED_EMAILS` | Opcional; allowlist de emails para Google login. |
+| `ALLOWED_EMAILS` | **Ignorado** en login Google: si el usuario existe en la BD, entra. (Antes bloqueaba a profesionales no listados en env.) Puedes borrarlo en Render o dejarlo; no afecta. |
 | `DEFAULT_TIMEZONE` | Opcional; por defecto `Europe/Madrid`. |
 | `MAIL_SOCIAL_FACEBOOK_URL` / `MAIL_SOCIAL_INSTAGRAM_URL` | Opcionales; pie de emails. |
 

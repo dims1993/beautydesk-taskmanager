@@ -37,14 +37,6 @@ GOOGLE_CALENDAR_SCOPES = [
 ]
 
 
-def _parse_allowed_emails() -> list[str]:
-    """Comma-separated allowlist. Empty / unset = no extra check (only registered users in DB)."""
-    raw = os.getenv("ALLOWED_EMAILS") or ""
-    return [e.strip().lower() for e in raw.split(",") if e.strip()]
-
-
-ALLOWED_EMAILS = _parse_allowed_emails()
-
 def _google_oauth_client_config_web():
     return {
         "client_id": GOOGLE_CLIENT_ID,
@@ -102,21 +94,17 @@ async def auth_google(data: dict, db: Session = Depends(get_session)):
         
         # 3. CONTROL DE ACCESO: Si no está en la DB, no entra.
         if not user:
-            print(f"🚫 Intento de acceso denegado para: {email}")
+            print(f"🚫 Intento de acceso denegado (no en BD): {email}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Acceso denegado. Este correo no está registrado como profesional en BeautyTask."
             )
 
-        # 4. CONTROL DE ACCESO: Lista blanca opcional (ALLOWED_EMAILS en env)
-        if ALLOWED_EMAILS and email.lower() not in ALLOWED_EMAILS:
-            print(f"🚫 Intento de acceso denegado para: {email}")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Acceso denegado. Este correo no está en la lista blanca.",
-            )
+        # Si el usuario ya existe en la BD, siempre puede entrar con Google.
+        # ALLOWED_EMAILS ya no se aplica aquí: bloqueaba a profesionales registrados
+        # cuando en producción había una lista corta en env (p. ej. solo admins).
 
-        # 5. Guardar tokens de Google (si vienen en la petición)
+        # 4. Guardar tokens de Google (si vienen en la petición)
         google_access_token = data.get("access_token")
         google_refresh_token = data.get("refresh_token")
 
