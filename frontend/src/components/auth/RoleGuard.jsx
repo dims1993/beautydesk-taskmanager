@@ -11,8 +11,8 @@ const RoleGuard = ({ children, allowedRoles, user, isLoggedIn }) => {
   // 2. Si está logueado pero aún no tenemos los datos del usuario (fetch en proceso)
   if (isLoggedIn && !user) {
     return (
-      <div className="flex items-center justify-center h-screen bg-[#f8f5f2]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#5d5045]"></div>
+      <div className="flex items-center justify-center h-screen bg-[var(--bt-bg)]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--bt-primary)]"></div>
       </div>
     );
   }

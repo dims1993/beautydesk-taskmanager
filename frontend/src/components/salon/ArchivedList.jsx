@@ -29,11 +29,11 @@ const ArchivedList = ({ appointments, onRestore, onDeletePermanent }) => {
   if (archivedVisible.length === 0) return null;
 
   return (
-    <div className="mt-12 bg-white/30 rounded-[2.5rem] p-8 border border-dashed border-[#dcc7b1] animate-fadeIn mb-10">
+    <div className="mt-12 bg-white/30 rounded-[2.5rem] p-8 border border-dashed border-[var(--bt-border-strong)] animate-fadeIn mb-10">
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-3">
           <span className="text-xl opacity-50">📁</span>
-          <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-[#a39485]">
+          <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-[var(--bt-muted)]">
             Papelera Reciente (Autolimpia en 14d)
           </h4>
         </div>
@@ -47,10 +47,10 @@ const ArchivedList = ({ appointments, onRestore, onDeletePermanent }) => {
           return (
             <div
               key={appo.id}
-              className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 flex items-center justify-between border border-[#eee8e2] shadow-sm"
+              className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 flex items-center justify-between border border-[var(--bt-border)] shadow-sm"
             >
               <div>
-                <p className="text-sm font-bold text-[#5d5045]">
+                <p className="text-sm font-bold text-[var(--bt-primary)]">
                   {appo.client_name}
                 </p>
                 <p className="text-[9px] font-black uppercase text-[#b5a798] tracking-widest flex gap-2">
@@ -60,7 +60,7 @@ const ArchivedList = ({ appointments, onRestore, onDeletePermanent }) => {
               </div>
               <button
                 onClick={() => onRestore(appo.id, "scheduled")}
-                className="px-4 py-2 bg-[#5d5045] text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-[#dcc7b1] transition-all"
+                className="px-4 py-2 bg-[var(--bt-primary)] text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-[var(--bt-primary-hover)] transition-all"
               >
                 Restaurar
               </button>
@@ -68,7 +68,7 @@ const ArchivedList = ({ appointments, onRestore, onDeletePermanent }) => {
           );
         })}
       </div>
-      <p className="text-[8px] text-[#a39485] mt-6 text-center uppercase font-bold opacity-40">
+      <p className="text-[8px] text-[var(--bt-muted)] mt-6 text-center uppercase font-bold opacity-40">
         Las citas de más de 30 días se eliminan permanentemente del sistema
         automáticamente.
       </p>

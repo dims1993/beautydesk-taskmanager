@@ -69,44 +69,44 @@ export default function MorningWhatsAppRemindersModal({
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 md:p-6">
       <div
-        className="absolute inset-0 bg-[#5d5045]/20 backdrop-blur-md animate-in fade-in duration-300"
+        className="absolute inset-0 bg-[var(--bt-primary)]/20 backdrop-blur-md animate-in fade-in duration-300"
         onClick={onClose}
       />
-      <div className="relative w-full min-w-0 max-w-lg rounded-[3rem] border border-[#eaddcf] bg-white overflow-x-clip overflow-y-visible shadow-2xl animate-in fade-in zoom-in-95 duration-300">
+      <div className="relative w-full min-w-0 max-w-lg rounded-[3rem] border border-[var(--bt-border)] bg-white overflow-x-clip overflow-y-visible shadow-2xl animate-in fade-in zoom-in-95 duration-300">
         <div className="p-8 md:p-10 min-w-0">
           <div className="flex justify-between items-start mb-6">
             <div className="space-y-1">
-              <p className="text-[9px] font-black uppercase tracking-[0.4em] text-[#8c857d]">
+              <p className="text-[9px] font-black uppercase tracking-[0.4em] text-[var(--bt-muted)]">
                 Recordatorios
               </p>
-              <h3 className="text-2xl font-serif text-[#5d5045] flex items-center gap-2">
+              <h3 className="text-2xl font-serif text-[var(--bt-primary)] flex items-center gap-2">
                 <Sunrise className="w-5 h-5 text-[#c4a484]" />
                 {greet}
               </h3>
             </div>
             <button
               onClick={onClose}
-              className="h-10 w-10 flex items-center justify-center hover:bg-[#FAF9F6] rounded-full transition-colors"
+              className="h-10 w-10 flex items-center justify-center hover:bg-[var(--bt-bg)] rounded-full transition-colors"
               aria-label="Cerrar"
             >
-              <X className="w-5 h-5 text-[#8c857d]" />
+              <X className="w-5 h-5 text-[var(--bt-muted)]" />
             </button>
           </div>
 
           {step === "prompt" ? (
             <div className="space-y-6">
-              <div className="rounded-[2.5rem] border border-[#eaddcf] bg-[#FAF9F6] p-6">
-                <p className="text-sm font-bold text-[#5d5045]">
+              <div className="rounded-[2.5rem] border border-[var(--bt-border)] bg-[var(--bt-bg)] p-6">
+                <p className="text-sm font-bold text-[var(--bt-primary)]">
                   Hoy tienes{" "}
                   <span className="font-black text-[#c4a484]">{count}</span>{" "}
                   {count === 1 ? "cita" : "citas"}.
                 </p>
-                <p className="mt-2 text-[11px] leading-relaxed text-[#8c857d]">
+                <p className="mt-2 text-[11px] leading-relaxed text-[var(--bt-muted)]">
                   ¿Te gustaría preparar los recordatorios por WhatsApp ahora?
                   Abriremos WhatsApp con el texto listo para que tú solo confirmes
                   el envío.
                 </p>
-                <p className="mt-3 text-[9px] font-black uppercase tracking-widest text-[#a39485]">
+                <p className="mt-3 text-[9px] font-black uppercase tracking-widest text-[var(--bt-muted)]">
                   {todayKey}
                 </p>
               </div>
@@ -114,7 +114,7 @@ export default function MorningWhatsAppRemindersModal({
                 <button
                   type="button"
                   onClick={() => setStep("list")}
-                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl bg-[#5d5045] text-white py-4 text-[10px] font-black uppercase tracking-[0.2em] hover:bg-[#4a3f36] transition-all"
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--bt-primary)] text-white py-4 text-[10px] font-black uppercase tracking-[0.2em] hover:bg-[var(--bt-primary-hover)] transition-all"
                 >
                   <MessageCircle className="w-4 h-4" />
                   Sí, preparar WhatsApp
@@ -122,7 +122,7 @@ export default function MorningWhatsAppRemindersModal({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="flex-1 inline-flex items-center justify-center rounded-2xl bg-white border border-[#eaddcf] py-4 text-[10px] font-black uppercase tracking-[0.2em] text-[#8c857d] hover:border-[#dcc7b1] transition-all"
+                  className="flex-1 inline-flex items-center justify-center rounded-2xl bg-white border border-[var(--bt-border)] py-4 text-[10px] font-black uppercase tracking-[0.2em] text-[var(--bt-muted)] hover:border-[var(--bt-border-strong)] transition-all"
                 >
                   No, gracias
                 </button>
@@ -130,11 +130,11 @@ export default function MorningWhatsAppRemindersModal({
             </div>
           ) : (
             <div className="space-y-6">
-              <div className="rounded-[2.5rem] border border-[#eaddcf] bg-[#FAF9F6] p-6">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#5d5045]">
+              <div className="rounded-[2.5rem] border border-[var(--bt-border)] bg-[var(--bt-bg)] p-6">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--bt-primary)]">
                   Recordatorios de hoy
                 </p>
-                <p className="mt-2 text-[11px] leading-relaxed text-[#8c857d]">
+                <p className="mt-2 text-[11px] leading-relaxed text-[var(--bt-muted)]">
                   Pulsa en cada cita para abrir WhatsApp con el mensaje listo.
                 </p>
               </div>
@@ -143,13 +143,13 @@ export default function MorningWhatsAppRemindersModal({
                 {rows.map((r) => (
                   <div
                     key={r.id}
-                    className="rounded-3xl border border-[#eaddcf] bg-white p-5 flex items-center justify-between gap-4"
+                    className="rounded-3xl border border-[var(--bt-border)] bg-white p-5 flex items-center justify-between gap-4"
                   >
                     <div className="min-w-0">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-[#a39485]">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-[var(--bt-muted)]">
                         {r.time || "Hoy"}
                       </p>
-                      <p className="font-bold text-[#5d5045] truncate">
+                      <p className="font-bold text-[var(--bt-primary)] truncate">
                         {r.name}
                       </p>
                       {!r.phoneDigits && (
@@ -164,8 +164,8 @@ export default function MorningWhatsAppRemindersModal({
                       rel="noopener noreferrer"
                       className={`shrink-0 inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-[9px] font-black uppercase tracking-[0.2em] ${
                         r.url
-                          ? "bg-[#5d5045] text-white hover:bg-[#4a3f36]"
-                          : "bg-[#f5f0ea] text-[#a39485] cursor-not-allowed pointer-events-none"
+                          ? "bg-[var(--bt-primary)] text-white hover:bg-[var(--bt-primary-hover)]"
+                          : "bg-[var(--bt-accent)] text-[var(--bt-muted)] cursor-not-allowed pointer-events-none"
                       }`}
                     >
                       <ExternalLink className="w-4 h-4" />
@@ -178,7 +178,7 @@ export default function MorningWhatsAppRemindersModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="w-full inline-flex items-center justify-center rounded-2xl bg-white border border-[#eaddcf] py-4 text-[10px] font-black uppercase tracking-[0.2em] text-[#8c857d] hover:border-[#dcc7b1] transition-all"
+                className="w-full inline-flex items-center justify-center rounded-2xl bg-white border border-[var(--bt-border)] py-4 text-[10px] font-black uppercase tracking-[0.2em] text-[var(--bt-muted)] hover:border-[var(--bt-border-strong)] transition-all"
               >
                 Listo
               </button>

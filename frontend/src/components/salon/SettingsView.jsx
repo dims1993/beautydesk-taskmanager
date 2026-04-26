@@ -44,35 +44,35 @@ function SettingsAccordion({
   const panelId = `settings-acc-p-${baseId}`;
 
   return (
-    <div className="rounded-[2.5rem] border border-[#e5e0d8] bg-white/90 shadow-sm backdrop-blur-md overflow-hidden">
+    <div className="rounded-[2.5rem] border border-[var(--bt-border)] bg-white/90 shadow-sm backdrop-blur-md overflow-hidden">
       <button
         type="button"
         id={headerId}
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-4 p-6 text-left transition-colors hover:bg-black/[0.02] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5d5045]/30 focus-visible:ring-inset"
+        className="flex w-full items-center justify-between gap-4 p-6 text-left transition-colors hover:bg-black/[0.02] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--bt-primary)]/30 focus-visible:ring-inset"
       >
         <div className="min-w-0 flex-1 flex items-start gap-3">
           {Icon ? (
             <Icon
-              className="mt-0.5 h-4 w-4 shrink-0 text-[#5d5045]"
+              className="mt-0.5 h-4 w-4 shrink-0 text-[var(--bt-primary)]"
               strokeWidth={2}
             />
           ) : null}
           <div className="min-w-0">
-            <h3 className="text-[10px] font-black uppercase tracking-widest text-[#5d5045]">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--bt-primary)]">
               {title}
             </h3>
             {description ? (
-              <p className="mt-1 text-[10px] leading-relaxed text-[#8c857d]">
+              <p className="mt-1 text-[10px] leading-relaxed text-[var(--bt-muted)]">
                 {description}
               </p>
             ) : null}
           </div>
         </div>
         <ChevronDown
-          className={`h-5 w-5 shrink-0 text-[#8c857d] transition-transform duration-300 ${open ? "rotate-180" : ""}`}
+          className={`h-5 w-5 shrink-0 text-[var(--bt-muted)] transition-transform duration-300 ${open ? "rotate-180" : ""}`}
           aria-hidden
         />
       </button>
@@ -81,7 +81,7 @@ function SettingsAccordion({
         role="region"
         aria-labelledby={headerId}
         hidden={!open}
-        className={open ? "border-t border-[#e5e0d8]/80" : ""}
+        className={open ? "border-t border-[var(--bt-border)]/80" : ""}
       >
         {open ? (
           <div className="px-6 pb-6 pt-4">
@@ -548,7 +548,7 @@ export default function SettingsView({
             <button
               type="submit"
               disabled={saving || !canSubmitBilling}
-              className="w-full bg-[#5d5045] text-[#f5ebe0] py-4 rounded-full text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+              className="w-full bg-[var(--bt-primary)] text-white py-4 rounded-full text-[10px] font-black uppercase tracking-widest disabled:opacity-50 hover:bg-[var(--bt-primary-hover)]"
             >
               {saving ? "Guardando…" : "Guardar datos fiscales"}
             </button>
@@ -564,7 +564,7 @@ export default function SettingsView({
             icon={Building2}
             defaultOpen={false}
           >
-            <p className="text-[11px] text-[#8c857d] leading-relaxed">
+            <p className="text-[11px] text-[var(--bt-muted)] leading-relaxed">
               Los datos fiscales de tu negocio ya están registrados. Si necesitas
               cambios administrativos, contacta con soporte.
             </p>
@@ -597,26 +597,26 @@ export default function SettingsView({
           icon={Scissors}
           defaultOpen={focusServices}
         >
-          <p className="text-[10px] text-[#8c857d] leading-relaxed mb-4">
+          <p className="text-[10px] text-[var(--bt-muted)] leading-relaxed mb-4">
             Tu cuenta solo ve los servicios de tu organización.
           </p>
           {services.length > 0 && (
-            <div className="mb-4 space-y-3 pb-4 border-b border-[#eee8e2]">
+            <div className="mb-4 space-y-3 pb-4 border-b border-[var(--bt-border)]">
               {services.map((s) =>
                 editingService?.id === s.id ? (
                   <form
                     key={s.id}
                     onSubmit={submitEditService}
-                    className="rounded-2xl border border-[#dcc7b1] bg-[#faf8f5] p-4 space-y-3"
+                    className="rounded-2xl border border-[var(--bt-border-strong)] bg-[var(--bt-bg)] p-4 space-y-3"
                   >
-                    <p className="text-[9px] font-black uppercase tracking-widest text-[#5d5045]">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)]">
                       Editar servicio
                     </p>
                     <input
                       type="text"
                       required
                       placeholder="Nombre"
-                      className="w-full bg-white border border-[#eaddcf] py-3 px-4 rounded-2xl text-[10px] font-black tracking-widest"
+                      className="w-full bg-white border border-[var(--bt-border)] py-3 px-4 rounded-2xl text-[10px] font-black tracking-widest"
                       value={editingService.name}
                       onChange={(e) =>
                         setEditingService({
@@ -628,7 +628,7 @@ export default function SettingsView({
                     <input
                       type="text"
                       placeholder="Descripción (opcional)"
-                      className="w-full bg-white border border-[#eaddcf] py-3 px-4 rounded-2xl text-[10px] font-black tracking-widest"
+                      className="w-full bg-white border border-[var(--bt-border)] py-3 px-4 rounded-2xl text-[10px] font-black tracking-widest"
                       value={editingService.description}
                       onChange={(e) =>
                         setEditingService({
@@ -639,13 +639,13 @@ export default function SettingsView({
                     />
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-[8px] font-black uppercase text-[#8c857d] mb-1">
+                        <label className="block text-[8px] font-black uppercase text-[var(--bt-muted)] mb-1">
                           Minutos
                         </label>
                         <input
                           type="number"
                           min={5}
-                          className="w-full bg-white border border-[#eaddcf] py-2.5 px-3 rounded-xl text-[10px] font-black"
+                          className="w-full bg-white border border-[var(--bt-border)] py-2.5 px-3 rounded-xl text-[10px] font-black"
                           value={editingService.duration}
                           onChange={(e) =>
                             setEditingService({
@@ -656,14 +656,14 @@ export default function SettingsView({
                         />
                       </div>
                       <div>
-                        <label className="block text-[8px] font-black uppercase text-[#8c857d] mb-1">
+                        <label className="block text-[8px] font-black uppercase text-[var(--bt-muted)] mb-1">
                           Precio (€)
                         </label>
                         <input
                           type="number"
                           min={0}
                           step={0.5}
-                          className="w-full bg-white border border-[#eaddcf] py-2.5 px-3 rounded-xl text-[10px] font-black"
+                          className="w-full bg-white border border-[var(--bt-border)] py-2.5 px-3 rounded-xl text-[10px] font-black"
                           value={editingService.price}
                           onChange={(e) =>
                             setEditingService({
@@ -679,14 +679,14 @@ export default function SettingsView({
                         type="button"
                         onClick={() => setEditingService(null)}
                         disabled={svcEditSaving}
-                        className="flex-1 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest text-[#8c857d] border border-[#eaddcf] bg-white disabled:opacity-50"
+                        className="flex-1 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest text-[var(--bt-muted)] border border-[var(--bt-border)] bg-white disabled:opacity-50"
                       >
                         Cancelar
                       </button>
                       <button
                         type="submit"
                         disabled={svcEditSaving}
-                        className="flex-1 py-2.5 rounded-full bg-[#5d5045] text-[#f5ebe0] text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+                        className="flex-1 py-2.5 rounded-full bg-[var(--bt-primary)] text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-50 hover:bg-[var(--bt-primary-hover)]"
                       >
                         {svcEditSaving ? "Guardando…" : "Guardar"}
                       </button>
@@ -695,13 +695,13 @@ export default function SettingsView({
                 ) : (
                   <div
                     key={s.id}
-                    className="flex flex-col gap-3 rounded-2xl border border-[#eee8e2] bg-[#FAF9F6] p-4 sm:flex-row sm:items-center sm:justify-between"
+                    className="flex flex-col gap-3 rounded-2xl border border-[var(--bt-border)] bg-[var(--bt-bg)] p-4 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="min-w-0">
-                      <p className="font-bold text-[#5d5045] truncate">
+                      <p className="font-bold text-[var(--bt-primary)] truncate">
                         {s.name}
                       </p>
-                      <p className="text-[10px] text-[#8c857d] mt-0.5">
+                      <p className="text-[10px] text-[var(--bt-muted)] mt-0.5">
                         {s.duration} min — {s.price}€
                         {s.description ? (
                           <span className="block mt-1 text-[9px] opacity-90">
@@ -723,7 +723,7 @@ export default function SettingsView({
                           })
                         }
                         disabled={svcDeletingId != null}
-                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#eaddcf] bg-white px-3 py-2 text-[9px] font-black uppercase tracking-widest text-[#5d5045] transition hover:border-[#5d5045] disabled:opacity-50"
+                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-[var(--bt-border)] bg-white px-3 py-2 text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)] transition hover:border-[var(--bt-primary)] disabled:opacity-50"
                       >
                         <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
                         Editar
@@ -749,13 +749,13 @@ export default function SettingsView({
             onSubmit={submitService}
             className="grid gap-2 pt-1"
           >
-            <p className="text-[9px] font-black uppercase tracking-widest text-[#5d5045] mb-1">
+            <p className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)] mb-1">
               Añadir servicio
             </p>
             <input
               type="text"
               placeholder="Nombre del servicio"
-              className="w-full bg-[#FAF9F6] border border-[#eaddcf] py-3 px-4 rounded-2xl text-[10px] font-black tracking-widest"
+              className="w-full bg-[var(--bt-bg)] border border-[var(--bt-border)] py-3 px-4 rounded-2xl text-[10px] font-black tracking-widest"
               value={svcForm.name}
               onChange={(e) =>
                 setSvcForm({ ...svcForm, name: e.target.value })
@@ -764,7 +764,7 @@ export default function SettingsView({
             <input
               type="text"
               placeholder="Descripción (opcional)"
-              className="w-full bg-[#FAF9F6] border border-[#eaddcf] py-3 px-4 rounded-2xl text-[10px] font-black tracking-widest"
+              className="w-full bg-[var(--bt-bg)] border border-[var(--bt-border)] py-3 px-4 rounded-2xl text-[10px] font-black tracking-widest"
               value={svcForm.description}
               onChange={(e) =>
                 setSvcForm({ ...svcForm, description: e.target.value })
@@ -774,13 +774,13 @@ export default function SettingsView({
               <div className="space-y-2">
                 <label
                   htmlFor="settings-svc-duration"
-                  className="block text-[9px] font-black uppercase tracking-widest text-[#8c857d] ml-1"
+                  className="block text-[9px] font-black uppercase tracking-widest text-[var(--bt-muted)] ml-1"
                 >
                   Duración del servicio
                 </label>
-                <p className="text-[9px] text-[#a39485] ml-1 leading-snug">
+                <p className="text-[9px] text-[var(--bt-muted)] ml-1 leading-snug">
                   Tiempo en{" "}
-                  <span className="font-bold text-[#5d5045]">minutos</span> (ej.
+                  <span className="font-bold text-[var(--bt-primary)]">minutos</span> (ej.
                   45 para una manicura).
                 </p>
                 <input
@@ -790,7 +790,7 @@ export default function SettingsView({
                   inputMode="numeric"
                   placeholder="Ej. 45"
                   aria-label="Duración en minutos"
-                  className="w-full bg-[#FAF9F6] border border-[#eaddcf] py-3 px-4 rounded-2xl text-[10px] font-black"
+                  className="w-full bg-[var(--bt-bg)] border border-[var(--bt-border)] py-3 px-4 rounded-2xl text-[10px] font-black"
                   value={svcForm.duration}
                   onChange={(e) =>
                     setSvcForm({ ...svcForm, duration: e.target.value })
@@ -800,13 +800,13 @@ export default function SettingsView({
               <div className="space-y-2">
                 <label
                   htmlFor="settings-svc-price"
-                  className="block text-[9px] font-black uppercase tracking-widest text-[#8c857d] ml-1"
+                  className="block text-[9px] font-black uppercase tracking-widest text-[var(--bt-muted)] ml-1"
                 >
                   Precio del servicio
                 </label>
-                <p className="text-[9px] text-[#a39485] ml-1 leading-snug">
+                <p className="text-[9px] text-[var(--bt-muted)] ml-1 leading-snug">
                   Importe en{" "}
-                  <span className="font-bold text-[#5d5045]">euros (€)</span>;
+                  <span className="font-bold text-[var(--bt-primary)]">euros (€)</span>;
                   puedes usar decimales (ej. 25 o 32,50).
                 </p>
                 <input
@@ -817,7 +817,7 @@ export default function SettingsView({
                   inputMode="decimal"
                   placeholder="Ej. 25"
                   aria-label="Precio en euros"
-                  className="w-full bg-[#FAF9F6] border border-[#eaddcf] py-3 px-4 rounded-2xl text-[10px] font-black"
+                  className="w-full bg-[var(--bt-bg)] border border-[var(--bt-border)] py-3 px-4 rounded-2xl text-[10px] font-black"
                   value={svcForm.price}
                   onChange={(e) =>
                     setSvcForm({ ...svcForm, price: e.target.value })
@@ -828,7 +828,7 @@ export default function SettingsView({
             <button
               type="submit"
               disabled={svcSaving || !svcForm.name.trim()}
-              className="w-full bg-[#5d5045] text-[#f5ebe0] py-3 rounded-full text-[10px] font-black uppercase tracking-widest disabled:opacity-50 mt-2"
+              className="w-full bg-[var(--bt-primary)] text-white py-3 rounded-full text-[10px] font-black uppercase tracking-widest disabled:opacity-50 mt-2 hover:bg-[var(--bt-primary-hover)]"
             >
               {svcSaving ? "Guardando…" : "Añadir servicio"}
             </button>
@@ -844,14 +844,14 @@ export default function SettingsView({
           defaultOpen={focusHours}
         >
           <div className="flex items-center justify-between gap-3 mb-4">
-            <p className="text-[10px] text-[#8c857d] leading-relaxed">
+            <p className="text-[10px] text-[var(--bt-muted)] leading-relaxed">
               Recomendación: configura el horario antes de usar el agente de WhatsApp.
             </p>
             <button
               type="button"
               onClick={loadHours}
               disabled={hoursLoading}
-              className="shrink-0 rounded-full border border-[#eaddcf] bg-white px-4 py-2 text-[9px] font-black uppercase tracking-widest text-[#5d5045] disabled:opacity-50"
+              className="shrink-0 rounded-full border border-[var(--bt-border)] bg-white px-4 py-2 text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)] disabled:opacity-50"
             >
               {hoursLoading ? "Cargando…" : "Cargar"}
             </button>
@@ -870,7 +870,7 @@ export default function SettingsView({
           )}
 
           {!hours && (
-            <p className="text-[10px] text-[#8c857d]">
+            <p className="text-[10px] text-[var(--bt-muted)]">
               Pulsa <strong>Cargar</strong> para ver tu horario actual.
             </p>
           )}
@@ -880,13 +880,13 @@ export default function SettingsView({
               {hours.map((d, idx) => (
                 <div
                   key={d.day_of_week ?? idx}
-                  className="rounded-2xl border border-[#eee8e2] bg-[#FAF9F6] p-4"
+                  className="rounded-2xl border border-[var(--bt-border)] bg-[var(--bt-bg)] p-4"
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-[10px] font-black tracking-widest text-[#5d5045]">
+                    <p className="text-[10px] font-black tracking-widest text-[var(--bt-primary)]">
                       {dayLabel(d.day_of_week)}
                     </p>
-                    <label className="inline-flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-[#8c857d]">
+                    <label className="inline-flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-[var(--bt-muted)]">
                       <input
                         type="checkbox"
                         checked={!!d.is_open}
@@ -903,7 +903,7 @@ export default function SettingsView({
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-[8px] font-black uppercase text-[#8c857d] mb-1">
+                      <label className="block text-[8px] font-black uppercase text-[var(--bt-muted)] mb-1">
                         Apertura
                       </label>
                       <input
@@ -917,11 +917,11 @@ export default function SettingsView({
                             ),
                           )
                         }
-                        className="w-full rounded-xl border border-[#eaddcf] bg-white px-3 py-2 text-[10px] font-black text-[#5d5045] disabled:opacity-50"
+                        className="w-full rounded-xl border border-[var(--bt-border)] bg-white px-3 py-2 text-[10px] font-black text-[var(--bt-primary)] disabled:opacity-50"
                       />
                     </div>
                     <div>
-                      <label className="block text-[8px] font-black uppercase text-[#8c857d] mb-1">
+                      <label className="block text-[8px] font-black uppercase text-[var(--bt-muted)] mb-1">
                         Cierre
                       </label>
                       <input
@@ -937,7 +937,7 @@ export default function SettingsView({
                             ),
                           )
                         }
-                        className="w-full rounded-xl border border-[#eaddcf] bg-white px-3 py-2 text-[10px] font-black text-[#5d5045] disabled:opacity-50"
+                        className="w-full rounded-xl border border-[var(--bt-border)] bg-white px-3 py-2 text-[10px] font-black text-[var(--bt-primary)] disabled:opacity-50"
                       />
                     </div>
                   </div>
@@ -947,7 +947,7 @@ export default function SettingsView({
                 type="button"
                 onClick={saveHours}
                 disabled={hoursSaving}
-                className="w-full rounded-full bg-[#5d5045] py-3 text-[10px] font-black uppercase tracking-widest text-[#f5ebe0] disabled:opacity-50"
+                className="w-full rounded-full bg-[var(--bt-primary)] py-3 text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-50 hover:bg-[var(--bt-primary-hover)]"
               >
                 {hoursSaving ? "Guardando…" : "Guardar horario"}
               </button>
@@ -974,12 +974,12 @@ export default function SettingsView({
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-600 ring-1 ring-red-100">
               <AlertTriangle className="h-7 w-7" strokeWidth={1.75} />
             </div>
-            <p className="text-center text-[9px] font-black uppercase tracking-[0.35em] text-[#a39485] mb-2">
+            <p className="text-center text-[9px] font-black uppercase tracking-[0.35em] text-[var(--bt-muted)] mb-2">
               Eliminar servicio
             </p>
             <h3
               id="settings-delete-svc-title"
-              className="font-serif text-lg text-center text-[#5d5045] mb-3 leading-snug"
+              className="font-serif text-lg text-center text-[var(--bt-primary)] mb-3 leading-snug"
             >
               ¿Eliminar «{serviceToDelete.name}»?
             </h3>
@@ -988,11 +988,11 @@ export default function SettingsView({
               servicio, no podrás eliminarlo hasta que las gestiones.
             </p>
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-              <button
+            <button
                 type="button"
                 onClick={() => setServiceToDelete(null)}
                 disabled={svcDeletingId != null}
-                className="w-full sm:w-auto rounded-full border border-[#eaddcf] bg-white px-6 py-3 text-[10px] font-black uppercase tracking-widest text-[#8c857d] transition hover:bg-[#faf8f5] disabled:opacity-50"
+              className="w-full sm:w-auto rounded-full border border-[var(--bt-border)] bg-white px-6 py-3 text-[10px] font-black uppercase tracking-widest text-[var(--bt-muted)] transition hover:bg-[var(--bt-bg)] disabled:opacity-50"
               >
                 Cancelar
               </button>

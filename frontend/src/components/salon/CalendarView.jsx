@@ -208,9 +208,9 @@ const CalendarView = ({
         </div>
       )}
       {/* SECCIÓN CALENDARIO */}
-      <div className="bg-white/90 backdrop-blur-md rounded-[2.5rem] p-6 shadow-sm border border-[#e5e0d8]">
+      <div className="bg-white/90 backdrop-blur-md rounded-[2.5rem] p-6 shadow-sm border border-[var(--bt-border)]">
         <div className="flex justify-between items-center mb-6 px-2">
-          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#5d5045]">
+          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--bt-primary)]">
             {monthName} <span className="opacity-40">{year}</span>
           </h3>
           <div className="flex items-center gap-3">
@@ -223,8 +223,8 @@ const CalendarView = ({
               }
               className={`inline-flex items-center justify-center border px-4 py-2 rounded-2xl transition-all text-[10px] font-black uppercase tracking-widest ${
                 integrationsLocked
-                  ? "bg-[#f5f0eb] text-[#a39485] border-[#e8e0d8] cursor-not-allowed"
-                  : "bg-white text-[#5d5045] border-[#eee8e2] hover:border-[#dcc7b1]"
+                  ? "bg-[var(--bt-accent)] text-[var(--bt-muted)] border-[var(--bt-border)] cursor-not-allowed"
+                  : "bg-white text-[var(--bt-primary)] border-[var(--bt-border)] hover:border-[var(--bt-border-strong)]"
               }`}
               title={
                 integrationsLocked
@@ -251,7 +251,7 @@ const CalendarView = ({
                   return d;
                 })
               }
-              className="text-[#a39485] hover:text-[#5d5045]"
+              className="text-[var(--bt-muted)] hover:text-[var(--bt-primary)]"
             >
               ←
             </button>
@@ -264,7 +264,7 @@ const CalendarView = ({
                   return d;
                 })
               }
-              className="text-[#a39485] hover:text-[#5d5045]"
+              className="text-[var(--bt-muted)] hover:text-[var(--bt-primary)]"
             >
               →
             </button>
@@ -273,7 +273,7 @@ const CalendarView = ({
 
         <div className="grid grid-cols-7 gap-1.5 text-center">
           {["L", "M", "X", "J", "V", "S", "D"].map((d) => (
-            <span key={d} className="text-[9px] font-black text-[#a39485] mb-2">
+            <span key={d} className="text-[9px] font-black text-[var(--bt-muted)] mb-2">
               {d}
             </span>
           ))}
@@ -294,12 +294,12 @@ const CalendarView = ({
             const dotPaletteSel = [
               "bg-white",
               "bg-white/85",
-              "bg-[#dcc7b1]",
-              "bg-[#f5ebe0]",
+              "bg-[var(--bt-border-strong)]",
+              "bg-[var(--bt-accent)]",
             ];
             const dotPalette = [
-              "bg-[#dcc7b1]",
-              "bg-[#5d5045]",
+              "bg-[var(--bt-border-strong)]",
+              "bg-[var(--bt-primary)]",
               "bg-amber-500/80",
               "bg-emerald-600/75",
             ];
@@ -311,14 +311,14 @@ const CalendarView = ({
                 onClick={() => handleDayClick(day)}
                 className={`aspect-square rounded-2xl flex flex-col items-center justify-center transition-all relative border ${
                   isSelected
-                    ? "bg-[#5d5045] border-[#5d5045] text-white scale-105 shadow-md z-10"
+                    ? "bg-[var(--bt-primary)] border-[var(--bt-primary)] text-white scale-105 shadow-md z-10"
                     : isToday
-                      ? "bg-[#fcfaf8] border-[#dcc7b1] text-[#5d5045]"
-                      : "bg-white border-[#eee8e2] hover:border-[#dcc7b1] text-[#5d5045]"
+                      ? "bg-[var(--bt-bg)] border-[var(--bt-border-strong)] text-[var(--bt-primary)]"
+                      : "bg-white border-[var(--bt-border)] hover:border-[var(--bt-border-strong)] text-[var(--bt-primary)]"
                 }`}
               >
                 <span
-                  className={`text-[11px] font-bold ${isToday && !isSelected ? "text-[#dcc7b1]" : ""}`}
+                  className={`text-[11px] font-bold ${isToday && !isSelected ? "text-[var(--bt-border-strong)]" : ""}`}
                 >
                   {day}
                 </span>
@@ -342,7 +342,7 @@ const CalendarView = ({
       {selectedDay && (
         <div className="space-y-6">
           {/* BLOQUE DE PENDIENTES */}
-          <div className="bg-[#5d5045] rounded-[2.5rem] p-8 text-white shadow-2xl animate-slideUp">
+          <div className="bg-[var(--bt-primary)] rounded-[2.5rem] p-8 text-white shadow-2xl animate-slideUp">
             <div className="flex justify-between items-start mb-8">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-50 mb-1">
@@ -394,7 +394,7 @@ const CalendarView = ({
                             {appo.client_name}
                           </p>
                           <div className="flex flex-wrap gap-x-2 gap-y-1 items-center mt-1">
-                            <span className="text-[9px] font-black uppercase tracking-widest text-[#dcc7b1] truncate max-w-[12rem]">
+                            <span className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-border-strong)] truncate max-w-[12rem]">
                               {serviceNamesForAppointment(appo, safeServices).join(
                                 " · ",
                               )}
@@ -452,8 +452,8 @@ const CalendarView = ({
 
           {/* BLOQUE DE FINALIZADAS */}
           {completedApps.length > 0 && (
-            <div className="bg-white rounded-[2.5rem] p-8 border border-[#e5e0d8] shadow-sm animate-slideUp">
-              <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-[#a39485] mb-6">
+            <div className="bg-white rounded-[2.5rem] p-8 border border-[var(--bt-border)] shadow-sm animate-slideUp">
+              <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-[var(--bt-muted)] mb-6">
                 Finalizadas
               </h4>
               <div className="space-y-3">
@@ -461,17 +461,17 @@ const CalendarView = ({
                   return (
                   <div
                     key={appo.id}
-                    className="bg-[#fcfaf8] rounded-3xl p-4 flex items-center justify-between border border-[#eee8e2]"
+                    className="bg-[var(--bt-bg)] rounded-3xl p-4 flex items-center justify-between border border-[var(--bt-border)]"
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 opacity-40 min-w-0">
-                      <span className="text-[9px] font-black text-[#5d5045] shrink-0">
+                      <span className="text-[9px] font-black text-[var(--bt-primary)] shrink-0">
                         {formatTimeRangeEs(appo, safeServices)}
                       </span>
                       <div className="min-w-0">
-                        <p className="font-bold text-sm text-[#5d5045] line-through truncate">
+                        <p className="font-bold text-sm text-[var(--bt-primary)] line-through truncate">
                           {appo.client_name}
                         </p>
-                        <p className="text-[8px] font-black uppercase tracking-wider text-[#a39485] truncate">
+                        <p className="text-[8px] font-black uppercase tracking-wider text-[var(--bt-muted)] truncate">
                           {serviceNamesForAppointment(appo, safeServices).join(
                             " · ",
                           )}
@@ -482,7 +482,7 @@ const CalendarView = ({
                       {/* BOTÓN RETORNO: Vuelve a 'scheduled' */}
                       <button
                         onClick={() => onUpdateStatus(appo.id, "scheduled")}
-                        className="h-9 w-9 flex items-center justify-center bg-white text-[#a39485] border border-[#eee8e2] rounded-xl hover:text-[#5d5045] transition-all text-lg"
+                        className="h-9 w-9 flex items-center justify-center bg-white text-[var(--bt-muted)] border border-[var(--bt-border)] rounded-xl hover:text-[var(--bt-primary)] transition-all text-lg"
                         title="Devolver a pendientes"
                       >
                         ↺

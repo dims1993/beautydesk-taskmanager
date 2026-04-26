@@ -121,7 +121,7 @@ export const PaymentModal = ({ isOpen, onClose, appointment, onConfirm }) => {
             <div className="grid grid-cols-2 gap-4">
               <button
                 onClick={() => setMethod("efectivo")}
-                className={`flex flex-col items-center gap-3 p-6 rounded-3xl border transition-all ${method === "efectivo" ? "bg-[#5d5045] border-[#5d5045] text-white shadow-lg" : "bg-white border-[#eaddcf] text-[#8c857d] hover:border-[#5d5045]"}`}
+                className={`flex flex-col items-center gap-3 p-6 rounded-3xl border transition-all ${method === "efectivo" ? "bg-[var(--bt-primary)] border-[var(--bt-primary)] text-white shadow-lg" : "bg-white border-[var(--bt-border)] text-[var(--bt-muted)] hover:border-[var(--bt-primary)]"}`}
               >
                 <Banknote className="w-5 h-5" />
                 <span className="text-[9px] font-black uppercase tracking-widest">
@@ -130,7 +130,7 @@ export const PaymentModal = ({ isOpen, onClose, appointment, onConfirm }) => {
               </button>
               <button
                 onClick={() => setMethod("tarjeta")}
-                className={`flex flex-col items-center gap-3 p-6 rounded-3xl border transition-all ${method === "tarjeta" ? "bg-[#5d5045] border-[#5d5045] text-white shadow-lg" : "bg-white border-[#eaddcf] text-[#8c857d] hover:border-[#5d5045]"}`}
+                className={`flex flex-col items-center gap-3 p-6 rounded-3xl border transition-all ${method === "tarjeta" ? "bg-[var(--bt-primary)] border-[var(--bt-primary)] text-white shadow-lg" : "bg-white border-[var(--bt-border)] text-[var(--bt-muted)] hover:border-[var(--bt-primary)]"}`}
               >
                 <CreditCard className="w-5 h-5" />
                 <span className="text-[9px] font-black uppercase tracking-widest">
@@ -143,7 +143,7 @@ export const PaymentModal = ({ isOpen, onClose, appointment, onConfirm }) => {
 
         <button
           onClick={() => onConfirm(appointment.id, price, method)}
-          className="w-full py-6 bg-[#5d5045] text-[#f5ebe0] rounded-2xl font-black uppercase text-[10px] tracking-[0.4em] shadow-xl hover:bg-[#4a3f36] transition-all flex items-center justify-center gap-3"
+          className="w-full py-6 bg-[var(--bt-primary)] text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.4em] shadow-xl hover:bg-[var(--bt-primary-hover)] transition-all flex items-center justify-center gap-3"
         >
           Confirmar Pago <CheckCircle2 className="w-4 h-4" />
         </button>
@@ -202,23 +202,23 @@ export const EditAppointmentModal = ({
     >
       <form className="min-w-0 space-y-8" onSubmit={handleSubmit}>
         {appointment?.client_name && (
-          <p className="text-[11px] font-bold text-[#5d5045] px-1">
+          <p className="text-[11px] font-bold text-[var(--bt-primary)] px-1">
             {appointment.client_name}
           </p>
         )}
 
         <div className="space-y-6">
           <div className="relative group">
-            <label className="px-1 text-[9px] font-black text-[#8c857d] uppercase tracking-[0.3em] block mb-2">
+            <label className="px-1 text-[9px] font-black text-[var(--bt-muted)] uppercase tracking-[0.3em] block mb-2">
               Servicio
             </label>
             <div className="relative">
-              <Layers className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 text-[#c4bdb5]" />
+              <Layers className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--bt-icon)]" />
               <select
                 required
                 value={serviceId}
                 onChange={(e) => setServiceId(e.target.value)}
-                className="w-full min-w-0 max-w-full pl-8 py-4 bg-transparent border-b border-[#eaddcf] outline-none text-base font-bold tracking-wide text-[#5d5045] appearance-none"
+                className="w-full min-w-0 max-w-full pl-8 py-4 bg-transparent border-b border-[var(--bt-border)] outline-none text-base font-bold tracking-wide text-[var(--bt-primary)] appearance-none"
               >
                 {services.map((s) => (
                   <option key={s.id} value={s.id}>
@@ -230,17 +230,17 @@ export const EditAppointmentModal = ({
           </div>
 
           <div className="relative group">
-            <label className="px-1 text-[9px] font-black text-[#8c857d] uppercase tracking-[0.3em] block mb-2">
+            <label className="px-1 text-[9px] font-black text-[var(--bt-muted)] uppercase tracking-[0.3em] block mb-2">
               Fecha y hora
             </label>
             <div className="relative min-w-0 w-full max-w-full">
-              <Timer className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 shrink-0 text-[#c4bdb5] pointer-events-none" />
+              <Timer className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 shrink-0 text-[var(--bt-icon)] pointer-events-none" />
               <input
                 type="datetime-local"
                 required
                 value={startLocal}
                 onChange={(e) => setStartLocal(e.target.value)}
-                className="box-border w-full min-w-0 max-w-full pl-8 py-4 bg-transparent border-b border-[#eaddcf] outline-none text-base font-bold tracking-wide text-[#5d5045] [color-scheme:light]"
+                className="box-border w-full min-w-0 max-w-full pl-8 py-4 bg-transparent border-b border-[var(--bt-border)] outline-none text-base font-bold tracking-wide text-[var(--bt-primary)] [color-scheme:light]"
               />
             </div>
           </div>
@@ -253,7 +253,7 @@ export const EditAppointmentModal = ({
         <button
           type="submit"
           disabled={saving || !appointment?.id}
-          className="w-full py-6 bg-[#5d5045] text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.4em] shadow-xl transition-all disabled:opacity-50"
+          className="w-full py-6 bg-[var(--bt-primary)] text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.4em] shadow-xl transition-all disabled:opacity-50 hover:bg-[var(--bt-primary-hover)]"
         >
           {saving ? "Guardando…" : "Guardar Cambios"}
         </button>
@@ -278,10 +278,10 @@ export const ArchiveAppointmentModal = ({ isOpen, onClose, onConfirm }) => {
           </div>
         </div>
         <div className="space-y-3">
-          <p className="text-[#5d5045] font-serif text-xl italic">
+          <p className="text-[var(--bt-primary)] font-serif text-xl italic">
             ¿Retirar de la agenda?
           </p>
-          <p className="text-[#8c857d] text-[11px] font-medium leading-relaxed px-4 uppercase tracking-tighter">
+          <p className="text-[var(--bt-muted)] text-[11px] font-medium leading-relaxed px-4 uppercase tracking-tighter">
             La cita dejará de ser visible en el calendario actual y se moverá al
             archivo histórico.
           </p>
@@ -295,7 +295,7 @@ export const ArchiveAppointmentModal = ({ isOpen, onClose, onConfirm }) => {
           </button>
           <button
             onClick={onClose}
-            className="w-full py-4 text-[#8c857d] font-black uppercase text-[9px] tracking-[0.2em] hover:text-[#5d5045]"
+            className="w-full py-4 text-[var(--bt-muted)] font-black uppercase text-[9px] tracking-[0.2em] hover:text-[var(--bt-primary)]"
           >
             Mantener Reserva
           </button>
@@ -327,15 +327,15 @@ export const DeleteClientConfirmModal = ({
           </div>
         </div>
         <div className="space-y-3">
-          <p className="text-[#5d5045] font-serif text-xl italic">
+          <p className="text-[var(--bt-primary)] font-serif text-xl italic">
             ¿Eliminar esta ficha del directorio?
           </p>
           {clientLabel ? (
-            <p className="text-[#5d5045] text-sm font-black tracking-wide px-2">
+            <p className="text-[var(--bt-primary)] text-sm font-black tracking-wide px-2">
               {clientLabel}
             </p>
           ) : null}
-          <p className="text-[#8c857d] text-[11px] font-medium leading-relaxed px-4 uppercase tracking-tighter">
+          <p className="text-[var(--bt-muted)] text-[11px] font-medium leading-relaxed px-4 uppercase tracking-tighter">
             Las citas guardadas no se borran; solo se quita el enlace entre esas
             citas y este contacto.
           </p>
@@ -353,7 +353,7 @@ export const DeleteClientConfirmModal = ({
             type="button"
             onClick={onClose}
             disabled={isDeleting}
-            className="w-full py-4 text-[#8c857d] font-black uppercase text-[9px] tracking-[0.2em] hover:text-[#5d5045] disabled:opacity-40"
+            className="w-full py-4 text-[var(--bt-muted)] font-black uppercase text-[9px] tracking-[0.2em] hover:text-[var(--bt-primary)] disabled:opacity-40"
           >
             Conservar ficha
           </button>

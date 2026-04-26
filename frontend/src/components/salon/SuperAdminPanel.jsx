@@ -173,7 +173,7 @@ const SuperAdminPanel = () => {
         {/* Botón Volver */}
         <Link
           to="/app"
-          className="absolute left-0 top-0 flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-[#eee8e2] text-[#a39485] hover:text-[#5d5045] hover:border-[#dcc7b1] transition-all group shadow-sm"
+          className="absolute left-0 top-0 flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-[var(--bt-border)] text-[var(--bt-muted)] hover:text-[var(--bt-primary)] hover:border-[var(--bt-border-strong)] transition-all group shadow-sm"
         >
           <ArrowLeft
             size={14}
@@ -186,14 +186,14 @@ const SuperAdminPanel = () => {
         </Link>
 
         <div className="text-center space-y-2 mt-12 lg:mt-0">
-          <div className="flex justify-center mb-2 text-[#dcc7b1]">
+          <div className="flex justify-center mb-2 text-[var(--bt-border-strong)]">
             <LayoutDashboard size={32} strokeWidth={1.5} />
           </div>
         </div>
-        <h2 className="text-4xl font-black text-[#5d5045] tracking-tighter">
+        <h2 className="text-4xl font-black text-[var(--bt-primary)] tracking-tighter">
           Master Control
         </h2>
-        <p className="text-[#a39485] font-medium text-sm italic">
+        <p className="text-[var(--bt-muted)] font-medium text-sm italic">
           Gestión Global de Organizaciones y Licencias
         </p>
       </div>
@@ -201,23 +201,23 @@ const SuperAdminPanel = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
         {/* --- COLUMNA IZQUIERDA: FORMULARIO --- */}
         <div className="lg:col-span-5">
-          <div className="bg-white p-8 rounded-[3rem] border border-[#eee8e2] shadow-xl shadow-[#5d5045]/5 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-[#dcc7b1]/10 rounded-full -mr-12 -mt-12" />
+          <div className="bg-white p-8 rounded-[3rem] border border-[var(--bt-border)] shadow-xl shadow-black/5 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-[var(--bt-border-strong)]/10 rounded-full -mr-12 -mt-12" />
 
             <form onSubmit={handleSubmit} className="space-y-6 relative z-10">
-              <h3 className="text-[10px] font-black uppercase tracking-widest text-[#5d5045] mb-4">
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--bt-primary)] mb-4">
                 Nuevo Registro
               </h3>
 
               <div className="space-y-4">
                 <div>
-                  <label className="text-[9px] font-black uppercase tracking-[0.2em] text-[#a39485] ml-4 mb-2 block">
+                  <label className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--bt-muted)] ml-4 mb-2 block">
                     Salón
                   </label>
                   <input
                     type="text"
                     placeholder="Nombre del salón"
-                    className="w-full px-6 py-4 rounded-2xl bg-[#f8f5f2] border-2 border-transparent focus:border-[#dcc7b1] focus:bg-white transition-all outline-none text-sm font-medium"
+                    className="w-full px-6 py-4 rounded-2xl bg-[var(--bt-bg)] border-2 border-transparent focus:border-[var(--bt-border-strong)] focus:bg-white transition-all outline-none text-sm font-medium"
                     value={formData.salon_name}
                     onChange={(e) =>
                       setFormData({ ...formData, salon_name: e.target.value })
@@ -227,13 +227,13 @@ const SuperAdminPanel = () => {
                 </div>
 
                 <div>
-                  <label className="text-[9px] font-black uppercase tracking-[0.2em] text-[#a39485] ml-4 mb-2 block">
+                  <label className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--bt-muted)] ml-4 mb-2 block">
                     Email Admin
                   </label>
                   <input
                     type="email"
                     placeholder="correo@gmail.com"
-                    className="w-full px-6 py-4 rounded-2xl bg-[#f8f5f2] border-2 border-transparent focus:border-[#dcc7b1] focus:bg-white transition-all outline-none text-sm font-medium"
+                    className="w-full px-6 py-4 rounded-2xl bg-[var(--bt-bg)] border-2 border-transparent focus:border-[var(--bt-border-strong)] focus:bg-white transition-all outline-none text-sm font-medium"
                     value={formData.email}
                     onChange={(e) =>
                       setFormData({ ...formData, email: e.target.value })
@@ -246,25 +246,25 @@ const SuperAdminPanel = () => {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-[#5d5045] text-white font-black py-4 rounded-2xl hover:bg-[#4a3f36] transform hover:-translate-y-1 transition-all shadow-lg disabled:opacity-50 uppercase tracking-widest text-[10px]"
+                className="w-full bg-[var(--bt-primary)] text-white font-black py-4 rounded-2xl hover:bg-[var(--bt-primary-hover)] transform hover:-translate-y-1 transition-all shadow-lg disabled:opacity-50 uppercase tracking-widest text-[10px]"
               >
                 {isLoading ? "Creando..." : "Alta de Organización"}
               </button>
             </form>
 
-            <div className="mt-8 pt-8 border-t border-[#f3ede7] relative z-10">
-              <h3 className="text-[10px] font-black uppercase tracking-widest text-[#5d5045] mb-4">
+            <div className="mt-8 pt-8 border-t border-black/5 relative z-10">
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--bt-primary)] mb-4">
                 Soporte — Entrar como usuario
               </h3>
               <form onSubmit={handleImpersonate} className="space-y-4">
                 <div>
-                  <label className="text-[9px] font-black uppercase tracking-[0.2em] text-[#a39485] ml-4 mb-2 block">
+                  <label className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--bt-muted)] ml-4 mb-2 block">
                     Email del usuario
                   </label>
                   <input
                     type="email"
                     placeholder="usuario@correo.com"
-                    className="w-full px-6 py-4 rounded-2xl bg-[#f8f5f2] border-2 border-transparent focus:border-[#dcc7b1] focus:bg-white transition-all outline-none text-sm font-medium"
+                    className="w-full px-6 py-4 rounded-2xl bg-[var(--bt-bg)] border-2 border-transparent focus:border-[var(--bt-border-strong)] focus:bg-white transition-all outline-none text-sm font-medium"
                     value={impersonateEmail}
                     onChange={(e) => setImpersonateEmail(e.target.value)}
                     required
@@ -273,7 +273,7 @@ const SuperAdminPanel = () => {
                 <button
                   type="submit"
                   disabled={impersonateLoading}
-                  className="w-full bg-white border border-[#eaddcf] text-[#5d5045] font-black py-4 rounded-2xl hover:border-[#5d5045]/30 hover:bg-[#faf8f5] transition-all shadow-sm disabled:opacity-50 uppercase tracking-widest text-[10px] inline-flex items-center justify-center gap-2"
+                  className="w-full bg-white border border-[var(--bt-border)] text-[var(--bt-primary)] font-black py-4 rounded-2xl hover:border-[var(--bt-primary)]/30 hover:bg-[var(--bt-bg)] transition-all shadow-sm disabled:opacity-50 uppercase tracking-widest text-[10px] inline-flex items-center justify-center gap-2"
                 >
                   <LogIn size={16} strokeWidth={2.5} />
                   {impersonateLoading ? "Entrando..." : "Entrar como"}
@@ -299,7 +299,7 @@ const SuperAdminPanel = () => {
         {/* --- COLUMNA DERECHA: LISTADO DE ORGANIZACIONES --- */}
         <div className="lg:col-span-7 space-y-6">
           <div className="flex justify-between items-center px-4">
-            <h3 className="text-[10px] font-black text-[#a39485] uppercase tracking-[0.3em]">
+            <h3 className="text-[10px] font-black text-[var(--bt-muted)] uppercase tracking-[0.3em]">
               Organizaciones Activas ({organizations.length})
             </h3>
           </div>
@@ -307,7 +307,7 @@ const SuperAdminPanel = () => {
           <div className="grid grid-cols-1 gap-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
             {organizations.map((org) => (
               <div key={org.id} className="space-y-2">
-                <div className="bg-white p-6 rounded-[2rem] border border-[#eee8e2] flex justify-between items-center group hover:shadow-md transition-all hover:border-[#dcc7b1]">
+                <div className="bg-white p-6 rounded-[2rem] border border-[var(--bt-border)] flex justify-between items-center group hover:shadow-md transition-all hover:border-[var(--bt-border-strong)]">
                   <button
                     type="button"
                     onClick={() =>
@@ -316,19 +316,19 @@ const SuperAdminPanel = () => {
                     className="flex items-center gap-4 min-w-0 text-left"
                     title="Ver usuarios"
                   >
-                    <div className="p-3 bg-[#f8f5f2] rounded-2xl text-[#dcc7b1] group-hover:bg-[#5d5045] group-hover:text-white transition-colors shrink-0">
+                    <div className="p-3 bg-[var(--bt-bg)] rounded-2xl text-[var(--bt-border-strong)] group-hover:bg-[var(--bt-primary)] group-hover:text-white transition-colors shrink-0">
                       <Building2 size={20} />
                     </div>
 
                     <div className="space-y-1 min-w-0">
-                      <p className="font-black text-[#5d5045] text-base tracking-tighter uppercase truncate">
+                      <p className="font-black text-[var(--bt-primary)] text-base tracking-tighter uppercase truncate">
                         {org.name}
                       </p>
                       <div className="flex flex-wrap items-center gap-3">
-                        <span className="text-[9px] bg-[#f8f5f2] text-[#a39485] px-2 py-1 rounded-md font-bold uppercase">
+                        <span className="text-[9px] bg-[var(--bt-bg)] text-[var(--bt-muted)] px-2 py-1 rounded-md font-bold uppercase">
                           ID: {org.id.toString().slice(0, 8)}
                         </span>
-                        <div className="flex items-center gap-1 text-[9px] text-[#dcc7b1] font-black uppercase italic">
+                        <div className="flex items-center gap-1 text-[9px] text-[var(--bt-border-strong)] font-black uppercase italic">
                           <Users size={10} />
                           <span>{org.user_count} Usuarios</span>
                         </div>
@@ -338,7 +338,7 @@ const SuperAdminPanel = () => {
 
                   <div className="flex items-center gap-3 shrink-0">
                     <ChevronDown
-                      className={`w-4 h-4 text-[#a39485] transition-transform ${
+                      className={`w-4 h-4 text-[var(--bt-muted)] transition-transform ${
                         openOrgId === org.id ? "rotate-180" : ""
                       }`}
                       strokeWidth={2.5}
@@ -346,7 +346,7 @@ const SuperAdminPanel = () => {
                     <div className="h-2 w-2 rounded-full bg-green-400 shadow-[0_0_10px_rgba(74,222,128,0.4)]" />
                     <button
                       onClick={() => handleDelete(org.id, org.name)}
-                      className="p-2.5 text-[#a39485] hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                      className="p-2.5 text-[var(--bt-muted)] hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"
                       title="Eliminar Organización"
                     >
                       <Trash2 size={16} strokeWidth={2.5} />
@@ -355,17 +355,17 @@ const SuperAdminPanel = () => {
                 </div>
 
                 {openOrgId === org.id && (
-                  <div className="bg-white/90 rounded-[2rem] border border-[#eee8e2] px-6 py-5">
+                  <div className="bg-white/90 rounded-[2rem] border border-[var(--bt-border)] px-6 py-5">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#a39485]">
+                        <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--bt-muted)]">
                           Agent Key (WhatsApp/IG)
                         </p>
-                        <p className="mt-2 text-[10px] text-[#8c857d] font-medium leading-relaxed">
+                        <p className="mt-2 text-[10px] text-[var(--bt-muted)] font-medium leading-relaxed">
                           Esta clave se usa en integraciones externas para llamar a{" "}
-                          <span className="font-black text-[#5d5045]">/agent/*</span>{" "}
+                          <span className="font-black text-[var(--bt-primary)]">/agent/*</span>{" "}
                           con el header{" "}
-                          <span className="font-black text-[#5d5045]">
+                          <span className="font-black text-[var(--bt-primary)]">
                             X-Agent-Key
                           </span>
                           .
@@ -375,7 +375,7 @@ const SuperAdminPanel = () => {
                         type="button"
                         onClick={() => rotateAgentKey(org.id)}
                         disabled={rotatingOrgId === org.id}
-                        className="shrink-0 inline-flex items-center gap-2 rounded-2xl border border-[#eaddcf] bg-white px-4 py-3 text-[9px] font-black uppercase tracking-widest text-[#5d5045] hover:border-[#dcc7b1] disabled:opacity-50"
+                        className="shrink-0 inline-flex items-center gap-2 rounded-2xl border border-[var(--bt-border)] bg-white px-4 py-3 text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)] hover:border-[var(--bt-border-strong)] disabled:opacity-50"
                       >
                         <KeyRound className="w-4 h-4" strokeWidth={2.5} />
                         {rotatingOrgId === org.id ? "Generando..." : "Generar"}
@@ -383,16 +383,16 @@ const SuperAdminPanel = () => {
                     </div>
 
                     {org.has_agent_key && (
-                      <div className="mt-4 rounded-2xl border border-[#f1ebe6] bg-[#faf8f5] px-4 py-3 flex items-center justify-between gap-3">
+                      <div className="mt-4 rounded-2xl border border-black/5 bg-[var(--bt-bg)] px-4 py-3 flex items-center justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="text-[9px] font-black uppercase tracking-widest text-[#a39485]">
+                          <p className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-muted)]">
                             Clave activa
                           </p>
-                          <p className="text-[10px] font-black tracking-widest text-[#5d5045] truncate">
+                          <p className="text-[10px] font-black tracking-widest text-[var(--bt-primary)] truncate">
                             ••••{org.agent_key_last4 || "????"}
                           </p>
                         </div>
-                        <span className="text-[9px] font-bold text-[#8c857d]">
+                        <span className="text-[9px] font-bold text-[var(--bt-muted)]">
                           (no se muestra completa)
                         </span>
                       </div>
@@ -407,7 +407,7 @@ const SuperAdminPanel = () => {
                           <input
                             readOnly
                             value={freshAgentKeyByOrg[org.id]}
-                            className="min-w-0 flex-1 rounded-xl bg-white border border-amber-200 px-3 py-2 text-[10px] font-bold text-[#5d5045] outline-none"
+                            className="min-w-0 flex-1 rounded-xl bg-white border border-amber-200 px-3 py-2 text-[10px] font-bold text-[var(--bt-primary)] outline-none"
                           />
                           <button
                             type="button"
@@ -421,27 +421,27 @@ const SuperAdminPanel = () => {
                       </div>
                     )}
 
-                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#a39485]">
+                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--bt-muted)]">
                       Usuarios (emails)
                     </p>
                     <div className="mt-3 space-y-2">
                       {(org.user_emails || []).length === 0 ? (
-                        <p className="text-[10px] text-[#8c857d] font-medium">
+                        <p className="text-[10px] text-[var(--bt-muted)] font-medium">
                           No hay usuarios asociados.
                         </p>
                       ) : (
                         (org.user_emails || []).map((em) => (
                           <div
                             key={em}
-                            className="flex items-center justify-between gap-3 rounded-2xl border border-[#f1ebe6] bg-[#faf8f5] px-4 py-3"
+                            className="flex items-center justify-between gap-3 rounded-2xl border border-black/5 bg-[var(--bt-bg)] px-4 py-3"
                           >
-                            <span className="min-w-0 truncate text-[10px] font-black tracking-widest text-[#5d5045]">
+                            <span className="min-w-0 truncate text-[10px] font-black tracking-widest text-[var(--bt-primary)]">
                               {em}
                             </span>
                             <button
                               type="button"
                               onClick={() => setImpersonateEmail(em)}
-                              className="shrink-0 rounded-full border border-[#eaddcf] bg-white px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-[#5d5045] hover:border-[#dcc7b1]"
+                              className="shrink-0 rounded-full border border-[var(--bt-border)] bg-white px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)] hover:border-[var(--bt-border-strong)]"
                             >
                               Usar
                             </button>
@@ -456,8 +456,8 @@ const SuperAdminPanel = () => {
 
             {/* Estado vacío */}
             {organizations.length === 0 && (
-              <div className="text-center py-20 bg-white/50 rounded-[3rem] border border-dashed border-[#dcc7b1]">
-                <p className="text-[10px] font-black text-[#a39485] uppercase tracking-widest">
+              <div className="text-center py-20 bg-white/50 rounded-[3rem] border border-dashed border-[var(--bt-border-strong)]">
+                <p className="text-[10px] font-black text-[var(--bt-muted)] uppercase tracking-widest">
                   No hay salones registrados
                 </p>
               </div>
@@ -467,7 +467,7 @@ const SuperAdminPanel = () => {
       </div>
 
       <div className="text-center pt-10">
-        <p className="text-[9px] text-[#a39485] uppercase tracking-[0.5em] font-black opacity-50">
+        <p className="text-[9px] text-[var(--bt-muted)] uppercase tracking-[0.5em] font-black opacity-50">
           BeautyTask Management System v1.0
         </p>
       </div>

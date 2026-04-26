@@ -282,7 +282,7 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10">
       {/* CABECERA DIARIA */}
-      <div className="p-8 rounded-[2.5rem] text-white shadow-xl bg-[#5d5045]">
+      <div className="p-8 rounded-[2.5rem] text-white shadow-xl bg-[var(--bt-primary)]">
         <div className="flex justify-between items-center">
           <div>
             <p className="text-[10px] font-black uppercase opacity-70 tracking-widest mb-1">
@@ -301,12 +301,12 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
           >
             {isLocked ? (
               <Lock
-                className="h-7 w-7 text-[#f5ebe0]"
+                className="h-7 w-7 text-[var(--bt-accent)]"
                 strokeWidth={1.5}
               />
             ) : (
               <Sparkles
-                className="h-7 w-7 text-[#f5ebe0]"
+                className="h-7 w-7 text-[var(--bt-accent)]"
                 strokeWidth={1.5}
               />
             )}
@@ -315,7 +315,7 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
       </div>
 
       {/* MÉTODOS Y CIERRE */}
-      <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-[#eee8e2]">
+      <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-[var(--bt-border)]">
         <div className="flex justify-between items-center mb-8">
           <button
             type="button"
@@ -326,15 +326,15 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
                 return d;
               })
             }
-            className="w-10 h-10 flex items-center justify-center rounded-full bg-[#f8f5f2]"
+            className="w-10 h-10 flex items-center justify-center rounded-full bg-[var(--bt-bg)]"
           >
             ←
           </button>
           <div className="text-center">
-            <h5 className="text-[9px] font-black uppercase tracking-[0.2em] text-[#a39485]">
+            <h5 className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--bt-muted)]">
               Caja Diaria
             </h5>
-            <p className="text-[11px] font-bold text-[#5d5045] capitalize">
+            <p className="text-[11px] font-bold text-[var(--bt-primary)] capitalize">
               {dayLabel}
             </p>
           </div>
@@ -347,7 +347,7 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
                 return d;
               })
             }
-            className="w-10 h-10 flex items-center justify-center rounded-full bg-[#f8f5f2]"
+            className="w-10 h-10 flex items-center justify-center rounded-full bg-[var(--bt-bg)]"
           >
             →
           </button>
@@ -356,14 +356,14 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
         <div className="space-y-6 mb-8">
           <div>
             <div className="flex justify-between text-[10px] font-black mb-2 px-1">
-              <span className="text-[#a39485]">EFECTIVO</span>
-              <span className="text-[#5d5045]">
+              <span className="text-[var(--bt-muted)]">EFECTIVO</span>
+              <span className="text-[var(--bt-primary)]">
                 {formatMoney(statsHoy.metodos.efectivo)}€
               </span>
             </div>
-            <div className="h-3 bg-[#f8f5f2] rounded-full overflow-hidden">
+            <div className="h-3 bg-[var(--bt-bg)] rounded-full overflow-hidden">
               <div
-                className="h-full bg-[#dcc7b1] transition-all duration-1000"
+                className="h-full bg-[var(--bt-border-strong)] transition-all duration-1000"
                 style={{
                   width: `${statsHoy.total > 0 ? (statsHoy.metodos.efectivo / statsHoy.total) * 100 : 0}%`,
                 }}
@@ -372,14 +372,14 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
           </div>
           <div>
             <div className="flex justify-between text-[10px] font-black mb-2 px-1">
-              <span className="text-[#a39485]">TARJETA</span>
-              <span className="text-[#5d5045]">
+              <span className="text-[var(--bt-muted)]">TARJETA</span>
+              <span className="text-[var(--bt-primary)]">
                 {formatMoney(statsHoy.metodos.tarjeta)}€
               </span>
             </div>
-            <div className="h-3 bg-[#f8f5f2] rounded-full overflow-hidden">
+            <div className="h-3 bg-[var(--bt-bg)] rounded-full overflow-hidden">
               <div
-                className="h-full bg-[#5d5045] transition-all duration-1000"
+                className="h-full bg-[var(--bt-primary)] transition-all duration-1000"
                 style={{
                   width: `${statsHoy.total > 0 ? (statsHoy.metodos.tarjeta / statsHoy.total) * 100 : 0}%`,
                 }}
@@ -392,7 +392,7 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
           <button
             type="button"
             onClick={() => setShowPasswordModal(true)}
-            className="flex w-full items-center justify-center gap-2 py-3 bg-[#5d5045] text-white rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-black transition-all"
+            className="flex w-full items-center justify-center gap-2 py-3 bg-[var(--bt-primary)] text-white rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-[var(--bt-primary-hover)] transition-all"
           >
             <Lock className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
             Confirmar y Cerrar Caja
@@ -410,13 +410,13 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
       </div>
 
       {/* GRÁFICA DE SERVICIOS (MENSUAL) */}
-      <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-[#eee8e2]">
-        <h5 className="text-[9px] font-black uppercase tracking-[0.2em] text-[#a39485] mb-10 text-center uppercase">
+      <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-[var(--bt-border)]">
+        <h5 className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--bt-muted)] mb-10 text-center uppercase">
           Rendimiento Mensual ({monthName})
         </h5>
         <div className="relative max-md:pt-1">
           <div className="relative h-52 max-md:h-56 md:h-48 flex">
-            <div className="flex flex-col justify-between h-full pb-0.5 text-right pr-3 border-r border-[#f8f5f2]">
+            <div className="flex flex-col justify-between h-full pb-0.5 text-right pr-3 border-r border-[var(--bt-bg)]">
               {[1, 0.75, 0.5, 0.25, 0].map((f) => (
                 <span
                   key={f}
@@ -433,13 +433,13 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
                   className="flex-1 flex flex-col items-center group relative h-full min-w-0 justify-end"
                 >
                   <span
-                    className="absolute -top-5 left-1/2 z-20 w-[max-content] max-w-[min(100%,5.5rem)] -translate-x-1/2 text-center text-[8px] font-bold leading-tight text-[#5d5045] opacity-100 md:text-[9px] md:opacity-0 md:transition-opacity md:group-hover:opacity-100 rounded-md border border-[#eee8e2] bg-white px-1 py-0.5 shadow-sm md:rounded-lg md:px-2 md:py-1"
+                    className="absolute -top-5 left-1/2 z-20 w-[max-content] max-w-[min(100%,5.5rem)] -translate-x-1/2 text-center text-[8px] font-bold leading-tight text-[var(--bt-primary)] opacity-100 md:text-[9px] md:opacity-0 md:transition-opacity md:group-hover:opacity-100 rounded-md border border-[var(--bt-border)] bg-white px-1 py-0.5 shadow-sm md:rounded-lg md:px-2 md:py-1"
                     aria-hidden
                   >
                     {formatMoney(statsMes.servicios[label])}€
                   </span>
                   <div
-                    className={`w-full max-w-[24px] rounded-t-sm transition-all duration-1000 ${i % 2 === 0 ? "bg-[#dcc7b1]" : "bg-[#5d5045]"}`}
+                    className={`w-full max-w-[24px] rounded-t-sm transition-all duration-1000 ${i % 2 === 0 ? "bg-[var(--bt-border-strong)]" : "bg-[var(--bt-primary)]"}`}
                     style={{
                       height: `${(statsMes.servicios[label] / maxServiceValue) * 100}%`,
                     }}
@@ -452,7 +452,7 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
             {serviceLabels.map((l, i) => (
               <p
                 key={i}
-                className="flex-1 text-[7px] font-black uppercase text-[#a39485] text-center leading-tight"
+                className="flex-1 text-[7px] font-black uppercase text-[var(--bt-muted)] text-center leading-tight"
               >
                 {l}
               </p>
@@ -462,8 +462,8 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
       </div>
 
       {/* PROGRESO MENSUAL */}
-      <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-[#eee8e2] flex flex-col items-center">
-        <h5 className="text-[9px] font-black uppercase tracking-[0.2em] text-[#a39485] mb-8">
+      <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-[var(--bt-border)] flex flex-col items-center">
+        <h5 className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--bt-muted)] mb-8">
           Progreso Mensual
         </h5>
         <div className="relative w-40 h-40 flex items-center justify-center">
@@ -472,7 +472,7 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
               cx="80"
               cy="80"
               r="70"
-              stroke="#f8f5f2"
+              stroke="var(--bt-bg)"
               strokeWidth="12"
               fill="transparent"
             />
@@ -480,7 +480,7 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
               cx="80"
               cy="80"
               r="70"
-              stroke="#5d5045"
+              stroke="var(--bt-primary)"
               strokeWidth="12"
               fill="transparent"
               strokeDasharray={439.8}
@@ -490,13 +490,13 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
             />
           </svg>
           <div className="absolute text-center">
-            <p className="text-[10px] font-black text-[#a39485] uppercase mb-0.5">
+            <p className="text-[10px] font-black text-[var(--bt-muted)] uppercase mb-0.5">
               Acumulado
             </p>
-            <p className="text-xl font-black text-[#5d5045] leading-none">
+            <p className="text-xl font-black text-[var(--bt-primary)] leading-none">
               {formatMoney(statsMes.total)}€
             </p>
-            <div className="h-[1px] bg-[#eee8e2] w-12 mx-auto my-2"></div>
+            <div className="h-[1px] bg-[var(--bt-border)] w-12 mx-auto my-2"></div>
             <p className="text-[10px] font-bold text-[#b5a798]">
               Meta: {PERSONAL_GOAL}€
             </p>
@@ -516,8 +516,8 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
         }
         className={`w-full py-5 rounded-[2rem] text-[10px] font-black uppercase transition-all flex items-center justify-center gap-3 shadow-xl ${
           canExportMonthly
-            ? "bg-[#5d5045] text-white hover:bg-black active:scale-95"
-            : "bg-[#e8e2dc] text-[#a39485] cursor-not-allowed opacity-90"
+            ? "bg-[var(--bt-primary)] text-white hover:bg-[var(--bt-primary-hover)] active:scale-95"
+            : "bg-[var(--bt-accent)] text-[var(--bt-muted)] cursor-not-allowed opacity-90"
         }`}
       >
         <FileSpreadsheet className="h-5 w-5 shrink-0" strokeWidth={2} />
@@ -537,7 +537,7 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
           >
             <h4
               id="modal-cierre-title"
-              className="text-[11px] font-black uppercase tracking-widest text-[#5d5045] mb-2 text-center"
+              className="text-[11px] font-black uppercase tracking-widest text-[var(--bt-primary)] mb-2 text-center"
             >
               Validar Cierre
             </h4>
@@ -550,7 +550,7 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
             )}
             <input
               type="password"
-              className="w-full p-4 bg-[#f8f5f2] border-none rounded-2xl mb-4 text-center outline-none"
+              className="w-full p-4 bg-[var(--bt-bg)] border-none rounded-2xl mb-4 text-center outline-none"
               placeholder="••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -559,7 +559,7 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
               <button
                 type="button"
                 onClick={() => setShowPasswordModal(false)}
-                className="flex-1 py-3 text-[10px] font-black uppercase text-[#a39485]"
+                className="flex-1 py-3 text-[10px] font-black uppercase text-[var(--bt-muted)]"
               >
                 Cancelar
               </button>
@@ -567,7 +567,7 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
                 type="button"
                 disabled={confirmingLock}
                 onClick={handleConfirmLock}
-                className="flex-1 py-3 bg-[#5d5045] text-white rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+                className="flex-1 py-3 bg-[var(--bt-primary)] text-white rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
               >
                 {confirmingLock ? "…" : "Confirmar"}
               </button>
@@ -590,15 +590,15 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
             className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl text-center"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#f8f5f2] text-[#5d5045] ring-1 ring-[#eaddcf]">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--bt-bg)] text-[var(--bt-primary)] ring-1 ring-[var(--bt-border)]">
               <Inbox className="h-7 w-7" strokeWidth={1.75} />
             </div>
-            <p className="text-[9px] font-black uppercase tracking-[0.35em] text-[#a39485] mb-2">
+            <p className="text-[9px] font-black uppercase tracking-[0.35em] text-[var(--bt-muted)] mb-2">
               Informe mensual
             </p>
             <h4
               id="modal-sin-informe-title"
-              className="font-serif text-lg text-[#5d5045] mb-4 leading-snug"
+              className="font-serif text-lg text-[var(--bt-primary)] mb-4 leading-snug"
             >
               No hay registros de caja para {monthName}
             </h4>
@@ -610,7 +610,7 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
             <button
               type="button"
               onClick={() => setShowNoExportDataModal(false)}
-              className="w-full rounded-full bg-[#5d5045] py-3.5 text-[10px] font-black uppercase tracking-[0.2em] text-[#f5ebe0] shadow-lg transition hover:bg-[#4a3f36]"
+              className="w-full rounded-full bg-[var(--bt-primary)] py-3.5 text-[10px] font-black uppercase tracking-[0.2em] text-white shadow-lg transition hover:bg-[var(--bt-primary-hover)]"
             >
               Entendido
             </button>
@@ -634,7 +634,7 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
           >
             <h4
               id="modal-error-cierre-title"
-              className="text-[11px] font-black uppercase tracking-widest text-[#5d5045] mb-4"
+              className="text-[11px] font-black uppercase tracking-widest text-[var(--bt-primary)] mb-4"
             >
               No se pudo validar
             </h4>
@@ -644,7 +644,7 @@ const StatsCharts = ({ appointments = [], services = [], currentUser }) => {
             <button
               type="button"
               onClick={() => setLockErrorMessage(null)}
-              className="w-full rounded-full bg-[#5d5045] py-3.5 text-[10px] font-black uppercase tracking-[0.2em] text-[#f5ebe0] shadow-lg transition hover:bg-[#4a3f36]"
+              className="w-full rounded-full bg-[var(--bt-primary)] py-3.5 text-[10px] font-black uppercase tracking-[0.2em] text-white shadow-lg transition hover:bg-[var(--bt-primary-hover)]"
             >
               Cerrar
             </button>

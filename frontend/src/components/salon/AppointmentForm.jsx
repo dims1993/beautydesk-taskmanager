@@ -186,7 +186,7 @@ const AppointmentForm = ({
   };
 
   const selectClassName =
-    "w-full min-w-0 border-0 bg-transparent py-5 text-base font-bold tracking-wider text-[#5d5045] outline-none focus:ring-0 cursor-pointer";
+    "w-full min-w-0 border-0 bg-transparent py-5 text-base font-bold tracking-wider text-[var(--bt-primary)] outline-none focus:ring-0 cursor-pointer";
 
   useEffect(() => {
     if (formData.client_name.length > 1) {
@@ -336,13 +336,13 @@ const AppointmentForm = ({
   })();
 
   return (
-    <div className="min-w-0 max-w-full bg-white rounded-[3rem] shadow-2xl shadow-[#5d5045]/10 border border-[#eaddcf] overflow-x-clip overflow-y-visible sticky top-8 z-40 transition-all duration-500">
+    <div className="min-w-0 max-w-full bg-white rounded-[3rem] shadow-2xl shadow-black/10 border border-[var(--bt-border)] overflow-x-clip overflow-y-visible sticky top-8 z-40 transition-all duration-500">
       {/* Cabecera Editorial */}
-      <div className="bg-[#FAF9F6] p-10 border-b border-[#eaddcf] text-center space-y-2">
-        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#8c857d]">
+      <div className="bg-[var(--bt-bg)] p-10 border-b border-[var(--bt-border)] text-center space-y-2 rounded-t-[3rem]">
+        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[var(--bt-muted)]">
           Concierge
         </p>
-        <h2 className="text-3xl font-serif text-[#5d5045]">
+        <h2 className="text-3xl font-serif text-[var(--bt-primary)]">
           Reserva de <span className="italic opacity-80">Experiencias</span>
         </h2>
       </div>
@@ -353,23 +353,23 @@ const AppointmentForm = ({
       >
         {disabledReason && (
           <div className="pointer-events-auto absolute inset-0 z-50 flex items-start justify-center pt-8 px-4 bg-white/80 backdrop-blur-[2px] rounded-b-[3rem]">
-            <p className="text-center text-[10px] font-black uppercase tracking-widest text-[#5d5045] max-w-xs leading-relaxed border border-amber-200 bg-amber-50 rounded-2xl px-4 py-4">
+            <p className="text-center text-[10px] font-black uppercase tracking-widest text-[var(--bt-primary)] max-w-xs leading-relaxed border border-amber-200 bg-amber-50 rounded-2xl px-4 py-4">
               {disabledReason}
             </p>
           </div>
         )}
         {/* AVISO DE WHATSAPP (Rediseñado) */}
         {lastCreated && (
-          <div className="p-6 bg-[#f5f1ed] rounded-3xl border border-[#eaddcf] animate-in fade-in slide-in-from-top-4 duration-500 relative">
+          <div className="p-6 bg-[var(--bt-accent)] rounded-3xl border border-[var(--bt-border)] animate-in fade-in slide-in-from-top-4 duration-500 relative">
             <button
               onClick={() => setLastCreated(null)}
-              className="absolute top-4 right-4 text-[#8c857d] hover:text-[#5d5045]"
+              className="absolute top-4 right-4 text-[var(--bt-muted)] hover:text-[var(--bt-primary)]"
             >
               <X className="w-4 h-4" />
             </button>
             <div className="flex items-center gap-3 mb-4">
-              <CheckCircle2 className="w-5 h-5 text-[#5d5045]" />
-              <p className="text-[10px] font-black uppercase tracking-widest text-[#5d5045]">
+              <CheckCircle2 className="w-5 h-5 text-[var(--bt-primary)]" />
+              <p className="text-[10px] font-black uppercase tracking-widest text-[var(--bt-primary)]">
                 Confirmación Lista
               </p>
             </div>
@@ -395,7 +395,7 @@ const AppointmentForm = ({
                 );
                 setLastCreated(null);
               }}
-              className="w-full py-4 bg-[#5d5045] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-3 hover:bg-[#4a3f36] transition-all"
+              className="w-full py-4 bg-[var(--bt-primary)] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-3 hover:bg-[var(--bt-primary-hover)] transition-all"
             >
               <MessageCircle className="w-4 h-4" /> Enviar WhatsApp
             </button>
@@ -404,7 +404,7 @@ const AppointmentForm = ({
 
         {/* Campo: Cliente */}
         <div className="space-y-3 relative">
-          <label className="flex justify-between items-center px-2 text-[10px] font-black text-[#8c857d] uppercase tracking-[0.2em]">
+          <label className="flex justify-between items-center px-2 text-[10px] font-black text-[var(--bt-muted)] uppercase tracking-[0.2em]">
             <span>Cliente</span>
             {isNewClient && (
               <span className="text-[#c4a484] flex items-center gap-1 font-black">
@@ -413,10 +413,10 @@ const AppointmentForm = ({
             )}
           </label>
           <div className="relative">
-            <User className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#c4bdb5]" />
+            <User className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--bt-icon)]" />
             <input
               required
-              className="w-full min-w-0 pl-14 pr-6 py-5 bg-[#FAF9F6] border border-[#eaddcf] rounded-2xl outline-none focus:border-[#5d5045] focus:bg-white transition-all text-base font-bold tracking-wider text-[#5d5045] placeholder:text-[#c4bdb5]"
+              className="w-full min-w-0 pl-14 pr-6 py-5 bg-[var(--bt-bg)] border border-[var(--bt-border)] rounded-2xl outline-none focus:border-[var(--bt-primary)] focus:bg-white transition-all text-base font-bold tracking-wider text-[var(--bt-primary)] placeholder:text-[var(--bt-icon)]"
               placeholder="NOMBRE COMPLETO"
               value={formData.client_name}
               onChange={(e) =>
@@ -427,22 +427,22 @@ const AppointmentForm = ({
           </div>
 
           {showSuggestions && suggestions.length > 0 && (
-            <div className="absolute z-[60] w-full mt-2 bg-white border border-[#eaddcf] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="absolute z-[60] w-full mt-2 bg-white border border-[var(--bt-border)] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
               {suggestions.map((c, i) => (
                 <div
                   key={i}
                   onClick={() => selectClientFromList(c)}
-                  className="px-6 py-4 hover:bg-[#FAF9F6] cursor-pointer border-b border-[#f5f1ed] last:border-0 flex justify-between items-center transition-colors"
+                  className="px-6 py-4 hover:bg-[var(--bt-bg)] cursor-pointer border-b border-black/5 last:border-0 flex justify-between items-center transition-colors"
                 >
                   <div className="flex flex-col">
-                    <span className="text-xs font-black text-[#5d5045] uppercase tracking-wider">
+                    <span className="text-xs font-black text-[var(--bt-primary)] uppercase tracking-wider">
                       {c.nombre} {c.apellidos}
                     </span>
-                    <span className="text-[9px] text-[#8c857d] font-medium tracking-[0.1em]">
+                    <span className="text-[9px] text-[var(--bt-muted)] font-medium tracking-[0.1em]">
                       {c.telefono}
                     </span>
                   </div>
-                  <ChevronRight className="w-4 h-4 text-[#eaddcf]" />
+                  <ChevronRight className="w-4 h-4 text-[var(--bt-border)]" />
                 </div>
               ))}
             </div>
@@ -451,14 +451,18 @@ const AppointmentForm = ({
 
         {/* Campo: Teléfono */}
         <div className="space-y-3">
-          <label className="px-2 text-[10px] font-black text-[#8c857d] uppercase tracking-[0.2em]">
+          <label className="px-2 text-[10px] font-black text-[var(--bt-muted)] uppercase tracking-[0.2em]">
             Teléfono {isNewClient && "*"}
           </label>
           <div className="relative">
-            <Phone className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#c4bdb5]" />
+            <Phone className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--bt-icon)]" />
             <input
               required={isNewClient}
-              className={`w-full min-w-0 pl-14 pr-6 py-5 border rounded-2xl outline-none transition-all text-base font-bold tracking-wider ${isNewClient ? "bg-[#fdf8f3] border-[#c4a484]/30" : "bg-[#FAF9F6] border-[#eaddcf]"} focus:border-[#5d5045]`}
+              className={`w-full min-w-0 pl-14 pr-6 py-5 border rounded-2xl outline-none transition-all text-base font-bold tracking-wider ${
+                isNewClient
+                  ? "bg-[#fdf8f3] border-[#c4a484]/30"
+                  : "bg-[var(--bt-bg)] border-[var(--bt-border)]"
+              } focus:border-[var(--bt-primary)]`}
               placeholder="600 000 000"
               value={formData.client_phone}
               onChange={(e) =>
@@ -471,7 +475,7 @@ const AppointmentForm = ({
         {/* Servicios (varias líneas) + resumen duración / precio */}
         <div className="min-w-0 w-full max-w-full space-y-3 overflow-x-clip">
           <div className="flex items-center justify-between gap-2 px-2">
-            <label className="text-[10px] font-black text-[#8c857d] uppercase tracking-[0.2em]">
+            <label className="text-[10px] font-black text-[var(--bt-muted)] uppercase tracking-[0.2em]">
               Servicios
             </label>
             <button
@@ -482,7 +486,7 @@ const AppointmentForm = ({
                 if (fallback == null) return;
                 setSelectedServiceIds((prev) => [...prev, String(fallback)]);
               }}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#eaddcf] bg-[#FAF9F6] text-[#5d5045] hover:border-[#5d5045] disabled:opacity-40"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--bt-border)] bg-[var(--bt-bg)] text-[var(--bt-primary)] hover:border-[var(--bt-primary)] disabled:opacity-40"
               title="Añadir otro servicio"
             >
               <Plus className="w-4 h-4" strokeWidth={2.5} />
@@ -490,7 +494,7 @@ const AppointmentForm = ({
           </div>
           <div className="space-y-2 min-w-0">
             {touchPrimaryUi && selectedServiceIds.length > 1 && (
-              <p className="px-2 text-[9px] font-bold uppercase tracking-widest text-[#a39485]">
+              <p className="px-2 text-[9px] font-bold uppercase tracking-widest text-[var(--bt-muted)]">
                 Desliza el servicio hacia la derecha para eliminarlo
               </p>
             )}
@@ -529,7 +533,7 @@ const AppointmentForm = ({
                 return (
                   <div
                     key={`${sid}-${index}`}
-                    className="flex min-w-0 w-full max-w-full items-stretch gap-2 rounded-2xl border border-[#eaddcf] bg-[#FAF9F6] focus-within:border-[#5d5045] focus-within:bg-white"
+                    className="flex min-w-0 w-full max-w-full items-stretch gap-2 rounded-2xl border border-[var(--bt-border)] bg-[var(--bt-bg)] focus-within:border-[var(--bt-primary)] focus-within:bg-white"
                   >
                     <div className="min-w-0 flex-1">{selectEl}</div>
                     <button
@@ -547,7 +551,7 @@ const AppointmentForm = ({
                 return (
                   <div
                     key={`${sid}-${index}`}
-                    className="min-w-0 w-full rounded-2xl border border-[#eaddcf] bg-[#FAF9F6] focus-within:border-[#5d5045] focus-within:bg-white"
+                    className="min-w-0 w-full rounded-2xl border border-[var(--bt-border)] bg-[var(--bt-bg)] focus-within:border-[var(--bt-primary)] focus-within:bg-white"
                   >
                     {selectEl}
                   </div>
@@ -557,7 +561,7 @@ const AppointmentForm = ({
               return (
                 <div
                   key={`${sid}-${index}`}
-                  className="relative min-w-0 w-full max-w-full touch-pan-x overflow-hidden rounded-2xl border border-[#eaddcf] bg-[#FAF9F6]"
+                  className="relative min-w-0 w-full max-w-full touch-pan-x overflow-hidden rounded-2xl border border-[var(--bt-border)] bg-[var(--bt-bg)]"
                 >
                   <div
                     className="flex min-w-0 will-change-transform"
@@ -581,7 +585,7 @@ const AppointmentForm = ({
                     >
                       Eliminar
                     </button>
-                    <div className="min-w-0 flex-1 border-l border-[#eaddcf] bg-[#FAF9F6]">
+                    <div className="min-w-0 flex-1 border-l border-[var(--bt-border)] bg-[var(--bt-bg)]">
                       {selectEl}
                     </div>
                   </div>
@@ -599,15 +603,15 @@ const AppointmentForm = ({
 
         {/* Horario: misma cáscara que Cliente / Teléfono (icono + pl-14) */}
         <div className="space-y-3">
-          <label className="px-2 text-[10px] font-black text-[#8c857d] uppercase tracking-[0.2em]">
+          <label className="px-2 text-[10px] font-black text-[var(--bt-muted)] uppercase tracking-[0.2em]">
             Horario
           </label>
           <div className="relative min-w-0 w-full">
-            <Calendar className="pointer-events-none absolute left-5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-[#c4bdb5]" />
+            <Calendar className="pointer-events-none absolute left-5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-[var(--bt-icon)]" />
             <input
               required
               type="datetime-local"
-              className="appearance-none block w-full bg-[#FAF9F6] border border-[#eaddcf] rounded-2xl outline-none focus:border-[#5d5045] focus:bg-white transition-all text-base font-bold tracking-wider text-[#5d5045] [color-scheme:light] pl-14 pr-4 py-5 m-0 box-border [&::-webkit-datetime-edit]:flex [&::-webkit-datetime-edit-fields-wrapper]:p-0 [&::-webkit-datetime-edit-text]:p-0"
+              className="appearance-none block w-full bg-[var(--bt-bg)] border border-[var(--bt-border)] rounded-2xl outline-none focus:border-[var(--bt-primary)] focus:bg-white transition-all text-base font-bold tracking-wider text-[var(--bt-primary)] [color-scheme:light] pl-14 pr-4 py-5 m-0 box-border [&::-webkit-datetime-edit]:flex [&::-webkit-datetime-edit-fields-wrapper]:p-0 [&::-webkit-datetime-edit-text]:p-0"
               style={{
                 fontSize: "16px", // Evita el zoom automático en iOS
                 minWidth: "0", // Fuerza a que pueda encogerse
@@ -629,7 +633,7 @@ const AppointmentForm = ({
             services.length === 0 ||
             selectedServiceIds.length === 0
           }
-          className="w-full py-6 mt-4 bg-[#5d5045] text-[#f5ebe0] rounded-2xl font-black uppercase text-[11px] tracking-[0.4em] shadow-xl shadow-[#5d5045]/20 disabled:opacity-50 transition-all hover:bg-[#4a3f36] active:scale-[0.98]"
+          className="w-full py-6 mt-4 bg-[var(--bt-primary)] text-white rounded-2xl font-black uppercase text-[11px] tracking-[0.4em] shadow-xl shadow-black/10 disabled:opacity-50 transition-all hover:bg-[var(--bt-primary-hover)] active:scale-[0.98]"
         >
           {loading ? "PROCESANDO..." : "CONFIRMAR CITA"}
         </button>

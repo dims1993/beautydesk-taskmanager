@@ -225,37 +225,37 @@ const SalonClientsView = ({
         clientLabel={pendingDeleteLabel}
         isDeleting={deleteSubmitting}
       />
-      <div className="bg-white p-6 rounded-[2.5rem] border border-[#eee8e2] shadow-sm space-y-4">
+      <div className="bg-white p-6 rounded-[2.5rem] border border-[var(--bt-border)] shadow-sm space-y-4">
         {blockedMessage && (
           <p className="text-[10px] font-black uppercase tracking-widest text-amber-900 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
             {blockedMessage}
           </p>
         )}
         <div className="flex justify-between items-center">
-          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#a39485]">
+          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--bt-muted)]">
             Directorio de clientes
           </h3>
           <button
             type="button"
             disabled={!!blockedMessage}
             onClick={() => !blockedMessage && setShowForm(!showForm)}
-            className="bg-[#5d5045] text-white text-[18px] w-10 h-10 rounded-full hover:rotate-90 transition-all flex items-center justify-center disabled:opacity-40 disabled:hover:rotate-0"
+            className="bg-[var(--bt-primary)] text-white text-[18px] w-10 h-10 rounded-full hover:rotate-90 transition-all flex items-center justify-center disabled:opacity-40 disabled:hover:rotate-0"
           >
             {showForm ? "×" : "+"}
           </button>
         </div>
         {clients.length === 0 && !blockedMessage && (
-          <p className="text-[10px] text-[#a39485] font-medium leading-relaxed">
+          <p className="text-[10px] text-[var(--bt-muted)] font-medium leading-relaxed">
             Aún no hay clientes. Usa el botón + para dar de alta el primero en
             tu espacio.
           </p>
         )}
         {!blockedMessage && (
           <div className="rounded-2xl border border-[#e8dfd6] bg-[#faf7f4] p-4 space-y-3">
-            <p className="text-[9px] font-black uppercase tracking-[0.15em] text-[#a39485]">
+            <p className="text-[9px] font-black uppercase tracking-[0.15em] text-[var(--bt-muted)]">
               Sincronizar con tu agenda
             </p>
-            <p className="text-[10px] text-[#8c857d] leading-relaxed">
+            <p className="text-[10px] text-[var(--bt-muted)] leading-relaxed">
               Importa desde el teléfono o un archivo .vcf, o exporta tus clientes para
               añadirlos a Contactos. Los duplicados se unen por número de teléfono.
             </p>
@@ -272,7 +272,7 @@ const SalonClientsView = ({
                   type="button"
                   disabled={syncBusy}
                   onClick={handlePickDeviceContacts}
-                  className="inline-flex items-center gap-2 rounded-xl bg-white border border-[#eee8e2] px-3 py-2 text-[9px] font-black uppercase tracking-widest text-[#5d5045] hover:border-[#dcc7b1] disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-xl bg-white border border-[var(--bt-border)] px-3 py-2 text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)] hover:border-[var(--bt-border-strong)] disabled:opacity-50"
                 >
                   <Smartphone className="w-3.5 h-3.5" strokeWidth={2} />
                   Elegir contactos
@@ -282,7 +282,7 @@ const SalonClientsView = ({
                 type="button"
                 disabled={syncBusy}
                 onClick={() => vcfInputRef.current?.click()}
-                className="inline-flex items-center gap-2 rounded-xl bg-white border border-[#eee8e2] px-3 py-2 text-[9px] font-black uppercase tracking-widest text-[#5d5045] hover:border-[#dcc7b1] disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-xl bg-white border border-[var(--bt-border)] px-3 py-2 text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)] hover:border-[var(--bt-border-strong)] disabled:opacity-50"
               >
                 <Upload className="w-3.5 h-3.5" strokeWidth={2} />
                 Importar .vcf
@@ -291,17 +291,19 @@ const SalonClientsView = ({
                 type="button"
                 disabled={syncBusy || !clients.length}
                 onClick={handleExportVcf}
-                className="inline-flex items-center gap-2 rounded-xl bg-[#5d5045] text-white px-3 py-2 text-[9px] font-black uppercase tracking-widest hover:opacity-95 disabled:opacity-40"
+                className="inline-flex items-center gap-2 rounded-xl bg-[var(--bt-primary)] text-white px-3 py-2 text-[9px] font-black uppercase tracking-widest hover:bg-[var(--bt-primary-hover)] disabled:opacity-40"
               >
                 <Download className="w-3.5 h-3.5" strokeWidth={2} />
                 Exportar .vcf
               </button>
             </div>
             {syncBusy && (
-              <p className="text-[10px] font-bold text-[#dcc7b1]">Importando…</p>
+              <p className="text-[10px] font-bold text-[var(--bt-border-strong)]">
+                Importando…
+              </p>
             )}
             {syncMessage && !syncBusy && (
-              <p className="text-[10px] font-medium text-[#5d5045] leading-relaxed">
+              <p className="text-[10px] font-medium text-[var(--bt-primary)] leading-relaxed">
                 {syncMessage}
               </p>
             )}
@@ -312,20 +314,20 @@ const SalonClientsView = ({
           placeholder="Buscar por nombre o teléfono..."
           value={searchTerm || ""}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full bg-[#f8f5f2] border-none rounded-2xl px-5 py-3 text-sm focus:ring-2 focus:ring-[#dcc7b1] outline-none transition-all"
+          className="w-full bg-[var(--bt-bg)] border-none rounded-2xl px-5 py-3 text-sm focus:ring-2 focus:ring-[var(--bt-border-strong)] outline-none transition-all"
         />
       </div>
 
       {showForm && !blockedMessage && (
         <form
           onSubmit={handleSubmit}
-          className="bg-[#dcc7b1]/10 p-6 rounded-[2.5rem] border border-dashed border-[#dcc7b1] space-y-3 animate-slideDown"
+          className="bg-[var(--bt-accent)]/60 p-6 rounded-[2.5rem] border border-dashed border-[var(--bt-border-strong)] space-y-3 animate-slideDown"
         >
           <div className="grid grid-cols-2 gap-3">
             <input
               placeholder="Nombre"
               required
-              className="p-3 rounded-xl border-none text-sm outline-none focus:ring-1 focus:ring-[#dcc7b1]"
+              className="p-3 rounded-xl border-none text-sm outline-none focus:ring-1 focus:ring-[var(--bt-border-strong)]"
               value={newClient.nombre || ""}
               onChange={(e) =>
                 setNewClient({ ...newClient, nombre: e.target.value })
@@ -333,7 +335,7 @@ const SalonClientsView = ({
             />
             <input
               placeholder="Apellidos"
-              className="p-3 rounded-xl border-none text-sm outline-none focus:ring-1 focus:ring-[#dcc7b1]"
+              className="p-3 rounded-xl border-none text-sm outline-none focus:ring-1 focus:ring-[var(--bt-border-strong)]"
               value={newClient.apellidos || ""}
               onChange={(e) =>
                 setNewClient({ ...newClient, apellidos: e.target.value })
@@ -343,7 +345,7 @@ const SalonClientsView = ({
           <input
             placeholder="Teléfono"
             required
-            className="w-full p-3 rounded-xl border-none text-sm outline-none focus:ring-1 focus:ring-[#dcc7b1]"
+            className="w-full p-3 rounded-xl border-none text-sm outline-none focus:ring-1 focus:ring-[var(--bt-border-strong)]"
             value={newClient.telefono || ""}
             onChange={(e) =>
               setNewClient({ ...newClient, telefono: e.target.value })
@@ -352,7 +354,7 @@ const SalonClientsView = ({
           <input
             placeholder="Email"
             type="email"
-            className="w-full p-3 rounded-xl border-none text-sm outline-none focus:ring-1 focus:ring-[#dcc7b1]"
+            className="w-full p-3 rounded-xl border-none text-sm outline-none focus:ring-1 focus:ring-[var(--bt-border-strong)]"
             value={newClient.email || ""}
             onChange={(e) =>
               setNewClient({ ...newClient, email: e.target.value })
@@ -360,7 +362,7 @@ const SalonClientsView = ({
           />
           <button
             type="submit"
-            className="w-full bg-[#5d5045] text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-widest"
+            className="w-full bg-[var(--bt-primary)] text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[var(--bt-primary-hover)]"
           >
             Guardar cliente
           </button>
@@ -373,25 +375,25 @@ const SalonClientsView = ({
             key={client.id}
             className={`bg-white p-6 rounded-[2.5rem] border transition-all ${
               editingId === client.id
-                ? "border-[#dcc7b1] ring-2 ring-[#dcc7b1]/10"
-                : "border-[#eee8e2]"
-            } hover:border-[#dcc7b1] group relative`}
+                ? "border-[var(--bt-border-strong)] ring-2 ring-[var(--bt-border-strong)]/10"
+                : "border-[var(--bt-border)]"
+            } hover:border-[var(--bt-border-strong)] group relative`}
           >
             {editingId === client.id && editForm ? (
               <form
                 onSubmit={handleSaveEdit}
                 className="space-y-4 animate-fadeIn"
               >
-                <p className="text-[9px] font-black text-[#dcc7b1] uppercase tracking-[0.2em] mb-2">
+                <p className="text-[9px] font-black text-[var(--bt-border-strong)] uppercase tracking-[0.2em] mb-2">
                   Editando perfil
                 </p>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <label className="text-[8px] font-bold text-[#a39485] uppercase ml-2">
+                    <label className="text-[8px] font-bold text-[var(--bt-muted)] uppercase ml-2">
                       Nombre
                     </label>
                     <input
-                      className="w-full p-2.5 bg-[#f8f5f2] rounded-xl text-xs font-bold text-[#5d5045] outline-none"
+                      className="w-full p-2.5 bg-[var(--bt-bg)] rounded-xl text-xs font-bold text-[var(--bt-primary)] outline-none"
                       value={editForm.nombre || ""}
                       onChange={(e) =>
                         setEditForm({ ...editForm, nombre: e.target.value })
@@ -399,11 +401,11 @@ const SalonClientsView = ({
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[8px] font-bold text-[#a39485] uppercase ml-2">
+                    <label className="text-[8px] font-bold text-[var(--bt-muted)] uppercase ml-2">
                       Apellidos
                     </label>
                     <input
-                      className="w-full p-2.5 bg-[#f8f5f2] rounded-xl text-xs text-[#5d5045] outline-none"
+                      className="w-full p-2.5 bg-[var(--bt-bg)] rounded-xl text-xs text-[var(--bt-primary)] outline-none"
                       value={editForm.apellidos || ""}
                       onChange={(e) =>
                         setEditForm({ ...editForm, apellidos: e.target.value })
@@ -412,11 +414,11 @@ const SalonClientsView = ({
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[8px] font-bold text-[#a39485] uppercase ml-2">
+                  <label className="text-[8px] font-bold text-[var(--bt-muted)] uppercase ml-2">
                     Teléfono
                   </label>
                   <input
-                    className="w-full p-2.5 bg-[#f8f5f2] rounded-xl text-xs text-[#5d5045] outline-none"
+                    className="w-full p-2.5 bg-[var(--bt-bg)] rounded-xl text-xs text-[var(--bt-primary)] outline-none"
                     value={editForm.telefono || ""}
                     onChange={(e) =>
                       setEditForm({ ...editForm, telefono: e.target.value })
@@ -424,11 +426,11 @@ const SalonClientsView = ({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[8px] font-bold text-[#a39485] uppercase ml-2">
+                  <label className="text-[8px] font-bold text-[var(--bt-muted)] uppercase ml-2">
                     Email
                   </label>
                   <input
-                    className="w-full p-2.5 bg-[#f8f5f2] rounded-xl text-xs text-[#5d5045] outline-none"
+                    className="w-full p-2.5 bg-[var(--bt-bg)] rounded-xl text-xs text-[var(--bt-primary)] outline-none"
                     value={editForm.email || ""}
                     onChange={(e) =>
                       setEditForm({ ...editForm, email: e.target.value })
@@ -438,14 +440,14 @@ const SalonClientsView = ({
                 <div className="flex gap-2 pt-2">
                   <button
                     type="submit"
-                    className="flex-1 bg-[#5d5045] text-white text-[9px] font-black py-2.5 rounded-xl uppercase tracking-widest shadow-md"
+                    className="flex-1 bg-[var(--bt-primary)] text-white text-[9px] font-black py-2.5 rounded-xl uppercase tracking-widest shadow-md hover:bg-[var(--bt-primary-hover)]"
                   >
                     Actualizar
                   </button>
                   <button
                     type="button"
                     onClick={() => setEditingId(null)}
-                    className="flex-1 bg-white border border-[#eee8e2] text-[#a39485] text-[9px] font-black py-2.5 rounded-xl uppercase"
+                    className="flex-1 bg-white border border-[var(--bt-border)] text-[var(--bt-muted)] text-[9px] font-black py-2.5 rounded-xl uppercase"
                   >
                     Cancelar
                   </button>
@@ -455,10 +457,10 @@ const SalonClientsView = ({
               <>
                 <div className="flex justify-between items-start gap-2">
                   <div className="min-w-0">
-                    <p className="text-[10px] font-black text-[#dcc7b1] uppercase tracking-tighter">
+                    <p className="text-[10px] font-black text-[var(--bt-border-strong)] uppercase tracking-tighter">
                       Cliente
                     </p>
-                    <h4 className="font-bold text-[#5d5045] text-lg">
+                    <h4 className="font-bold text-[var(--bt-primary)] text-lg">
                       {client.nombre} {client.apellidos || ""}
                     </h4>
                   </div>
@@ -469,7 +471,7 @@ const SalonClientsView = ({
                         setEditingId(client.id);
                         setEditForm({ ...client });
                       }}
-                      className="p-2.5 bg-[#f8f5f2] text-[#5d5045] rounded-full text-xs hover:bg-[#dcc7b1] hover:text-white transition-all"
+                      className="p-2.5 bg-[var(--bt-bg)] text-[var(--bt-primary)] rounded-full text-xs hover:bg-[var(--bt-primary)] hover:text-white transition-all"
                       title="Editar"
                     >
                       <Pencil className="w-4 h-4" strokeWidth={2} />
@@ -478,7 +480,7 @@ const SalonClientsView = ({
                       type="button"
                       onClick={() => openDeleteModal(client)}
                       disabled={deletingId === client.id}
-                      className="p-2.5 bg-[#f8f5f2] text-red-400 rounded-full hover:bg-red-50 hover:text-red-500 transition-all disabled:opacity-40"
+                      className="p-2.5 bg-[var(--bt-bg)] text-red-400 rounded-full hover:bg-red-50 hover:text-red-500 transition-all disabled:opacity-40"
                       title="Eliminar ficha"
                     >
                       <Trash2 className="w-4 h-4" strokeWidth={2} />
@@ -486,13 +488,13 @@ const SalonClientsView = ({
                   </div>
                 </div>
                 <div className="mt-4 space-y-1">
-                  <p className="text-[11px] font-medium text-[#a39485] flex items-center gap-2">
-                    <Phone className="w-3.5 h-3.5 shrink-0 text-[#c4bdb5]" strokeWidth={2} />
+                  <p className="text-[11px] font-medium text-[var(--bt-muted)] flex items-center gap-2">
+                    <Phone className="w-3.5 h-3.5 shrink-0 text-[var(--bt-icon)]" strokeWidth={2} />
                     {client.telefono}
                   </p>
                   {client.email && (
-                    <p className="text-[11px] font-medium text-[#a39485] flex items-center gap-2">
-                      <Mail className="w-3.5 h-3.5 shrink-0 text-[#c4bdb5]" strokeWidth={2} />
+                    <p className="text-[11px] font-medium text-[var(--bt-muted)] flex items-center gap-2">
+                      <Mail className="w-3.5 h-3.5 shrink-0 text-[var(--bt-icon)]" strokeWidth={2} />
                       {client.email}
                     </p>
                   )}

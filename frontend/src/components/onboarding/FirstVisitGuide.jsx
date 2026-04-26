@@ -182,7 +182,7 @@ function CashPasswordFields({ onSuccess }) {
         type="password"
         autoComplete="new-password"
         placeholder="Contraseña"
-        className="w-full rounded-2xl border-none bg-[#f8f5f2] p-3 text-center text-[12px] outline-none ring-1 ring-[#eaddcf] focus:ring-[#5d5045]"
+        className="w-full rounded-2xl border-none bg-[var(--bt-bg)] p-3 text-center text-[12px] outline-none ring-1 ring-[var(--bt-border)] focus:ring-[var(--bt-primary)]"
         value={a}
         onChange={(e) => setA(e.target.value)}
       />
@@ -190,14 +190,14 @@ function CashPasswordFields({ onSuccess }) {
         type="password"
         autoComplete="new-password"
         placeholder="Repetir contraseña"
-        className="w-full rounded-2xl border-none bg-[#f8f5f2] p-3 text-center text-[12px] outline-none ring-1 ring-[#eaddcf] focus:ring-[#5d5045]"
+        className="w-full rounded-2xl border-none bg-[var(--bt-bg)] p-3 text-center text-[12px] outline-none ring-1 ring-[var(--bt-border)] focus:ring-[var(--bt-primary)]"
         value={b}
         onChange={(e) => setB(e.target.value)}
       />
       <button
         type="submit"
         disabled={saving}
-        className="w-full rounded-full bg-[#5d5045] py-3 text-[10px] font-black uppercase tracking-widest text-[#f5ebe0] disabled:opacity-50"
+        className="w-full rounded-full bg-[var(--bt-primary)] py-3 text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-50 hover:bg-[var(--bt-primary-hover)]"
       >
         {saving ? "Guardando…" : "Guardar y continuar"}
       </button>
@@ -345,14 +345,14 @@ export default function FirstVisitGuide({
             <button
               type="button"
               onClick={finish}
-              className="absolute -top-1 -right-1 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-[#8c857d] shadow-md ring-1 ring-[#eaddcf] transition hover:bg-white hover:text-[#5d5045] md:-right-2 md:-top-2"
+              className="absolute -top-1 -right-1 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-[var(--bt-muted)] shadow-md ring-1 ring-[var(--bt-border)] transition hover:bg-white hover:text-[var(--bt-primary)] md:-right-2 md:-top-2"
               aria-label="Omitir guía"
             >
               <X className="h-5 w-5" strokeWidth={2} />
             </button>
-            <div className="relative flex flex-col items-center justify-center rounded-[2rem] border border-[#eaddcf] bg-[#faf8f5]/95 px-8 py-14 text-center shadow-[0_24px_80px_rgba(93,80,69,0.18)] backdrop-blur-md md:px-12 md:py-16">
+            <div className="relative flex flex-col items-center justify-center rounded-[2rem] border border-[var(--bt-border)] bg-white/95 px-8 py-14 text-center shadow-[0_24px_80px_rgba(0,0,0,0.18)] backdrop-blur-md md:px-12 md:py-16">
               <Sparkles
-                className="mb-5 h-9 w-9 text-[#5d5045] opacity-90"
+                className="mb-5 h-9 w-9 text-[var(--bt-primary)] opacity-90"
                 strokeWidth={1.5}
               />
               <p className="mb-2 text-[9px] font-black uppercase tracking-[0.5em] text-[#a39a91]">
@@ -360,14 +360,14 @@ export default function FirstVisitGuide({
               </p>
               <h2
                 id="onboarding-intro-title"
-                className="mb-8 font-serif text-2xl leading-snug text-[#5d5045] md:text-3xl"
+                className="mb-8 font-serif text-2xl leading-snug text-[var(--bt-primary)] md:text-3xl"
               >
                 Te llevamos por cada sección: cambiaremos de pestaña y te
                 explicamos qué hacer en cada una.
               </h2>
 
-              <div className="w-full max-w-md rounded-[1.5rem] border border-[#eaddcf] bg-white/80 px-5 py-4 text-left mb-8">
-                <p className="text-[9px] font-black uppercase tracking-[0.35em] text-[#8c857d]">
+              <div className="w-full max-w-md rounded-[1.5rem] border border-[var(--bt-border)] bg-white/80 px-5 py-4 text-left mb-8">
+                <p className="text-[9px] font-black uppercase tracking-[0.35em] text-[var(--bt-muted)]">
                   Tareas pendientes recomendadas
                 </p>
                 <div className="mt-3 space-y-2">
@@ -395,13 +395,13 @@ export default function FirstVisitGuide({
                     return (
                       <div
                         key={t.key}
-                        className="flex items-center justify-between gap-3 rounded-2xl border border-[#eee8e2] bg-[#faf8f5] px-4 py-3"
+                        className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--bt-border)] bg-[var(--bt-bg)] px-4 py-3"
                       >
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-white ring-1 ring-[#eaddcf] text-[#5d5045]">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-white ring-1 ring-[var(--bt-border)] text-[var(--bt-primary)]">
                             <Icon2 className="h-4 w-4" strokeWidth={2} />
                           </div>
-                          <p className="min-w-0 truncate text-[10px] font-black tracking-widest text-[#5d5045]">
+                          <p className="min-w-0 truncate text-[10px] font-black tracking-widest text-[var(--bt-primary)]">
                             {t.label}
                           </p>
                         </div>
@@ -411,7 +411,7 @@ export default function FirstVisitGuide({
                             strokeWidth={2}
                           />
                         ) : (
-                          <span className="shrink-0 text-[9px] font-black uppercase tracking-widest text-[#a39485]">
+                          <span className="shrink-0 text-[9px] font-black uppercase tracking-widest text-[var(--bt-muted)]">
                             Pendiente
                           </span>
                         )}
@@ -419,7 +419,7 @@ export default function FirstVisitGuide({
                     );
                   })}
                 </div>
-                <p className="mt-3 text-[10px] text-[#8c857d] leading-relaxed">
+                <p className="mt-3 text-[10px] text-[var(--bt-muted)] leading-relaxed">
                   Consejo: configura el <strong>horario</strong> para que el agente
                   de WhatsApp pueda proponerte huecos reales según el día.
                 </p>
@@ -427,7 +427,7 @@ export default function FirstVisitGuide({
               <button
                 type="button"
                 onClick={startTour}
-                className="group relative inline-flex items-center justify-center overflow-hidden rounded-full bg-[#5d5045] px-12 py-4 text-[11px] font-black uppercase tracking-[0.35em] text-[#f5ebe0] shadow-[0_12px_40px_rgba(93,80,69,0.35)] transition hover:bg-[#4a3f36] active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5d5045] focus-visible:ring-offset-2"
+                className="group relative inline-flex items-center justify-center overflow-hidden rounded-full bg-[var(--bt-primary)] px-12 py-4 text-[11px] font-black uppercase tracking-[0.35em] text-white shadow-[0_12px_40px_rgba(0,0,0,0.18)] transition hover:bg-[var(--bt-primary-hover)] active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--bt-primary)] focus-visible:ring-offset-2"
               >
                 <span className="relative z-10">Empezar</span>
                 <span
@@ -438,7 +438,7 @@ export default function FirstVisitGuide({
               <button
                 type="button"
                 onClick={finish}
-                className="mt-6 text-[9px] font-bold uppercase tracking-widest text-[#8c857d] underline-offset-4 hover:text-[#5d5045] hover:underline"
+                className="mt-6 text-[9px] font-bold uppercase tracking-widest text-[var(--bt-muted)] underline-offset-4 hover:text-[var(--bt-primary)] hover:underline"
               >
                 Omitir
               </button>
@@ -449,7 +449,7 @@ export default function FirstVisitGuide({
 
       {phase === "tour" && slide && Icon && (
         <div
-          className="fixed z-[220] w-[min(100vw-24px,400px)] max-h-[min(78vh,480px)] overflow-y-auto rounded-[1.5rem] border border-[#eaddcf] bg-white/98 px-5 py-5 shadow-[0_20px_60px_rgba(93,80,69,0.25)] pointer-events-auto"
+          className="fixed z-[220] w-[min(100vw-24px,400px)] max-h-[min(78vh,480px)] overflow-y-auto rounded-[1.5rem] border border-[var(--bt-border)] bg-white/98 px-5 py-5 shadow-[0_20px_60px_rgba(0,0,0,0.18)] pointer-events-auto"
           style={tooltipStyle}
           role="dialog"
           aria-modal="true"
@@ -458,16 +458,16 @@ export default function FirstVisitGuide({
           <div className="pointer-events-auto">
             <div className="mb-4 flex items-start justify-between gap-3">
               <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#f5ebe0] text-[#5d5045] ring-2 ring-[#5d5045]/20">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--bt-accent)] text-[var(--bt-primary)] ring-2 ring-[var(--bt-primary)]/20">
                   <Icon className="h-5 w-5" strokeWidth={2} />
                 </div>
                 <div className="min-w-0 text-left">
-                  <p className="text-[9px] font-black uppercase tracking-[0.35em] text-[#8c857d]">
+                  <p className="text-[9px] font-black uppercase tracking-[0.35em] text-[var(--bt-muted)]">
                     Estás aquí · {stepIndex + 1}/{tourSteps.length}
                   </p>
                   <h3
                     id="tour-step-title"
-                    className="font-serif text-lg leading-tight text-[#5d5045] md:text-xl"
+                    className="font-serif text-lg leading-tight text-[var(--bt-primary)] md:text-xl"
                   >
                     {slide.title}
                   </h3>
@@ -476,7 +476,7 @@ export default function FirstVisitGuide({
               <button
                 type="button"
                 onClick={finish}
-                className="shrink-0 rounded-full p-1.5 text-[#8c857d] hover:bg-[#f5ebe0] hover:text-[#5d5045]"
+                className="shrink-0 rounded-full p-1.5 text-[var(--bt-muted)] hover:bg-[var(--bt-accent)] hover:text-[var(--bt-primary)]"
                 aria-label="Cerrar guía"
               >
                 <X className="h-5 w-5" />
@@ -509,7 +509,7 @@ export default function FirstVisitGuide({
                 <span
                   key={i}
                   className={`h-1.5 rounded-full transition-all duration-300 ${
-                    i === stepIndex ? "w-6 bg-[#5d5045]" : "w-1.5 bg-[#eaddcf]"
+                    i === stepIndex ? "w-6 bg-[var(--bt-primary)]" : "w-1.5 bg-[var(--bt-border)]"
                   }`}
                   aria-hidden
                 />
@@ -520,7 +520,7 @@ export default function FirstVisitGuide({
                 <button
                   type="button"
                   onClick={finish}
-                  className="text-center text-[9px] font-bold uppercase tracking-widest text-[#8c857d] hover:text-[#5d5045] sm:text-left"
+                  className="text-center text-[9px] font-bold uppercase tracking-widest text-[var(--bt-muted)] hover:text-[var(--bt-primary)] sm:text-left"
                 >
                   Omitir guía
                 </button>
@@ -530,7 +530,7 @@ export default function FirstVisitGuide({
                     if (isLast) finish();
                     else setStepIndex((i) => i + 1);
                   }}
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-[#5d5045] px-6 py-3 text-[10px] font-black uppercase tracking-[0.2em] text-[#f5ebe0] shadow-lg transition hover:bg-[#4a3f36]"
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-[var(--bt-primary)] px-6 py-3 text-[10px] font-black uppercase tracking-[0.2em] text-white shadow-lg transition hover:bg-[var(--bt-primary-hover)]"
                 >
                   {isLast ? "Listo" : "Siguiente sección"}
                   {!isLast ? (
@@ -543,7 +543,7 @@ export default function FirstVisitGuide({
               <button
                 type="button"
                 onClick={finish}
-                className="mt-2 w-full text-center text-[9px] font-bold uppercase tracking-widest text-[#8c857d] hover:text-[#5d5045]"
+                className="mt-2 w-full text-center text-[9px] font-bold uppercase tracking-widest text-[var(--bt-muted)] hover:text-[var(--bt-primary)]"
               >
                 Omitir este paso (configurar luego en Ajustes)
               </button>
@@ -585,7 +585,7 @@ function TourNavHighlight({ tabId }) {
 
   return (
     <div
-      className="pointer-events-none fixed z-[215] rounded-full border-2 border-[#5d5045] shadow-[0_0_0_6px_rgba(93,80,69,0.15)] animate-pulse"
+      className="pointer-events-none fixed z-[215] rounded-full border-2 border-[var(--bt-primary)] shadow-[0_0_0_6px_rgba(0,0,0,0.10)] animate-pulse"
       style={{
         left: rect.left - 4,
         top: rect.top - 4,

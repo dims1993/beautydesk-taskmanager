@@ -200,7 +200,7 @@ export default function BillingSubscriptionPanel({
 
   if (loading) {
     return (
-      <p className="text-[10px] text-[#a39485] animate-pulse">
+      <p className="text-[10px] text-[var(--bt-muted)] animate-pulse">
         Cargando estado de pagos…
       </p>
     );
@@ -233,7 +233,7 @@ export default function BillingSubscriptionPanel({
           <p className="text-[#2d2a28]">
             {flowHint.text.split("**").map((part, i) =>
               i % 2 === 1 ? (
-                <strong key={i} className="font-serif text-[#5d5045]">
+                <strong key={i} className="font-serif text-[var(--bt-primary)]">
                   {part}
                 </strong>
               ) : (
@@ -245,7 +245,7 @@ export default function BillingSubscriptionPanel({
             <button
               type="button"
               onClick={dismissFlowHint}
-              className="mt-2 text-[9px] font-black uppercase tracking-widest text-[#5d5045] underline"
+              className="mt-2 text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)] underline"
             >
               Cerrar aviso
             </button>
@@ -253,23 +253,23 @@ export default function BillingSubscriptionPanel({
         </div>
       )}
 
-      <div className="flex items-start gap-3 rounded-2xl border border-[#e5e0d8] bg-[#faf8f5] px-4 py-3">
-        <CreditCard className="h-5 w-5 shrink-0 text-[#5d5045] mt-0.5" />
-        <div className="space-y-1 text-[11px] text-[#5d5045] leading-relaxed">
+      <div className="flex items-start gap-3 rounded-2xl border border-[var(--bt-border)] bg-[var(--bt-bg)] px-4 py-3">
+        <CreditCard className="h-5 w-5 shrink-0 text-[var(--bt-primary)] mt-0.5" />
+        <div className="space-y-1 text-[11px] text-[var(--bt-primary)] leading-relaxed">
           <p>
-            <span className="font-black uppercase tracking-widest text-[10px] text-[#8c857d]">
+            <span className="font-black uppercase tracking-widest text-[10px] text-[var(--bt-muted)]">
               Plan en la app
             </span>
             :{" "}
             <span className="font-serif text-base capitalize">{currentPlan}</span>
             {hasSub ? (
-              <span className="text-[#8c857d]">
+              <span className="text-[var(--bt-muted)]">
                 {trialing
                   ? " · Prueba activa: tarjeta registrada, primer cargo al final del periodo de prueba"
                   : " · Suscripción Stripe activa"}
               </span>
             ) : (
-              <span className="text-[#8c857d]">
+              <span className="text-[var(--bt-muted)]">
                 {" "}
                 · Sin suscripción online (permisos de Esencial hasta que contrates)
               </span>
@@ -309,13 +309,13 @@ export default function BillingSubscriptionPanel({
       )}
 
       <div className="space-y-2">
-        <label className="text-[9px] font-black uppercase tracking-widest text-[#a39485]">
+        <label className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-muted)]">
           Objetivo (plan de la oferta o cambio)
         </label>
         <select
           value={targetPlan}
           onChange={(e) => setTargetPlan(e.target.value)}
-          className="w-full rounded-2xl border border-[#eaddcf] bg-white py-3 px-4 text-[11px] font-bold text-[#5d5045]"
+          className="w-full rounded-2xl border border-[var(--bt-border)] bg-white py-3 px-4 text-[11px] font-bold text-[var(--bt-primary)]"
         >
           {PLANS.map((p) => (
             <option key={p.id} value={p.id}>
@@ -323,7 +323,7 @@ export default function BillingSubscriptionPanel({
             </option>
           ))}
         </select>
-        <p className="text-[9px] text-[#a39485]">
+        <p className="text-[9px] text-[var(--bt-muted)]">
           Plan de la app ahora: <strong>{planLabel(currentPlan)}</strong>
           {hasSub ? " (pagado vía Stripe)" : ""}. Ajusta el desplegable si quieres
           otro destino.
@@ -335,7 +335,7 @@ export default function BillingSubscriptionPanel({
           >
             No se puede abrir el checkout con <strong>{planLabel(targetPlan)}</strong>{" "}
             hasta que en el servidor exista el ID de precio de Stripe (variable
-            <code className="bg-amber-100/80 px-1 rounded text-[#5d5045]">
+            <code className="bg-amber-100/80 px-1 rounded text-[var(--bt-primary)]">
               STRIPE_PRICE_
               {String(targetPlan).toUpperCase()}
             </code>
@@ -347,7 +347,7 @@ export default function BillingSubscriptionPanel({
       </div>
 
       {canOfferTrial && (
-        <p className="text-[9px] leading-relaxed text-[#5d5045] bg-white border border-[#e5e0d8] rounded-2xl px-4 py-3">
+        <p className="text-[9px] leading-relaxed text-[var(--bt-primary)] bg-white border border-[var(--bt-border)] rounded-2xl px-4 py-3">
           <strong>Primera contratación:</strong> en Stripe se registra un método
           de pago (verificación/SCA, importe 0€ en el inicio) y comienza el
           periodo de prueba de {trialDays} días. Al terminar, se aplica el cargo
@@ -368,7 +368,7 @@ export default function BillingSubscriptionPanel({
                   : undefined
             }
             onClick={goCheckout}
-            className="flex-1 rounded-full bg-[#5d5045] py-3.5 text-[10px] font-black uppercase tracking-[0.2em] text-[#f5ebe0] shadow-lg transition hover:bg-[#4a3f36] disabled:opacity-40"
+            className="flex-1 rounded-full bg-[var(--bt-primary)] py-3.5 text-[10px] font-black uppercase tracking-[0.2em] text-white shadow-lg transition hover:bg-[var(--bt-primary-hover)] disabled:opacity-40"
           >
             {busy
               ? "…"
@@ -383,7 +383,7 @@ export default function BillingSubscriptionPanel({
               busy || !stripeOk || !priceOk || (sameTargetAsCurrent && hasSub)
             }
             onClick={goChangePlan}
-            className="flex-1 rounded-full bg-[#5d5045] py-3.5 text-[10px] font-black uppercase tracking-[0.2em] text-[#f5ebe0] shadow-lg transition hover:bg-[#4a3f36] disabled:opacity-40"
+            className="flex-1 rounded-full bg-[var(--bt-primary)] py-3.5 text-[10px] font-black uppercase tracking-[0.2em] text-white shadow-lg transition hover:bg-[var(--bt-primary-hover)] disabled:opacity-40"
             title={
               sameTargetAsCurrent
                 ? "Elige otro plan en el desplegable para cambiar"
@@ -401,18 +401,18 @@ export default function BillingSubscriptionPanel({
           type="button"
           disabled={busy || !stripeOk || !hasSub}
           onClick={goPortal}
-          className="flex-1 inline-flex items-center justify-center gap-2 rounded-full border border-[#eaddcf] bg-white py-3.5 text-[10px] font-black uppercase tracking-[0.15em] text-[#5d5045] hover:bg-[#f8f5f2] disabled:opacity-40"
+          className="flex-1 inline-flex items-center justify-center gap-2 rounded-full border border-[var(--bt-border)] bg-white py-3.5 text-[10px] font-black uppercase tracking-[0.15em] text-[var(--bt-primary)] hover:bg-[var(--bt-bg)] disabled:opacity-40"
         >
           Facturación y métodos
           <ExternalLink className="h-3.5 w-3.5" />
         </button>
       </div>
 
-      <p className="text-[9px] leading-relaxed text-[#a39485]">
+      <p className="text-[9px] leading-relaxed text-[var(--bt-muted)]">
         El webhook de Stripe actualiza el plan en la base de datos; los permisos
-        vienen de <code className="text-[#5d5045]">plan_entitlements</code> en{" "}
-        <code className="text-[#5d5045]">/users/me</code>. En local, usa{" "}
-        <code className="text-[#5d5045]">stripe listen --forward-to localhost:8000/billing/webhook</code>
+        vienen de <code className="text-[var(--bt-primary)]">plan_entitlements</code> en{" "}
+        <code className="text-[var(--bt-primary)]">/users/me</code>. En local, usa{" "}
+        <code className="text-[var(--bt-primary)]">stripe listen --forward-to localhost:8000/billing/webhook</code>
         .
       </p>
     </div>

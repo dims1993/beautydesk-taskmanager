@@ -118,10 +118,10 @@ const TeamView = ({ currentUser = null }) => {
       )}
 
       {/* FORMULARIO PARA AÑADIR */}
-      <div className="bg-white/80 p-6 rounded-[2.5rem] border border-[#eee8e2] shadow-sm">
+      <div className="bg-white/80 p-6 rounded-[2.5rem] border border-[var(--bt-border)] shadow-sm">
         <div className="flex items-center gap-2 mb-4 ml-2">
-          <UserPlus size={12} className="text-[#a39485]" />
-          <h3 className="text-[10px] font-black uppercase tracking-widest text-[#a39485]">
+          <UserPlus size={12} className="text-[var(--bt-muted)]" />
+          <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--bt-muted)]">
             Añadir Nuevo Profesional
           </h3>
         </div>
@@ -132,7 +132,7 @@ const TeamView = ({ currentUser = null }) => {
           <input
             type="email"
             placeholder="Correo de Google"
-            className="px-5 py-3 rounded-2xl bg-[#f8f5f2] border-none text-sm focus:ring-2 focus:ring-[#dcc7b1] outline-none font-medium disabled:opacity-50"
+            className="px-5 py-3 rounded-2xl bg-[var(--bt-bg)] border-none text-sm focus:ring-2 focus:ring-[var(--bt-border-strong)] outline-none font-medium disabled:opacity-50"
             value={newMember.email}
             onChange={(e) =>
               setNewMember({ ...newMember, email: e.target.value })
@@ -143,7 +143,7 @@ const TeamView = ({ currentUser = null }) => {
           <input
             type="text"
             placeholder="Nombre (ej: Saray)"
-            className="px-5 py-3 rounded-2xl bg-[#f8f5f2] border-none text-sm focus:ring-2 focus:ring-[#dcc7b1] outline-none font-medium disabled:opacity-50"
+            className="px-5 py-3 rounded-2xl bg-[var(--bt-bg)] border-none text-sm focus:ring-2 focus:ring-[var(--bt-border-strong)] outline-none font-medium disabled:opacity-50"
             value={newMember.username}
             onChange={(e) =>
               setNewMember({ ...newMember, username: e.target.value })
@@ -154,7 +154,7 @@ const TeamView = ({ currentUser = null }) => {
           <button
             type="submit"
             disabled={isAdding || !teamInvitesAllowed}
-            className="bg-[#5d5045] text-white font-bold py-3 rounded-2xl hover:bg-[#a39485] transition-all disabled:opacity-50 uppercase text-[10px] tracking-widest"
+            className="bg-[var(--bt-primary)] text-white font-bold py-3 rounded-2xl hover:bg-[var(--bt-primary-hover)] transition-all disabled:opacity-50 uppercase text-[10px] tracking-widest"
           >
             {isAdding ? "Procesando..." : "Autorizar Acceso"}
           </button>
@@ -175,17 +175,17 @@ const TeamView = ({ currentUser = null }) => {
           return (
             <div
               key={member.id}
-              className="group bg-white p-5 rounded-[2.5rem] border border-[#eee8e2] flex gap-4 items-start hover:shadow-md transition-all hover:border-[#dcc7b1]"
+              className="group bg-white p-5 rounded-[2.5rem] border border-[var(--bt-border)] flex gap-4 items-start hover:shadow-md transition-all hover:border-[var(--bt-border-strong)]"
             >
-              <div className="h-12 w-12 shrink-0 rounded-full bg-[#f8f5f2] text-[#dcc7b1] flex items-center justify-center font-black border border-[#eee8e2] group-hover:bg-[#5d5045] group-hover:text-white transition-colors">
+              <div className="h-12 w-12 shrink-0 rounded-full bg-[var(--bt-bg)] text-[var(--bt-border-strong)] flex items-center justify-center font-black border border-[var(--bt-border)] group-hover:bg-[var(--bt-primary)] group-hover:text-white transition-colors">
                 {(member.username || "?").charAt(0).toUpperCase()}
               </div>
               <div className="min-w-0 flex-1 space-y-2">
-                <h4 className="font-black text-[#5d5045] text-sm uppercase tracking-tighter truncate">
+                <h4 className="font-black text-[var(--bt-primary)] text-sm uppercase tracking-tighter truncate">
                   {member.username}
                 </h4>
                 <p
-                  className="text-[#a39485] text-[10px] font-medium truncate"
+                  className="text-[var(--bt-muted)] text-[10px] font-medium truncate"
                   title={member.email}
                 >
                   {member.email}
@@ -202,7 +202,7 @@ const TeamView = ({ currentUser = null }) => {
                 <button
                   type="button"
                   onClick={() => handleDeleteMember(member.id, member.username)}
-                  className="shrink-0 p-2 text-[#a39485] hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100"
+                  className="shrink-0 p-2 text-[var(--bt-muted)] hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100"
                   title="Retirar acceso"
                 >
                   <Trash2 size={14} strokeWidth={2.5} />
