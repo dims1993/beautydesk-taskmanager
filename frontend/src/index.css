@@ -1,5 +1,35 @@
 @import "tailwindcss";
 
+@layer base {
+  :root {
+    /* Default UI theme (nails/estética): current palette */
+    --bt-primary: #5d5045;
+    --bt-primary-hover: #4a3f36;
+    --bt-bg: #faf9f6;
+    --bt-surface: #ffffff;
+    --bt-border: #eaddcf;
+    --bt-border-strong: #dcc7b1;
+    --bt-accent: #f5ebe0;
+    --bt-muted: #8c857d;
+    --bt-icon: #c4bdb5;
+  }
+
+  [data-ui-theme="hair"] {
+    /* Peluquería / barbería / spa / otros (elegante + moderno) */
+    --bt-primary: #293249;
+    --bt-primary-hover: #1f2537;
+    /* Porcelain / soft blush background */
+    --bt-bg: #fbf7f5;
+    --bt-surface: #ffffff;
+    /* Warm grey borders + champagne accent */
+    --bt-border: #ddd3d5;
+    --bt-border-strong: #b8aeb1;
+    --bt-accent: #e7d7c9;
+    --bt-muted: #69656f;
+    --bt-icon: #a9a3aa;
+  }
+}
+
 /*
   iOS Safari hace zoom al enfocar inputs con fuente computada < 16px.
   Las utilidades Tailwind (p. ej. text-[11px]) pisan @layer base sin !important;

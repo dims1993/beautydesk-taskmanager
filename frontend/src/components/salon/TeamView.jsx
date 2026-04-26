@@ -4,9 +4,9 @@ import { Trash2, UserPlus, Users } from "lucide-react"; // Importamos iconos par
 
 function roleBadgeClass(role) {
   const r = String(role || "").toUpperCase();
-  if (r === "OWNER") return "bg-[#5d5045] text-[#f5ebe0]";
+  if (r === "OWNER") return "bg-[var(--bt-primary)] text-white";
   if (r === "SUPER_ADMIN") return "bg-amber-100 text-amber-900 ring-1 ring-amber-200/80";
-  return "bg-[#f8f5f2] text-[#a39485] ring-1 ring-[#eee8e2]";
+  return "bg-[var(--bt-bg)] text-[var(--bt-muted)] ring-1 ring-black/5";
 }
 
 function formatRoleLabel(role) {
@@ -81,7 +81,7 @@ const TeamView = ({ currentUser = null }) => {
 
   if (isLoading)
     return (
-      <div className="p-10 text-center animate-pulse text-[#a39485]">
+      <div className="p-10 text-center animate-pulse text-[var(--bt-muted)]">
         Cargando equipo...
       </div>
     );
@@ -90,13 +90,13 @@ const TeamView = ({ currentUser = null }) => {
     <div className="space-y-8 animate-fadeIn max-w-4xl mx-auto pb-10">
       {/* TÍTULO Y CABECERA */}
       <div className="text-center space-y-2">
-        <div className="flex justify-center text-[#dcc7b1] mb-2">
+        <div className="flex justify-center text-[var(--bt-border-strong)] mb-2">
           <Users size={28} strokeWidth={1.5} />
         </div>
-        <h2 className="text-2xl font-black text-[#5d5045] tracking-tight">
+        <h2 className="text-2xl font-black text-[var(--bt-primary)] tracking-tight">
           Gestión de Equipo
         </h2>
-        <p className="text-[#a39485] text-sm">
+        <p className="text-[var(--bt-muted)] text-sm">
           Invita profesionales según tu plan (Profesional: hasta 2; Premium:
           ilimitado).
         </p>
@@ -111,9 +111,9 @@ const TeamView = ({ currentUser = null }) => {
       )}
 
       {teamInvitesAllowed && typeof maxStaffLabel === "number" && (
-        <p className="text-center text-[10px] text-[#a39485]">
+        <p className="text-center text-[10px] text-[var(--bt-muted)]">
           Profesionales adicionales permitidos en tu plan:{" "}
-          <span className="font-black text-[#5d5045]">{maxStaffLabel}</span>
+          <span className="font-black text-[var(--bt-primary)]">{maxStaffLabel}</span>
         </p>
       )}
 

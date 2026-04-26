@@ -168,6 +168,7 @@ class UserMeOut(UserOut):
     organization_city: Optional[str] = None
     organization_billing_address_line1: Optional[str] = None
     organization_billing_address_line2: Optional[str] = None
+    organization_ui_theme: Optional[str] = None
     cash_close_password_configured: bool = False
     has_services_configured: bool = False
     salon_hours_configured: bool = False

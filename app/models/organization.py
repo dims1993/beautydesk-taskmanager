@@ -73,6 +73,8 @@ class Organization(SQLModel, table=True):
     # Wizard onboarding (beauty vertical categories)
     salon_category_primary: Optional[str] = Field(default=None)
     salon_categories_json: Optional[str] = Field(default=None)
+    # UI theme for the whole org (frontend uses CSS vars). None => default theme.
+    ui_theme: Optional[str] = Field(default=None)
 
     # Salon opening hours (JSON, 7 days). Used by booking agent and availability.
     salon_hours_json: Optional[str] = Field(default=None)

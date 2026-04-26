@@ -8,6 +8,7 @@ from google.oauth2 import id_token
 from sqlmodel import Session, select
 from typing import List
 from sqlalchemy import or_
+from pydantic import BaseModel
 
 from app.core.db.session import get_session
 import json
@@ -264,6 +265,7 @@ def read_users_me(
         organization_city=org_city,
         organization_billing_address_line1=org_billing_line1,
         organization_billing_address_line2=org_billing_line2,
+        organization_ui_theme=getattr(org, "ui_theme", None) if org else None,
         cash_close_password_configured=cash_close_configured,
         has_services_configured=has_services_configured,
         salon_hours_configured=salon_hours_configured,
@@ -277,6 +279,37 @@ def read_users_me(
         stripe_current_period_ends_at=stripe_current_period_ends_at,
         app_access_locked=app_access_locked,
     )
+
+
+class SetOrganizationUiThemeBody(BaseModel):
+    ui_theme: str
+
+
+@router.patch("/me/organization/ui-theme")
+def set_organization_ui_theme(
+    body: SetOrganizationUiThemeBody,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user_for_app),
+):
+    """Solo OWNER: cambia la paleta/interfaz de la organización."""
+    if current_user.role != UserRole.OWNER:
+        raise HTTPException(
+            status_code=403, detail="Solo el titular puede cambiar la interfaz."
+        )
+    if not current_user.organization_id:
+        raise HTTPException(status_code=400, detail="No perteneces a una organización.")
+    org = db.get(Organization, current_user.organization_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+
+    theme = (body.ui_theme or "").strip().lower()
+    if theme not in ("nails", "hair"):
+        raise HTTPException(status_code=400, detail="Tema inválido.")
+
+    org.ui_theme = theme
+    db.add(org)
+    db.commit()
+    return {"success": True, "ui_theme": theme}
 
 
 @router.get("/me/organization/salon-hours")

@@ -16,6 +16,18 @@ from app.models.user import User, UserRole
 CODE_TTL_MINUTES = 30
 
 
+def default_ui_theme_for_primary_category(primary_category: str) -> str:
+    """
+    Decide the default palette from the first selected service.
+    - hair: peluquería, barbería, spa, esteticista (acts as "otros")
+    - nails: uñas, estética, masaje, depilación (current palette)
+    """
+    key = (primary_category or "").strip().upper()
+    if key in {"PELUQUERO", "BARBERO", "SPA", "ESTETICISTA"}:
+        return "hair"
+    return "nails"
+
+
 def _hash_verification_code(code: str) -> str:
     return hashlib.sha256(code.strip().encode("utf-8")).hexdigest()
 
@@ -249,6 +261,7 @@ def confirm_owner_wizard_registration(
         billing_email=em,
         salon_category_primary=payload.get("primary_category"),
         salon_categories_json=json.dumps(payload.get("categories") or [], ensure_ascii=False),
+        ui_theme=default_ui_theme_for_primary_category(payload.get("primary_category") or ""),
     )
     db.add(org)
     db.commit()

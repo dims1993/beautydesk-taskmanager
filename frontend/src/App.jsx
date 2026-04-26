@@ -389,10 +389,15 @@ function App() {
     }
   };
 
+  const uiTheme = String(currentUser?.organization_ui_theme || "nails")
+    .trim()
+    .toLowerCase();
+
   return (
     <GoogleAuthShell>
-      <Router>
-        <Routes>
+      <div data-ui-theme={uiTheme}>
+        <Router>
+          <Routes>
           {/* --- RUTAS PÚBLICAS --- */}
           <Route path="/" element={<Landing />} />
           <Route path="/contacto" element={<ContactoView />} />
@@ -410,7 +415,7 @@ function App() {
                 <div className="relative">
                   <a
                     href="/"
-                    className="absolute top-8 left-8 text-[#5d5045] font-black text-[10px] uppercase tracking-widest z-50 bg-white/50 px-4 py-2 rounded-full border border-[#5d5045]/10 hover:bg-white transition-colors"
+                    className="absolute top-8 left-8 text-[var(--bt-primary)] font-black text-[10px] uppercase tracking-widest z-50 bg-white/50 px-4 py-2 rounded-full border border-[var(--bt-primary)]/10 hover:bg-white transition-colors"
                   >
                     ← Inicio
                   </a>
@@ -437,7 +442,7 @@ function App() {
             path="/app"
             element={
               isLoggedIn ? (
-                <div className="min-h-screen bg-[#f8f5f2] pb-24 md:pb-12 pt-6 md:pt-12 px-4 md:px-6 font-sans text-[#5d5045]">
+                <div className="min-h-screen bg-[var(--bt-bg)] pb-24 md:pb-12 pt-6 md:pt-12 px-4 md:px-6 font-sans text-[var(--bt-primary)]">
                   {impersonationTargetEmail && (
                     <div className="max-w-6xl mx-auto mb-4 px-1">
                       <div className="rounded-2xl border border-purple-200 bg-purple-50/95 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-[10px] font-bold text-purple-950">
@@ -459,7 +464,7 @@ function App() {
                     </div>
                   )}
                   {!currentUser && (
-                    <div className="max-w-6xl mx-auto py-20 text-center text-[10px] text-[#8c857d] font-bold uppercase tracking-widest">
+                    <div className="max-w-6xl mx-auto py-20 text-center text-[10px] text-[var(--bt-muted)] font-bold uppercase tracking-widest">
                       Cargando tu cuenta…
                     </div>
                   )}
@@ -769,8 +774,9 @@ function App() {
           />
 
           <Route path="*" element={<Navigate to="/" />} />
-        </Routes>
-      </Router>
+          </Routes>
+        </Router>
+      </div>
     </GoogleAuthShell>
   );
 }

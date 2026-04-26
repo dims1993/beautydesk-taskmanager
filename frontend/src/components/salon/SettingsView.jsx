@@ -7,6 +7,7 @@ import {
   ChevronDown,
   CreditCard,
   Mail,
+  Palette,
   Pencil,
   Phone,
   Scissors,
@@ -128,6 +129,13 @@ export default function SettingsView({
     billing_phone: "",
     billing_email: "",
   });
+
+  const currentUiTheme = String(currentUser?.organization_ui_theme || "nails")
+    .trim()
+    .toLowerCase();
+  const [uiTheme, setUiTheme] = useState(currentUiTheme);
+  const [uiThemeBusy, setUiThemeBusy] = useState(false);
+  const [uiThemeOk, setUiThemeOk] = useState(false);
   const [saving, setSaving] = useState(false);
   const [localError, setLocalError] = useState("");
   const [savedOk, setSavedOk] = useState(false);
@@ -294,42 +302,103 @@ export default function SettingsView({
   return (
     <div className="animate-fadeIn space-y-6 pb-16">
       <div>
-        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#8c857d]">
+        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[var(--bt-muted)]">
           Cuenta
         </p>
-        <h2 className="font-serif text-2xl text-[#5d5045] mt-1">Ajustes</h2>
+        <h2 className="font-serif text-2xl text-[var(--bt-primary)] mt-1">
+          Ajustes
+        </h2>
       </div>
 
       {/* Fijo: perfil */}
-      <div className="bg-white/90 backdrop-blur-md rounded-[2.5rem] p-6 shadow-sm border border-[#e5e0d8] space-y-4">
-        <h3 className="text-[10px] font-black uppercase tracking-widest text-[#5d5045] flex items-center gap-2">
+      <div className="bg-white/90 backdrop-blur-md rounded-[2.5rem] p-6 shadow-sm border border-[var(--bt-border)] space-y-4">
+        <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--bt-primary)] flex items-center gap-2">
           <User className="w-4 h-4" />
           Tu perfil
         </h3>
-        <div className="grid gap-3 text-[11px] text-[#5d5045]">
-          <div className="flex items-center gap-2 text-[#8c857d]">
+        <div className="grid gap-3 text-[11px] text-[var(--bt-primary)]">
+          <div className="flex items-center gap-2 text-[var(--bt-muted)]">
             <Mail className="w-4 h-4 shrink-0" />
             <span className="font-bold">{currentUser?.email || "—"}</span>
           </div>
-          <div className="flex items-center gap-2 text-[#8c857d]">
+          <div className="flex items-center gap-2 text-[var(--bt-muted)]">
             <Shield className="w-4 h-4 shrink-0" />
             <span className="font-black uppercase tracking-widest">
               {String(currentUser?.role || "").replace(/_/g, " ")}
             </span>
           </div>
           {currentUser?.phone && (
-            <div className="flex items-center gap-2 text-[#8c857d]">
+            <div className="flex items-center gap-2 text-[var(--bt-muted)]">
               <Phone className="w-4 h-4 shrink-0" />
               <span>{currentUser.phone}</span>
             </div>
           )}
           {currentUser?.organization_id != null && (
-            <p className="text-[10px] text-[#8c857d] pt-2">
+            <p className="text-[10px] text-[var(--bt-muted)] pt-2">
               Negocio vinculado (ID organización: {currentUser.organization_id})
             </p>
           )}
         </div>
       </div>
+
+      {/* Interfaz / paleta */}
+      {currentUser?.organization_id != null &&
+        String(currentUser?.role || "").toUpperCase() === "OWNER" && (
+          <div className="bg-white/90 backdrop-blur-md rounded-[2.5rem] p-6 shadow-sm border border-[var(--bt-border)] space-y-4">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--bt-primary)] flex items-center gap-2">
+              <Palette className="w-4 h-4" />
+              Interfaz
+            </h3>
+            <p className="text-[11px] text-[var(--bt-muted)] leading-relaxed">
+              Puedes cambiar la paleta aunque tu servicio principal sugiera otra.
+            </p>
+            <div className="grid gap-2">
+              <label className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-muted)] ml-1">
+                Paleta
+              </label>
+              <select
+                value={uiTheme}
+                onChange={(e) => {
+                  setUiThemeOk(false);
+                  setUiTheme(e.target.value);
+                }}
+                className="w-full bg-[var(--bt-bg)] border border-[var(--bt-border)] py-3 px-4 rounded-2xl text-[10px] font-black tracking-widest text-[var(--bt-primary)] focus:outline-none focus:border-[var(--bt-primary)]"
+              >
+                <option value="nails">Uñas / estética (actual)</option>
+                <option value="hair">Peluquería / barbería / spa</option>
+              </select>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between pt-1">
+              <button
+                type="button"
+                disabled={uiThemeBusy || uiTheme === currentUiTheme}
+                onClick={async () => {
+                  setUiThemeBusy(true);
+                  setUiThemeOk(false);
+                  try {
+                    await apiRequest("/users/me/organization/ui-theme", "PATCH", {
+                      ui_theme: uiTheme,
+                    });
+                    setUiThemeOk(true);
+                    await onRefresh?.();
+                  } catch (err) {
+                    onError?.(formatErr(err));
+                  } finally {
+                    setUiThemeBusy(false);
+                  }
+                }}
+                className="inline-flex items-center justify-center rounded-full bg-[var(--bt-primary)] px-6 py-3 text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-50"
+              >
+                {uiThemeBusy ? "Guardando…" : "Guardar interfaz"}
+              </button>
+              {uiThemeOk && (
+                <p className="text-[10px] font-bold text-emerald-700 uppercase">
+                  Interfaz actualizada.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
       {needsFiscal && (
         <div className="bg-amber-50 border border-amber-200 rounded-[2rem] p-6 space-y-4">

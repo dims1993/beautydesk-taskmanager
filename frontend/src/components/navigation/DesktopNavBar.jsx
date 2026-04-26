@@ -38,28 +38,28 @@ export default function DesktopNavBar({
               onClick={() => setActiveTab(tab.id)}
               className={`relative flex items-center justify-center w-11 h-11 rounded-full transition-all duration-500 ${
                 isActive
-                  ? "bg-[#5d5045] text-white shadow-md"
-                  : "text-[#5d5045] opacity-40 hover:opacity-70"
+                  ? "bg-[var(--bt-primary)] text-white shadow-md"
+                  : "text-[var(--bt-primary)] opacity-40 hover:opacity-70"
               } ${
                 tab.id === "ajustes" && fiscalIncomplete && !isActive
-                  ? "ring-2 ring-amber-400/80 ring-offset-2 ring-offset-[#f8f5f2]"
+                  ? "ring-2 ring-amber-400/80 ring-offset-2 ring-offset-[var(--bt-bg)]"
                   : ""
               }`}
             >
               <Icon size={18} strokeWidth={isActive ? 2.5 : 1.5} />
               {isActive && (
-                <span className="absolute -bottom-0.5 w-1 h-1 bg-[#5d5045] rounded-full animate-pulse" />
+                <span className="absolute -bottom-0.5 w-1 h-1 bg-[var(--bt-primary)] rounded-full animate-pulse" />
               )}
             </button>
           );
         })}
 
-        <div className="w-[1px] h-4 bg-[#5d5045]/10 mx-1" />
+        <div className="w-[1px] h-4 bg-[var(--bt-primary)]/10 mx-1" />
 
         {String(currentUser?.role || "").toUpperCase() === "SUPER_ADMIN" && (
           <Link
             to="/master-panel"
-            className="flex items-center justify-center w-11 h-11 rounded-full text-[#5d5045] opacity-50 hover:opacity-100 hover:bg-white/60 transition-all"
+            className="flex items-center justify-center w-11 h-11 rounded-full text-[var(--bt-primary)] opacity-50 hover:opacity-100 hover:bg-white/60 transition-all"
             title="Panel Maestro"
           >
             <LayoutDashboard size={18} strokeWidth={2} />
@@ -70,7 +70,7 @@ export default function DesktopNavBar({
           type="button"
           title="Salir"
           onClick={onLogout}
-          className="flex items-center justify-center w-11 h-11 rounded-full text-[#8c857d] opacity-40 hover:opacity-100 transition-opacity"
+          className="flex items-center justify-center w-11 h-11 rounded-full text-[var(--bt-muted)] opacity-40 hover:opacity-100 transition-opacity"
         >
           <LogOut size={18} strokeWidth={1.5} />
         </button>

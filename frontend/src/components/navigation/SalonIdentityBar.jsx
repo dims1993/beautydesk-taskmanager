@@ -31,9 +31,9 @@ export default function SalonIdentityBar({ currentUser }) {
       <p className="mb-1.5 text-[8px] font-semibold uppercase tracking-[0.55em] text-[#b5aea6]">
         Salón
       </p>
-      <p className="max-w-full font-serif text-[1.05rem] font-normal leading-snug tracking-[0.02em] text-[#5d5045]/88 md:text-[1.2rem]">
+      <p className="max-w-full font-serif text-[1.05rem] font-normal leading-snug tracking-[0.02em] text-[var(--bt-primary)]/88 md:text-[1.2rem]">
         {name ? (
-          <span className="font-medium text-[#5d5045]">{name}</span>
+          <span className="font-medium text-[var(--bt-primary)]">{name}</span>
         ) : null}
         {name && city ? (
           <span className="mx-2 text-[#c9c2ba] font-light select-none" aria-hidden>
@@ -41,7 +41,7 @@ export default function SalonIdentityBar({ currentUser }) {
           </span>
         ) : null}
         {city ? (
-          <span className="italic text-[#8a8178]">{city}</span>
+          <span className="italic text-[var(--bt-muted)]">{city}</span>
         ) : null}
       </p>
     </div>

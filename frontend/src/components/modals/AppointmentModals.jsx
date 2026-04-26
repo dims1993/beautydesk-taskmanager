@@ -37,23 +37,25 @@ const ModalWrapper = ({ isOpen, onClose, children, title, subtitle }) => {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6">
       <div
-        className="absolute inset-0 bg-[#5d5045]/20 backdrop-blur-md animate-in fade-in duration-300"
+        className="absolute inset-0 bg-[var(--bt-primary)]/20 backdrop-blur-md animate-in fade-in duration-300"
         onClick={onClose}
       />
-      <div className="relative w-full min-w-0 max-w-md rounded-[3rem] border border-[#eaddcf] bg-white overflow-x-clip overflow-y-visible shadow-2xl animate-in fade-in zoom-in-95 duration-300">
+      <div className="relative w-full min-w-0 max-w-md rounded-[3rem] border border-[var(--bt-border)] bg-white overflow-x-clip overflow-y-visible shadow-2xl animate-in fade-in zoom-in-95 duration-300">
         <div className="p-8 md:p-10 min-w-0">
           <div className="flex justify-between items-start mb-8">
             <div className="space-y-1">
-              <p className="text-[9px] font-black uppercase tracking-[0.4em] text-[#8c857d]">
+              <p className="text-[9px] font-black uppercase tracking-[0.4em] text-[var(--bt-muted)]">
                 {subtitle}
               </p>
-              <h3 className="text-2xl font-serif text-[#5d5045]">{title}</h3>
+              <h3 className="text-2xl font-serif text-[var(--bt-primary)]">
+                {title}
+              </h3>
             </div>
             <button
               onClick={onClose}
-              className="h-10 w-10 flex items-center justify-center hover:bg-[#FAF9F6] rounded-full transition-colors"
+              className="h-10 w-10 flex items-center justify-center hover:bg-[var(--bt-bg)] rounded-full transition-colors"
             >
-              <X className="w-5 h-5 text-[#8c857d]" />
+              <X className="w-5 h-5 text-[var(--bt-muted)]" />
             </button>
           </div>
           {children}
@@ -80,15 +82,15 @@ export const PaymentModal = ({ isOpen, onClose, appointment, onConfirm }) => {
       subtitle="Finalizar"
     >
       <div className="space-y-8">
-        <div className="p-6 bg-[#FAF9F6] rounded-[2rem] border border-[#eaddcf] flex items-center gap-4">
+        <div className="p-6 bg-[var(--bt-bg)] rounded-[2rem] border border-[var(--bt-border)] flex items-center gap-4">
           <div className="h-12 w-12 rounded-full bg-white flex items-center justify-center shadow-sm">
-            <Fingerprint className="w-5 h-5 text-[#5d5045]" />
+            <Fingerprint className="w-5 h-5 text-[var(--bt-primary)]" />
           </div>
           <div>
-            <p className="text-[9px] font-black uppercase tracking-widest text-[#8c857d]">
+            <p className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-muted)]">
               Cliente
             </p>
-            <p className="text-sm font-bold text-[#5d5045] uppercase tracking-widest">
+            <p className="text-sm font-bold text-[var(--bt-primary)] uppercase tracking-widest">
               {appointment?.client_name}
             </p>
           </div>
@@ -96,24 +98,24 @@ export const PaymentModal = ({ isOpen, onClose, appointment, onConfirm }) => {
 
         <div className="space-y-6">
           <div className="space-y-3">
-            <label className="px-2 text-[9px] font-black text-[#8c857d] uppercase tracking-[0.3em]">
+            <label className="px-2 text-[9px] font-black text-[var(--bt-muted)] uppercase tracking-[0.3em]">
               Importe Final
             </label>
             <div className="relative">
-              <span className="absolute left-6 top-1/2 -translate-y-1/2 text-[#5d5045] font-bold text-sm">
+              <span className="absolute left-6 top-1/2 -translate-y-1/2 text-[var(--bt-primary)] font-bold text-sm">
                 €
               </span>
               <input
                 type="number"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
-                className="w-full min-w-0 pl-12 pr-6 py-5 bg-[#FAF9F6] border-b border-[#eaddcf] outline-none focus:border-[#5d5045] text-base font-bold tracking-wide text-[#5d5045] transition-all"
+                className="w-full min-w-0 pl-12 pr-6 py-5 bg-[var(--bt-bg)] border-b border-[var(--bt-border)] outline-none focus:border-[var(--bt-primary)] text-base font-bold tracking-wide text-[var(--bt-primary)] transition-all"
               />
             </div>
           </div>
 
           <div className="space-y-4">
-            <label className="px-2 text-[9px] font-black text-[#8c857d] uppercase tracking-[0.3em]">
+            <label className="px-2 text-[9px] font-black text-[var(--bt-muted)] uppercase tracking-[0.3em]">
               Método de Pago
             </label>
             <div className="grid grid-cols-2 gap-4">
