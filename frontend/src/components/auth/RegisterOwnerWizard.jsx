@@ -45,6 +45,12 @@ const CATEGORY_OPTIONS = [
   { key: "ESTETICISTA", label: "Esteticista" },
 ];
 
+function uiThemeForPrimaryCategory(primaryCategory) {
+  const key = String(primaryCategory || "").trim().toUpperCase();
+  if (["PELUQUERO", "BARBERO", "SPA", "ESTETICISTA"].includes(key)) return "hair";
+  return "nails";
+}
+
 function formatRegisterError(err) {
   if (!err) return "Error al registrar.";
   if (typeof err.detail === "string") return err.detail;
@@ -202,6 +208,19 @@ const RegisterOwnerWizard = ({
       return next;
     });
   }, []);
+
+  // Live preview: as soon as the user selects the main service, switch palette.
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    const root = document.documentElement;
+    const prev = root.getAttribute("data-ui-theme");
+    const theme = uiThemeForPrimaryCategory(primaryCategory);
+    root.setAttribute("data-ui-theme", theme);
+    return () => {
+      if (prev) root.setAttribute("data-ui-theme", prev);
+      else root.removeAttribute("data-ui-theme");
+    };
+  }, [primaryCategory]);
 
   const fillAddressFromDeviceLocation = useCallback(async () => {
     setError("");
