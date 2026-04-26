@@ -46,12 +46,24 @@ def _nominatim_address_parts(data: dict) -> dict:
     city = str(city).strip()
     postcode = str(a.get("postcode") or "").strip()
     country = str(a.get("country") or "").strip()
+    province = (
+        a.get("province")
+        or a.get("county")
+        or a.get("state_district")
+        or a.get("region")
+        or a.get("state")
+        or ""
+    )
+    province = str(province).strip()
+    if province and city and province.casefold() == city.casefold():
+        province = ""
 
     return {
         "address": address_line,
         "city": city,
         "postal_code": postcode,
         "country": country,
+        "province": province,
     }
 
 

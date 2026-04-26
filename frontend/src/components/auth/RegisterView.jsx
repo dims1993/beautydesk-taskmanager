@@ -11,6 +11,8 @@ import {
   Building2,
   Shield,
   Phone,
+  Loader2,
+  LocateFixed,
 } from "lucide-react";
 import GoogleLoginButton from "./GoogleLoginButton";
 import RegisterOwnerWizard from "./RegisterOwnerWizard";
@@ -79,6 +81,8 @@ const RegisterView = ({ onBack, onCompleteRegistration }) => {
 
   const [googleCredential, setGoogleCredential] = useState(null);
   const [error, setError] = useState("");
+  const [geoHint, setGeoHint] = useState("");
+  const [geoFillBusy, setGeoFillBusy] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const isSuperAdmin = account.role === "SUPER_ADMIN";
@@ -126,6 +130,69 @@ const RegisterView = ({ onBack, onCompleteRegistration }) => {
   const clearGoogle = useCallback(() => {
     setGoogleCredential(null);
   }, []);
+
+  const fillBillingFromDeviceLocation = useCallback(async () => {
+    setError("");
+    setGeoHint("");
+    if (!navigator.geolocation) {
+      setError(
+        "Tu navegador no permite obtener la ubicación. Escribe la dirección manualmente.",
+      );
+      return;
+    }
+    setGeoFillBusy(true);
+    try {
+      const pos = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 18_000,
+          maximumAge: 0,
+        });
+      });
+      const { latitude, longitude } = pos.coords;
+      const q = new URLSearchParams({
+        lat: String(latitude),
+        lon: String(longitude),
+      });
+      const parts = await apiRequest(
+        `/public/reverse-geocode?${q.toString()}`,
+        "GET",
+        null,
+        { skipAuthRedirect: true },
+      );
+      setBilling((b) => ({
+        ...b,
+        billing_address_line1:
+          (parts.address || "").trim() || b.billing_address_line1,
+        city: (parts.city || "").trim() || b.city,
+        postal_code: (parts.postal_code || "").trim() || b.postal_code,
+        province: (parts.province || "").trim() || b.province,
+        country: (parts.country || "").trim() ? parts.country.trim() : b.country,
+      }));
+      setGeoHint(
+        "Dirección de facturación rellenada según tu posición. Revísala y ajusta razón social o NIF si hace falta.",
+      );
+    } catch (err) {
+      const code = err && typeof err.code === "number" ? err.code : null;
+      if (code === 1) {
+        setError(
+          "Ubicación denegada. Activa el permiso en el navegador o escribe la dirección a mano.",
+        );
+      } else if (code === 2) {
+        setError(
+          "No se pudo determinar la posición. Prueba en exterior o escribe la dirección.",
+        );
+      } else if (code === 3) {
+        setError(
+          "Tiempo agotado al pedir la ubicación. Inténtalo de nuevo o escribe la dirección.",
+        );
+      } else {
+        setError(formatRegisterError(err));
+      }
+    } finally {
+      setGeoFillBusy(false);
+    }
+  }, [apiRequest]);
 
   const submitStep1 = async (e) => {
     e.preventDefault();
@@ -502,6 +569,29 @@ const RegisterView = ({ onBack, onCompleteRegistration }) => {
                 Completa los datos de tu negocio para facturación. Esta
                 información queda asociada a tu cuenta de titular.
               </p>
+
+              <button
+                type="button"
+                disabled={geoFillBusy}
+                onClick={fillBillingFromDeviceLocation}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-[#dcc7b1] bg-[#faf8f5] py-3.5 px-4 text-[9px] font-black uppercase tracking-widest text-[#5d5045] transition-all hover:border-[#5d5045]/50 hover:bg-[#f5ebe0] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {geoFillBusy ? (
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+                ) : (
+                  <LocateFixed className="h-4 w-4 shrink-0" aria-hidden />
+                )}
+                Usar mi ubicación actual (dirección de facturación)
+              </button>
+              <p className="text-[9px] leading-snug text-[#8c857d] px-1 -mt-2">
+                El navegador pedirá permiso. No rellena nombre comercial, razón
+                social ni NIF.
+              </p>
+              {geoHint && (
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/90 px-3 py-2.5 text-[9px] font-semibold leading-snug text-emerald-900">
+                  {geoHint}
+                </div>
+              )}
 
               <div className="pt-2 space-y-3 border-t border-[#eaddcf]">
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#5d5045] flex items-center gap-2">
