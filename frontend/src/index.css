@@ -15,18 +15,16 @@
   }
 
   [data-ui-theme="hair"] {
-    /* Peluquería / barbería / spa / otros (elegante + moderno) */
-    --bt-primary: #293249;
-    --bt-primary-hover: #1f2537;
-    /* Porcelain / soft blush background */
-    --bt-bg: #fbf7f5;
+    /* Peluquería / barbería / spa / otros (premium neutro) */
+    --bt-primary: #4a4a48;
+    --bt-primary-hover: #333332;
+    --bt-accent: #f0f0ee;
+    --bt-bg: #f7f7f7;
     --bt-surface: #ffffff;
-    /* Warm grey borders + champagne accent */
-    --bt-border: #ddd3d5;
-    --bt-border-strong: #b8aeb1;
-    --bt-accent: #e7d7c9;
-    --bt-muted: #69656f;
-    --bt-icon: #a9a3aa;
+    --bt-border: #e5e5e3;
+    --bt-border-strong: #d1d1cf;
+    --bt-muted: #7a7a78;
+    --bt-icon: #b8b8b5;
   }
 }
 
