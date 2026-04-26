@@ -14,6 +14,25 @@ import {
 import { useApi } from "../../hooks/useApi";
 import { getPendingPlanFromSession, planLabel } from "../../utils/billingPlan";
 
+/** Misma regla que `RegisterOwnerWizardRequest` en la API. */
+const OWNER_WIZARD_PASSWORD_MIN_LEN = 8;
+
+/** Requisitos de contraseña aún no cumplidos (texto para el usuario). */
+function ownerWizardPasswordMissingMessages(password) {
+  const len = (password ?? "").length;
+  const min = OWNER_WIZARD_PASSWORD_MIN_LEN;
+  if (len >= min) return [];
+  const need = min - len;
+  if (len === 0) {
+    return [
+      `Añade al menos ${min} caracteres; sin eso no puedes continuar.`,
+    ];
+  }
+  return [
+    `Te ${need === 1 ? "falta" : "faltan"} ${need} carácter${need === 1 ? "" : "es"} para el mínimo de ${min} (vas ${len}/${min}).`,
+  ];
+}
+
 const CATEGORY_OPTIONS = [
   { key: "PELUQUERO", label: "Peluquería" },
   { key: "BARBERO", label: "Barbería" },
@@ -193,8 +212,15 @@ const RegisterOwnerWizard = ({
 
   const canNextStep2 = Boolean(primaryCategory);
 
+  const ownerPasswordIssues = useMemo(
+    () => ownerWizardPasswordMissingMessages(personal.password),
+    [personal.password],
+  );
+  const ownerPasswordOk =
+    personal.password.length >= OWNER_WIZARD_PASSWORD_MIN_LEN;
+
   const canSubmitStep3 = useMemo(() => {
-    if (personal.password.length < 8) return false;
+    if (personal.password.length < OWNER_WIZARD_PASSWORD_MIN_LEN) return false;
     if (!personal.acceptFreemium) return false;
     return (
       personal.first_name.trim() &&
@@ -209,7 +235,7 @@ const RegisterOwnerWizard = ({
     setError("");
     if (!canSubmitStep3) {
       setError(
-        "Completa todos los campos, contraseña mínimo 8 caracteres y acepta términos y privacidad.",
+        `Completa todos los campos, contraseña mínimo ${OWNER_WIZARD_PASSWORD_MIN_LEN} caracteres y acepta términos y privacidad.`,
       );
       return;
     }
@@ -643,13 +669,34 @@ const RegisterOwnerWizard = ({
               />
               <input
                 type="password"
-                placeholder="CONTRASEÑA (MÍN. 8 CARACTERES)"
+                placeholder={`CONTRASEÑA (MÍN. ${OWNER_WIZARD_PASSWORD_MIN_LEN} CARACTERES)`}
+                autoComplete="new-password"
                 className="w-full bg-[#FAF9F6] border border-[#eaddcf] py-4 px-4 rounded-2xl text-[10px] font-black tracking-widest focus:outline-none focus:border-[#5d5045]"
                 value={personal.password}
                 onChange={(e) =>
                   setPersonal({ ...personal, password: e.target.value })
                 }
               />
+              {ownerPasswordOk ? (
+                <p className="text-[9px] font-bold leading-snug text-emerald-700 px-1">
+                  Contraseña con la longitud mínima requerida.
+                </p>
+              ) : (
+                <div
+                  className="rounded-2xl border border-red-100 bg-red-50 px-3 py-2.5 text-[9px] font-bold leading-snug text-red-700"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <p className="uppercase tracking-widest text-[8px] text-red-600/90 mb-1.5">
+                    Contraseña incompleta
+                  </p>
+                  <ul className="list-disc space-y-1 pl-4 normal-case tracking-normal font-semibold">
+                    {ownerPasswordIssues.map((msg, i) => (
+                      <li key={i}>{msg}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <label className="flex items-start gap-3 cursor-pointer text-[10px] font-bold text-[#5d5045] leading-relaxed">
                 <input
                   type="checkbox"
