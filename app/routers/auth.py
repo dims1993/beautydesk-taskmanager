@@ -1,6 +1,6 @@
 import os
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlmodel import Session, select
 from google.oauth2 import id_token
 from google.auth.transport import requests
@@ -21,10 +21,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-GOOGLE_OAUTH_REDIRECT_URI = os.getenv(
-    "GOOGLE_OAUTH_REDIRECT_URI",
-    "http://localhost:8000/auth/google/calendar/callback",
-)
+# NOTE: Redirect URI must match the domain the user is on (Render in production).
+# We build it from the incoming request to avoid accidental localhost callbacks on mobile.
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
 # Include OIDC scopes because Google may return them in the callback `scope`
@@ -33,7 +31,8 @@ GOOGLE_CALENDAR_SCOPES = [
     "openid",
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/userinfo.profile",
-    "https://www.googleapis.com/auth/calendar",
+    # Full calendar access is overly broad. Prefer events scope for syncing appointments.
+    "https://www.googleapis.com/auth/calendar.events",
 ]
 
 
@@ -46,7 +45,7 @@ def _google_oauth_client_config_web():
     }
 
 
-def _build_calendar_flow(state: str | None = None) -> Flow:
+def _build_calendar_flow(*, redirect_uri: str, state: str | None = None) -> Flow:
     """
     Build a server-side OAuth flow for a confidential client.
     We explicitly disable PKCE here to avoid 'Missing code verifier' errors
@@ -63,14 +62,14 @@ def _build_calendar_flow(state: str | None = None) -> Flow:
         client_id=client_web["client_id"],
         scope=GOOGLE_CALENDAR_SCOPES,
         state=state,
-        redirect_uri=GOOGLE_OAUTH_REDIRECT_URI,
+        redirect_uri=redirect_uri,
     )
     return Flow(
         oauth2session=oauth2session,
         client_type="web",
         # Flow expects the Google client-secrets format: {"web": {...}} for web clients
         client_config={"web": client_web},
-        redirect_uri=GOOGLE_OAUTH_REDIRECT_URI,
+        redirect_uri=redirect_uri,
         code_verifier=None,
         autogenerate_code_verifier=False,
     )
@@ -182,6 +181,7 @@ def impersonate_user(
 
 @router.get("/google/calendar/connect")
 def google_calendar_connect(
+    request: Request,
     current_user: User = Depends(get_current_user_for_app),
     db: Session = Depends(get_session),
 ):
@@ -208,7 +208,7 @@ def google_calendar_connect(
         {
             "has_GOOGLE_CLIENT_ID": bool(GOOGLE_CLIENT_ID),
             "has_GOOGLE_CLIENT_SECRET": bool(GOOGLE_CLIENT_SECRET),
-            "GOOGLE_OAUTH_REDIRECT_URI": GOOGLE_OAUTH_REDIRECT_URI,
+            "request_base_url": str(request.base_url),
             "FRONTEND_URL": FRONTEND_URL,
         },
     )
@@ -230,7 +230,8 @@ def google_calendar_connect(
     }
     state = jwt.encode(state_payload, SECRET_KEY, algorithm=ALGORITHM)
 
-    flow = _build_calendar_flow(state=state)
+    redirect_uri = str(request.url_for("google_calendar_callback"))
+    flow = _build_calendar_flow(redirect_uri=redirect_uri, state=state)
 
     authorization_url, _ = flow.authorization_url(
         access_type="offline",
@@ -287,7 +288,12 @@ def google_calendar_disconnect(
 
 
 @router.get("/google/calendar/callback")
-def google_calendar_callback(code: str | None = None, state: str | None = None, db: Session = Depends(get_session)):
+def google_calendar_callback(
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+    db: Session = Depends(get_session),
+):
     """
     OAuth2 callback endpoint. Exchanges code for tokens and stores them on the user.
     Redirects back to the frontend.
@@ -322,7 +328,8 @@ def google_calendar_callback(code: str | None = None, state: str | None = None, 
             f"{FRONTEND_URL}/app?google_calendar=locked"
         )
 
-    flow = _build_calendar_flow(state=state)
+    redirect_uri = str(request.url_for("google_calendar_callback"))
+    flow = _build_calendar_flow(redirect_uri=redirect_uri, state=state)
 
     try:
         flow.fetch_token(code=code)
