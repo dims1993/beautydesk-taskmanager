@@ -1,8 +1,10 @@
 import json
+import os
 import re
 import unicodedata
 from datetime import datetime, timedelta, date, time
 from zoneinfo import ZoneInfo
+from urllib.parse import quote
 
 from fastapi import HTTPException
 from sqlmodel import Session, select
@@ -239,6 +241,100 @@ def _local_now_naive() -> datetime:
 
 def _greeting(org: Organization) -> str:
     return f"Hola, soy el asistente personal de {org.name}."
+
+
+def _public_booking_line(org: Organization) -> str | None:
+    tok = getattr(org, "booking_public_token", None)
+    if not tok or not str(tok).strip():
+        return None
+    base = (os.getenv("FRONTEND_URL") or "http://localhost:5173").rstrip("/")
+    return f"{base}/reservar?token={quote(str(tok).strip(), safe='')}"
+
+
+def _main_menu_message(org: Organization) -> str:
+    """
+    Utility-style root menu (similar to corporate WhatsApp bots): clear numbered options.
+    """
+    lines = [
+        _greeting(org),
+        "",
+        "Elige una opción escribiendo el número:",
+        "1) Servicios y precios",
+        "2) Reservar cita",
+        "3) Cancelar mi cita",
+        "4) Datos de contacto del salón",
+        "",
+        "También puedes escribir: SERVICIOS, CITA, CANCELAR, AYUDA u OPCIONES.",
+    ]
+    return "\n".join(lines)
+
+
+def _contact_message(org: Organization) -> str:
+    parts: list[str] = ["Datos de contacto del salón:", ""]
+    ph = (getattr(org, "billing_phone", None) or "").strip()
+    em = (getattr(org, "billing_email", None) or "").strip()
+    if ph:
+        parts.append(f"Teléfono: {ph}")
+    else:
+        parts.append("Teléfono: (no publicado) Pregunta al salón.")
+    if em:
+        parts.append(f"Email: {em}")
+    else:
+        parts.append("Email: (no publicado)")
+    pub = _public_booking_line(org)
+    if pub:
+        parts.append("")
+        parts.append("Reserva online (web):")
+        parts.append(pub)
+    parts.append("")
+    parts.append("Para volver al menú escribe OPCIONES o MENU.")
+    return "\n".join(parts)
+
+
+def _start_cita_flow(db: Session, conv: Conversation, org: Organization) -> str:
+    services = _list_services(db, int(org.id))
+    if not services:
+        return "Ahora mismo no hay servicios configurados en el salón."
+    state = {
+        "step": "awaiting_service",
+        "services_cache": [{"id": int(s.id), "name": s.name} for s in services if s.id is not None][:30],
+    }
+    _save_state(db, conv, state)
+    return f"{_greeting(org)}\n" + _format_services_menu(services)
+
+
+def _try_cancel_last_appointment(db: Session, org: Organization, from_addr: str) -> str:
+    """Shared by CANCELAR and main-menu option 3."""
+    phone_digits = _norm_phone_es(_digits_only(from_addr))
+    if not phone_digits:
+        return "Para cancelar necesito que me escribas desde el mismo WhatsApp de la reserva."
+    client = db.exec(
+        select(Client).where(
+            Client.organization_id == org.id,
+            Client.telefono == phone_digits,
+        )
+    ).first()
+    if not client or client.id is None:
+        return "No encuentro ninguna cita asociada a este número."
+    now_local = _local_now_naive()
+    appo = db.exec(
+        select(Appointment)
+        .where(
+            Appointment.organization_id == org.id,
+            Appointment.client_id == int(client.id),
+            Appointment.status == "scheduled",
+            Appointment.start_time >= now_local,
+        )
+        .order_by(Appointment.start_time.asc())
+    ).first()
+    if not appo:
+        return "No tienes ninguna cita pendiente para cancelar."
+    if (appo.start_time - now_local) > timedelta(hours=24):
+        return "Solo puedes cancelar dentro de las 24 horas previas a la cita."
+    appo.status = "cancelled"
+    db.add(appo)
+    db.commit()
+    return f"Tu cita ha sido cancelada. (Cita #{int(appo.id)})"
 
 
 def _staff_display_name(u: User) -> str:
@@ -631,40 +727,10 @@ def handle_inbound_whatsapp(
     if txt_upper in ("RESET", "REINICIAR"):
         state = {"step": "idle"}
         _save_state(db, conv, state)
-        return "Listo. Empezamos de cero. Escribe CITA para reservar o SERVICIOS para ver el catálogo."
+        return "Listo. Empezamos de cero. Escribe OPCIONES para ver el menú, CITA para reservar o SERVICIOS para el catálogo."
 
     if txt_upper in ("CANCELAR", "CANCEL", "ANULAR"):
-        # Policy: allow cancelling only within 24h prior to appointment.
-        phone_digits = _norm_phone_es(_digits_only(from_addr))
-        if not phone_digits:
-            return "Para cancelar necesito que me escribas desde el mismo WhatsApp de la reserva."
-        client = db.exec(
-            select(Client).where(
-                Client.organization_id == org.id,
-                Client.telefono == phone_digits,
-            )
-        ).first()
-        if not client or client.id is None:
-            return "No encuentro ninguna cita asociada a este número."
-        now_local = _local_now_naive()
-        appo = db.exec(
-            select(Appointment)
-            .where(
-                Appointment.organization_id == org.id,
-                Appointment.client_id == int(client.id),
-                Appointment.status == "scheduled",
-                Appointment.start_time >= now_local,
-            )
-            .order_by(Appointment.start_time.asc())
-        ).first()
-        if not appo:
-            return "No tienes ninguna cita pendiente para cancelar."
-        if (appo.start_time - now_local) > timedelta(hours=24):
-            return "Solo puedes cancelar dentro de las 24 horas previas a la cita."
-        appo.status = "cancelled"
-        db.add(appo)
-        db.commit()
-        return f"Tu cita ha sido cancelada. (Cita #{int(appo.id)})"
+        return _try_cancel_last_appointment(db, org, from_addr)
 
     if txt_upper in ("CAMBIAR FECHA", "FECHA", "OTRO DIA", "OTRO DÍA"):
         service_ids = [int(x) for x in (state.get("service_ids") or [])]
@@ -674,15 +740,8 @@ def handle_inbound_whatsapp(
         _save_state(db, conv, state)
         return "Perfecto. Dime la fecha (YYYY-MM-DD)."
 
-    if txt_upper in ("HI", "HOLA", "HELP", "AYUDA", "MENU", "MENÚ", "START"):
-        return (
-            f"{_greeting(org)}\n"
-            "Comandos:\n"
-            "- SERVICIOS\n"
-            "- CITA\n"
-            "- CANCELAR\n"
-            "- RESET\n"
-        )
+    if txt_upper in ("HI", "HOLA", "HELP", "AYUDA", "MENU", "MENÚ", "START", "OPCIONES"):
+        return _main_menu_message(org)
 
     if txt_upper.startswith("SERVICIOS"):
         services = _list_services(db, int(org.id))
@@ -702,6 +761,24 @@ def handle_inbound_whatsapp(
         return "Servicios disponibles:\n" + "\n".join(f"- {s.name}" for s in services[:30]) + "\n\nDi: CITA"
 
     step = state.get("step") or "idle"
+
+    # Main menu shortcuts (idle only) — must run before NL and before generic idle→CITA funnel.
+    if step == "idle" and txt.strip() in ("1", "2", "3", "4"):
+        choice = int(txt.strip())
+        if choice == 1:
+            services = _list_services(db, int(org.id))
+            if not services:
+                return "Aún no hay servicios configurados."
+            return (
+                "Servicios y precios:\n"
+                + "\n".join(f"- {s.name}" for s in services[:30])
+                + "\n\nPara reservar escribe 2 o CITA."
+            )
+        if choice == 2:
+            return _start_cita_flow(db, conv, org)
+        if choice == 3:
+            return _try_cancel_last_appointment(db, org, from_addr)
+        return _contact_message(org)
 
     # Natural language assist: capture date/time/service from free text when idle.
     if step == "idle" and txt and txt_upper not in ("CITA", "SERVICIOS"):
@@ -749,15 +826,7 @@ def handle_inbound_whatsapp(
             return "Perfecto. ¿Qué día quieres? Escribe la fecha en formato YYYY-MM-DD (ej: 2026-04-30)."
 
     if txt_upper == "CITA" or step == "idle":
-        services = _list_services(db, int(org.id))
-        if not services:
-            return "Ahora mismo no hay servicios configurados en el salón."
-        state = {
-            "step": "awaiting_service",
-            "services_cache": [{"id": int(s.id), "name": s.name} for s in services if s.id is not None][:30],
-        }
-        _save_state(db, conv, state)
-        return f"{_greeting(org)}\n" + _format_services_menu(services)
+        return _start_cita_flow(db, conv, org)
 
     if step == "awaiting_service":
         cached = state.get("services_cache") or []
@@ -1071,5 +1140,5 @@ def handle_inbound_whatsapp(
     # Fallback
     state["step"] = "idle"
     _save_state(db, conv, state)
-    return "No te he entendido. Escribe AYUDA para ver opciones."
+    return "No te he entendido. Escribe OPCIONES, MENU o AYUDA para ver el menú."
 
