@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional
 
@@ -47,3 +48,33 @@ class ClientImportResult(BaseModel):
     created: int
     updated: int
     skipped: int
+
+
+class ClientServiceDoneStat(BaseModel):
+    service_id: int
+    service_name: str
+    count: int
+
+
+class ClientNoteCreate(BaseModel):
+    text: str
+
+
+class ClientNoteUpdate(BaseModel):
+    text: str
+
+
+class ClientNoteOut(BaseModel):
+    id: int
+    text: str
+    created_at: datetime
+
+
+class ClientInsightsOut(BaseModel):
+    client: ClientOut
+    last_visit: datetime | None = None
+    services_done: list[ClientServiceDoneStat]
+    notes: list[ClientNoteOut]
+
+    class Config:
+        from_attributes = True

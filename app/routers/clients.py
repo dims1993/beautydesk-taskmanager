@@ -1,3 +1,4 @@
+import json
 from fastapi import APIRouter, Depends, HTTPException, Body
 from starlette.responses import Response
 from sqlmodel import Session, select
@@ -5,12 +6,19 @@ from typing import List
 
 from app.core.db.session import get_session
 from app.models.client import Client
+from app.models.client_note import ClientNote
 from app.models.appointment import Appointment
+from app.models.service import Service
 from app.schemas.client import (
     ClientCreate,
     ClientOut,
     ClientImportRequest,
     ClientImportResult,
+    ClientInsightsOut,
+    ClientNoteCreate,
+    ClientNoteUpdate,
+    ClientNoteOut,
+    ClientServiceDoneStat,
 )
 from app.models.user import User, UserRole
 from app.dependencies import get_current_user_for_app
@@ -239,5 +247,175 @@ def delete_client(
         db.add(appo)
 
     db.delete(client)
+    db.commit()
+    return Response(status_code=204)
+
+
+@router.get("/{client_id}/insights", response_model=ClientInsightsOut)
+def client_insights(
+    client_id: int,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user_for_app),
+):
+    client = db.exec(select(Client).where(Client.id == client_id)).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+    if current_user.role != UserRole.SUPER_ADMIN:
+        if client.organization_id != current_user.organization_id:
+            raise HTTPException(status_code=403, detail="No autorizado")
+
+    org_id = client.organization_id
+
+    stmt = select(Appointment).where(
+        Appointment.client_id == client_id,
+        Appointment.status == "completed",
+    )
+    if org_id is not None:
+        stmt = stmt.where(Appointment.organization_id == org_id)
+    rows = list(db.exec(stmt).all())
+
+    last_visit = None
+    service_counts: dict[int, int] = {}
+    for a in rows:
+        if last_visit is None or a.start_time > last_visit:
+            last_visit = a.start_time
+
+        if a.service_id:
+            service_counts[a.service_id] = service_counts.get(a.service_id, 0) + 1
+
+        if a.additional_service_ids_json:
+            try:
+                extra_ids = json.loads(a.additional_service_ids_json) or []
+            except Exception:
+                extra_ids = []
+            for sid in extra_ids:
+                try:
+                    sid_i = int(sid)
+                except Exception:
+                    continue
+                service_counts[sid_i] = service_counts.get(sid_i, 0) + 1
+
+    service_ids = sorted(service_counts.keys())
+    services_by_id: dict[int, Service] = {}
+    if service_ids:
+        svc_stmt = select(Service).where(Service.id.in_(service_ids))
+        if org_id is not None:
+            svc_stmt = svc_stmt.where(Service.organization_id == org_id)
+        for s in db.exec(svc_stmt).all():
+            services_by_id[int(s.id)] = s
+
+    services_done: list[ClientServiceDoneStat] = []
+    for sid in service_ids:
+        s = services_by_id.get(sid)
+        services_done.append(
+            ClientServiceDoneStat(
+                service_id=sid,
+                service_name=(s.name if s else f"Servicio {sid}"),
+                count=service_counts[sid],
+            )
+        )
+    services_done.sort(key=lambda x: (-x.count, x.service_name.lower()))
+
+    notes_stmt = select(ClientNote).where(ClientNote.client_id == client_id)
+    if org_id is not None:
+        notes_stmt = notes_stmt.where(ClientNote.organization_id == org_id)
+    notes_stmt = notes_stmt.order_by(ClientNote.created_at.desc())
+    notes_rows = list(db.exec(notes_stmt).all())
+    notes = [
+        ClientNoteOut(id=n.id, text=n.text, created_at=n.created_at) for n in notes_rows
+    ]
+
+    return ClientInsightsOut(
+        client=client,
+        last_visit=last_visit,
+        services_done=services_done,
+        notes=notes,
+    )
+
+
+@router.post("/{client_id}/notes", response_model=ClientNoteOut, status_code=201)
+def add_client_note(
+    client_id: int,
+    body: ClientNoteCreate,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user_for_app),
+):
+    client = db.exec(select(Client).where(Client.id == client_id)).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+    if current_user.role != UserRole.SUPER_ADMIN:
+        if client.organization_id != current_user.organization_id:
+            raise HTTPException(status_code=403, detail="No autorizado")
+
+    txt = str(body.text or "").strip()
+    if not txt:
+        raise HTTPException(status_code=400, detail="La nota no puede estar vacía.")
+
+    note = ClientNote(client_id=client_id, organization_id=client.organization_id, text=txt)
+    db.add(note)
+    db.commit()
+    db.refresh(note)
+    return ClientNoteOut(id=note.id, text=note.text, created_at=note.created_at)
+
+
+@router.patch("/{client_id}/notes/{note_id}", response_model=ClientNoteOut)
+def update_client_note(
+    client_id: int,
+    note_id: int,
+    body: ClientNoteUpdate,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user_for_app),
+):
+    client = db.exec(select(Client).where(Client.id == client_id)).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+    if current_user.role != UserRole.SUPER_ADMIN:
+        if client.organization_id != current_user.organization_id:
+            raise HTTPException(status_code=403, detail="No autorizado")
+
+    note = db.exec(
+        select(ClientNote).where(ClientNote.id == note_id, ClientNote.client_id == client_id)
+    ).first()
+    if not note:
+        raise HTTPException(status_code=404, detail="Nota no encontrada")
+    if current_user.role != UserRole.SUPER_ADMIN:
+        if note.organization_id != client.organization_id:
+            raise HTTPException(status_code=403, detail="No autorizado")
+
+    txt = str(body.text or "").strip()
+    if not txt:
+        raise HTTPException(status_code=400, detail="La nota no puede estar vacía.")
+
+    note.text = txt
+    db.add(note)
+    db.commit()
+    db.refresh(note)
+    return ClientNoteOut(id=note.id, text=note.text, created_at=note.created_at)
+
+
+@router.delete("/{client_id}/notes/{note_id}", status_code=204)
+def delete_client_note(
+    client_id: int,
+    note_id: int,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user_for_app),
+):
+    client = db.exec(select(Client).where(Client.id == client_id)).first()
+    if not client:
+        return Response(status_code=204)
+    if current_user.role != UserRole.SUPER_ADMIN:
+        if client.organization_id != current_user.organization_id:
+            raise HTTPException(status_code=403, detail="No autorizado")
+
+    note = db.exec(
+        select(ClientNote).where(ClientNote.id == note_id, ClientNote.client_id == client_id)
+    ).first()
+    if not note:
+        return Response(status_code=204)
+    if current_user.role != UserRole.SUPER_ADMIN:
+        if note.organization_id != client.organization_id:
+            raise HTTPException(status_code=403, detail="No autorizado")
+
+    db.delete(note)
     db.commit()
     return Response(status_code=204)
