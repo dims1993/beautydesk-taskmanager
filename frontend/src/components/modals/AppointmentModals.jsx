@@ -67,12 +67,23 @@ const ModalWrapper = ({ isOpen, onClose, children, title, subtitle }) => {
 
 /* --- 1. MODAL DE PAGO (REDISEÑADO) --- */
 export const PaymentModal = ({ isOpen, onClose, appointment, onConfirm }) => {
+  const { apiRequest } = useApi();
   const [price, setPrice] = useState(0);
   const [method, setMethod] = useState("efectivo");
+  const [quickNote, setQuickNote] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [noteError, setNoteError] = useState("");
 
   useEffect(() => {
     if (appointment) setPrice(appointment.price || 0);
   }, [appointment]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setQuickNote("");
+    setNoteSaving(false);
+    setNoteError("");
+  }, [isOpen, appointment?.id]);
 
   return (
     <ModalWrapper
@@ -141,11 +152,50 @@ export const PaymentModal = ({ isOpen, onClose, appointment, onConfirm }) => {
           </div>
         </div>
 
+        <div className="rounded-[2rem] border border-[var(--bt-border)] bg-[var(--bt-bg)] p-5">
+          <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[var(--bt-muted)] mb-2">
+            Nota rápida (opcional)
+          </p>
+          <textarea
+            value={quickNote}
+            onChange={(e) => setQuickNote(e.target.value)}
+            rows={3}
+            placeholder="Ej. Prefiere uñas cortas, alergia, color habitual…"
+            className="w-full rounded-2xl border border-[var(--bt-border)] bg-white px-4 py-3 text-[11px] text-[var(--bt-primary)] outline-none focus:border-[var(--bt-primary)]"
+          />
+          {!!noteError && (
+            <p className="mt-2 text-[10px] font-bold text-red-600">{noteError}</p>
+          )}
+          <p className="mt-2 text-[10px] text-[var(--bt-muted)]">
+            Esta nota aparecerá también en <strong>Contactos</strong> →{" "}
+            <strong>Notas</strong>.
+          </p>
+        </div>
+
         <button
-          onClick={() => onConfirm(appointment.id, price, method)}
+          onClick={async () => {
+            const txt = String(quickNote || "").trim();
+            const clientId = appointment?.client_id;
+            setNoteError("");
+            if (txt && clientId) {
+              setNoteSaving(true);
+              try {
+                await apiRequest(`/clients/${clientId}/notes`, "POST", { text: txt });
+              } catch (err) {
+                setNoteSaving(false);
+                setNoteError(formatApiError(err));
+                return;
+              } finally {
+                setNoteSaving(false);
+              }
+            }
+            onConfirm(appointment.id, price, method);
+          }}
+          disabled={noteSaving}
           className="w-full py-6 bg-[var(--bt-primary)] text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.4em] shadow-xl hover:bg-[var(--bt-primary-hover)] transition-all flex items-center justify-center gap-3"
         >
-          Confirmar Pago <CheckCircle2 className="w-4 h-4" />
+          {noteSaving ? "Guardando…" : "Confirmar Pago"}{" "}
+          <CheckCircle2 className="w-4 h-4" />
         </button>
       </div>
     </ModalWrapper>

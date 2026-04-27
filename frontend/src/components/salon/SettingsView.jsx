@@ -100,16 +100,12 @@ export default function SettingsView({
   services = [],
 }) {
   const [searchParams] = useSearchParams();
-  const [subscriptionOpenDefault] = useState(() => {
-    const b = searchParams.get("billing");
-    if (b === "1" || b === "focus") return true;
-    return Boolean(getPendingPlanFromSession());
-  });
+  const [subscriptionOpenDefault] = useState(() => false);
   const { apiRequest } = useApi();
 
   const focus = String(searchParams.get("focus") || "").toLowerCase();
-  const focusServices = focus === "services";
-  const focusHours = focus === "hours";
+  const focusServices = false;
+  const focusHours = false;
   const needsFiscal =
     String(currentUser?.role || "").toUpperCase() === "OWNER" &&
     (currentUser?.organization_id == null ||

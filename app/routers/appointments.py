@@ -38,6 +38,7 @@ def _parse_extra_service_ids_json(raw: Optional[str]) -> list[int]:
 def appointment_to_out(a: Appointment) -> AppointmentOut:
     return AppointmentOut(
         id=a.id,
+        client_id=a.client_id,
         client_name=a.client_name,
         client_phone=a.client_phone,
         client_email=a.client_email,

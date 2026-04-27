@@ -22,6 +22,7 @@ class AppointmentUpdate(BaseModel):
 # Lo que enviamos a React (incluyendo los nuevos campos para la gráfica)
 class AppointmentOut(BaseModel):
     id: int
+    client_id: Optional[int] = None
     client_name: str
     client_phone: Optional[str] = None
     client_email: Optional[str] = None
