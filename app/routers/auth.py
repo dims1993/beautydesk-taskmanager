@@ -35,6 +35,25 @@ GOOGLE_CALENDAR_SCOPES = [
     "https://www.googleapis.com/auth/calendar.events",
 ]
 
+def _public_redirect_uri_for_calendar_callback(request: Request) -> str:
+    """
+    Build a public redirect_uri that matches what the browser used.
+    Behind Render, request.url may be internal http; rely on X-Forwarded-*.
+    """
+    proto = (
+        request.headers.get("x-forwarded-proto")
+        or request.url.scheme
+        or "https"
+    ).split(",")[0].strip()
+    host = (
+        request.headers.get("x-forwarded-host")
+        or request.headers.get("host")
+        or request.url.hostname
+        or ""
+    ).split(",")[0].strip()
+    # request.url.path already contains any root_path prefix
+    return f"{proto}://{host}{request.url.path}"
+
 
 def _google_oauth_client_config_web():
     return {
@@ -230,7 +249,10 @@ def google_calendar_connect(
     }
     state = jwt.encode(state_payload, SECRET_KEY, algorithm=ALGORITHM)
 
-    redirect_uri = str(request.url_for("google_calendar_callback"))
+    # IMPORTANT: must match the exact public URL registered in Google OAuth client.
+    redirect_uri = _public_redirect_uri_for_calendar_callback(
+        request.url_for("google_calendar_callback")
+    )
     flow = _build_calendar_flow(redirect_uri=redirect_uri, state=state)
 
     authorization_url, _ = flow.authorization_url(
@@ -328,7 +350,9 @@ def google_calendar_callback(
             f"{FRONTEND_URL}/app?google_calendar=locked"
         )
 
-    redirect_uri = str(request.url_for("google_calendar_callback"))
+    redirect_uri = _public_redirect_uri_for_calendar_callback(
+        request.url_for("google_calendar_callback")
+    )
     flow = _build_calendar_flow(redirect_uri=redirect_uri, state=state)
 
     try:
