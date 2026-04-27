@@ -35,12 +35,12 @@ const ModalWrapper = ({ isOpen, onClose, children, title, subtitle }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6">
+    <div className="fixed inset-0 z-[100] flex items-start md:items-center justify-center p-4 md:p-6 overflow-y-auto">
       <div
         className="absolute inset-0 bg-[var(--bt-primary)]/20 backdrop-blur-md animate-in fade-in duration-300"
         onClick={onClose}
       />
-      <div className="relative w-full min-w-0 max-w-md rounded-[3rem] border border-[var(--bt-border)] bg-white overflow-x-clip overflow-y-visible shadow-2xl animate-in fade-in zoom-in-95 duration-300">
+      <div className="relative w-full min-w-0 max-w-md rounded-[3rem] border border-[var(--bt-border)] bg-white overflow-x-clip shadow-2xl animate-in fade-in zoom-in-95 duration-300 max-h-[calc(100vh-2rem)] md:max-h-[calc(100vh-3rem)] overflow-y-auto">
         <div className="p-8 md:p-10 min-w-0">
           <div className="flex justify-between items-start mb-8">
             <div className="space-y-1">
