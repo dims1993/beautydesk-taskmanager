@@ -19,11 +19,11 @@ CODE_TTL_MINUTES = 30
 def default_ui_theme_for_primary_category(primary_category: str) -> str:
     """
     Decide the default palette from the first selected service.
-    - hair: peluquería, barbería, spa, esteticista (acts as "otros")
+    - hair: peluquería, barbería, spa
     - nails: uñas, estética, masaje, depilación (current palette)
     """
     key = (primary_category or "").strip().upper()
-    if key in {"PELUQUERO", "BARBERO", "SPA", "ESTETICISTA"}:
+    if key in {"PELUQUERO", "BARBERO", "SPA"}:
         return "hair"
     return "nails"
 

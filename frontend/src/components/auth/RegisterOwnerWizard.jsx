@@ -42,12 +42,12 @@ const CATEGORY_OPTIONS = [
   { key: "SPA", label: "Spa" },
   { key: "MASAJE", label: "Masaje" },
   { key: "DEPILACION", label: "Depilación" },
-  { key: "ESTETICISTA", label: "Esteticista" },
+  { key: "ESTETICISTA", label: "Otros" },
 ];
 
 function uiThemeForPrimaryCategory(primaryCategory) {
   const key = String(primaryCategory || "").trim().toUpperCase();
-  if (["PELUQUERO", "BARBERO", "SPA", "ESTETICISTA"].includes(key)) return "hair";
+  if (["PELUQUERO", "BARBERO", "SPA"].includes(key)) return "hair";
   return "nails";
 }
 

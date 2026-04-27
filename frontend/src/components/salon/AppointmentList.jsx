@@ -17,6 +17,7 @@ const AppointmentList = ({
   services,
   onUpdateStatus,
   onRefresh,
+  variant = "standalone", // standalone | embedded
 }) => {
   const { openEdit, openPayment, openArchive, appointmentModals } =
     useAppointmentActionModals(services, onUpdateStatus, onRefresh);
@@ -42,7 +43,12 @@ const AppointmentList = ({
 
   if (safeAppointments.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center text-center py-20 sm:py-32 px-5 sm:px-8 md:px-6 bg-[var(--bt-bg)] rounded-[3rem] border border-dashed border-[var(--bt-border)]">
+      <div
+        className={[
+          "flex flex-col items-center justify-center text-center py-20 sm:py-32 px-5 sm:px-8 md:px-6 bg-[var(--bt-bg)] border border-dashed border-[var(--bt-border)]",
+          variant === "embedded" ? "rounded-[2rem]" : "rounded-[3rem]",
+        ].join(" ")}
+      >
         <CalendarIcon className="w-8 h-8 text-[var(--bt-icon)] mb-4 shrink-0" />
         <p className="max-w-[20rem] text-[10px] font-black uppercase leading-relaxed tracking-[0.3em] text-[var(--bt-muted)] text-balance">
           No hay citas programadas esta semana
@@ -53,7 +59,7 @@ const AppointmentList = ({
 
   return (
     <>
-      <div className="space-y-6">
+      <div className={variant === "embedded" ? "space-y-4" : "space-y-6"}>
         {safeAppointments.map((appo) => {
           const duration = durationMinutesForAppointment(appo, services);
           const names = serviceNamesForAppointment(appo, services).join(" · ");
@@ -62,7 +68,12 @@ const AppointmentList = ({
           return (
             <div
               key={appo.id}
-              className="group bg-white p-8 md:p-10 rounded-[3rem] border border-[var(--bt-border)] shadow-sm hover:shadow-2xl hover:shadow-[var(--bt-primary)]/5 transition-all duration-500"
+              className={[
+                "group bg-white border border-[var(--bt-border)] shadow-sm hover:shadow-2xl hover:shadow-[var(--bt-primary)]/5 transition-all duration-500",
+                variant === "embedded"
+                  ? "p-6 md:p-7 rounded-[2rem]"
+                  : "p-8 md:p-10 rounded-[3rem]",
+              ].join(" ")}
             >
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
                 <div className="space-y-4">

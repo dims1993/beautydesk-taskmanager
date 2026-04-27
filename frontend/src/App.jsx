@@ -591,38 +591,50 @@ function App() {
                       <section className="space-y-5">
                         {activeTab === "agenda" && (
                           <>
-                            <div className="rounded-[2.5rem] border border-[#eaddcf] bg-gradient-to-br from-[#faf8f5] to-[#f5f0ea] px-6 py-6 md:px-8 md:py-7 shadow-sm shadow-[#5d5045]/5">
-                              <p className="font-serif text-xl md:text-2xl text-[#5d5045] tracking-tight">
-                                Citas próximas
-                              </p>
-                              <p className="mt-3 max-w-xl text-[11px] md:text-xs font-medium leading-relaxed text-[#8c857d]">
-                                Aquí se muestran las{" "}
-                                <span className="font-bold text-[#5d5045]">
-                                  citas del día de hoy
-                                </span>
-                                . Con el botón de{" "}
-                                <span className="font-bold text-[#5d5045]">
-                                  Recordatorios
-                                </span>{" "}
-                                puedes preparar y enviar mensajes por WhatsApp (se
-                                abrirá WhatsApp con el texto listo para que tú
-                                confirmes el envío).
-                              </p>
-                              <button
-                                type="button"
-                                onClick={() => setShowMorningWhatsApp(true)}
-                                disabled={!todaysAppointments.length}
-                                className="mt-5 inline-flex items-center rounded-full border border-[#5d5045]/20 bg-white px-5 py-2.5 text-[9px] font-black uppercase tracking-[0.2em] text-[#5d5045] transition hover:border-[#dcc7b1] hover:bg-[#faf8f5]"
-                              >
-                                Recordatorios
-                              </button>
+                            <div className="min-w-0 max-w-full bg-white rounded-[3rem] shadow-2xl shadow-black/10 border border-[var(--bt-border)] overflow-x-clip overflow-y-visible transition-all duration-500">
+                              <div className="bg-[var(--bt-bg)] p-10 border-b border-[var(--bt-border)] text-center space-y-2 rounded-t-[3rem]">
+                                <h2 className="text-3xl font-serif text-[var(--bt-primary)]">
+                                  Citas{" "}
+                                  <span className="italic opacity-80">
+                                    próximas
+                                  </span>
+                                </h2>
+                              </div>
+
+                              <div className="p-8 md:p-10 space-y-6">
+                                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                  <p className="max-w-2xl text-[11px] md:text-xs font-medium leading-relaxed text-[var(--bt-muted)]">
+                                    Aquí se muestran las{" "}
+                                    <span className="font-bold text-[var(--bt-primary)]">
+                                      citas del día de hoy
+                                    </span>
+                                    . Con{" "}
+                                    <span className="font-bold text-[var(--bt-primary)]">
+                                      Recordatorios
+                                    </span>{" "}
+                                    puedes preparar y enviar mensajes por WhatsApp.
+                                  </p>
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowMorningWhatsApp(true)}
+                                    disabled={!todaysAppointments.length}
+                                    className="inline-flex items-center justify-center rounded-full border border-[var(--bt-border)] bg-white px-6 py-3 text-[9px] font-black uppercase tracking-[0.2em] text-[var(--bt-primary)] transition hover:border-[var(--bt-border-strong)] hover:bg-[var(--bt-bg)] disabled:opacity-50"
+                                  >
+                                    Recordatorios
+                                  </button>
+                                </div>
+
+                                <div className="border-t border-black/5 pt-6">
+                                  <AppointmentList
+                                    appointments={todaysAppointments}
+                                    services={services}
+                                    onUpdateStatus={handleUpdateStatus}
+                                    onRefresh={fetchInitialData}
+                                    variant="embedded"
+                                  />
+                                </div>
+                              </div>
                             </div>
-                            <AppointmentList
-                              appointments={todaysAppointments}
-                              services={services}
-                              onUpdateStatus={handleUpdateStatus}
-                              onRefresh={fetchInitialData}
-                            />
                           </>
                         )}
                         {activeTab === "calendario" && (
