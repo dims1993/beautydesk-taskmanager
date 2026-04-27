@@ -11,6 +11,7 @@ from app.dependencies import get_current_user_for_app, get_current_user_optional
 from app.models.appointment import Appointment
 from app.models.client import Client
 from app.models.organization import Organization
+from app.models.service_category import ServiceCategory
 from app.models.service import Service
 from app.models.user import User, UserRole
 from app.schemas.agent import (
@@ -68,12 +69,22 @@ def agent_services(
     rows = db.exec(
         select(Service).where(Service.organization_id == org_id, Service.is_active == True)  # noqa: E712
     ).all()
+    cats = db.exec(
+        select(ServiceCategory).where(ServiceCategory.organization_id == org_id)
+    ).all()
+    cat_by_id = {int(c.id): c for c in cats if c and c.id is not None}
     return [
         {
             "id": int(s.id),
             "name": s.name,
             "duration": int(s.duration),
             "price": float(s.price),
+            "category_id": int(s.category_id) if getattr(s, "category_id", None) else None,
+            "category_name": (
+                cat_by_id.get(int(s.category_id)).name
+                if getattr(s, "category_id", None) and int(s.category_id) in cat_by_id
+                else None
+            ),
         }
         for s in rows
         if s and s.id is not None

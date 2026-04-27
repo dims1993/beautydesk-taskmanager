@@ -148,12 +148,20 @@ export default function SettingsView({
     description: "",
     duration: 45,
     price: 25,
+    category_id: null,
   });
   const [svcSaving, setSvcSaving] = useState(false);
   const [editingService, setEditingService] = useState(null);
   const [svcEditSaving, setSvcEditSaving] = useState(false);
   const [svcDeletingId, setSvcDeletingId] = useState(null);
   const [serviceToDelete, setServiceToDelete] = useState(null);
+
+  const [serviceCategories, setServiceCategories] = useState([]);
+  const [serviceCategoriesLoading, setServiceCategoriesLoading] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [categoryCreating, setCategoryCreating] = useState(false);
+  const [openCategoryId, setOpenCategoryId] = useState(null);
+  const [addServiceCategoryId, setAddServiceCategoryId] = useState(null);
 
   const [hours, setHours] = useState(null);
   const [hoursShiftType, setHoursShiftType] = useState("intensive"); // intensive | split
@@ -481,8 +489,16 @@ export default function SettingsView({
         description: svcForm.description.trim() || null,
         duration: Number(svcForm.duration) || 30,
         price: Number(svcForm.price) || 0,
+        category_id: svcForm.category_id ? Number(svcForm.category_id) : null,
       });
-      setSvcForm({ name: "", description: "", duration: 45, price: 25 });
+      setSvcForm((prev) => ({
+        name: "",
+        description: "",
+        duration: 45,
+        price: 25,
+        category_id: prev?.category_id ?? null,
+      }));
+      setAddServiceCategoryId(null);
       await onRefresh?.();
     } catch (err) {
       onError?.(formatErr(err));
@@ -501,6 +517,9 @@ export default function SettingsView({
         description: String(editingService.description || "").trim() || null,
         duration: Number(editingService.duration) || 30,
         price: Number(editingService.price) || 0,
+        category_id: editingService.category_id
+          ? Number(editingService.category_id)
+          : null,
       });
       setEditingService(null);
       await onRefresh?.();
@@ -526,6 +545,84 @@ export default function SettingsView({
       setSvcDeletingId(null);
     }
   };
+
+  const loadServiceCategories = async () => {
+    if (!isOwnerWithOrg) return;
+    setServiceCategoriesLoading(true);
+    try {
+      const r = await apiRequest("/services/categories", "GET");
+      setServiceCategories(Array.isArray(r) ? r : []);
+    } catch (err) {
+      onError?.(formatErr(err));
+    } finally {
+      setServiceCategoriesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isOwnerWithOrg) return;
+    loadServiceCategories();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOwnerWithOrg]);
+
+  useEffect(() => {
+    if (!Array.isArray(serviceCategories) || serviceCategories.length === 0) return;
+    setSvcForm((prev) => {
+      if (prev?.category_id) return prev;
+      return { ...prev, category_id: String(serviceCategories[0].id) };
+    });
+  }, [serviceCategories]);
+
+  const createCategory = async () => {
+    if (!isOwnerWithOrg) return;
+    const name = String(newCategoryName || "").trim();
+    if (!name) return;
+    setCategoryCreating(true);
+    try {
+      await apiRequest("/services/categories", "POST", {
+        name,
+        sort_order: 0,
+      });
+      setNewCategoryName("");
+      await loadServiceCategories();
+    } catch (err) {
+      onError?.(formatErr(err));
+    } finally {
+      setCategoryCreating(false);
+    }
+  };
+
+  const sortedCategories = useMemo(() => {
+    const cats = Array.isArray(serviceCategories) ? [...serviceCategories] : [];
+    cats.sort((a, b) => {
+      const ao = Number(a?.sort_order ?? 0);
+      const bo = Number(b?.sort_order ?? 0);
+      if (ao !== bo) return ao - bo;
+      return String(a?.name || "").localeCompare(String(b?.name || ""));
+    });
+    return cats;
+  }, [serviceCategories]);
+
+  const servicesByCategoryId = useMemo(() => {
+    const out = new Map();
+    const svcs = Array.isArray(services) ? services : [];
+    const general = sortedCategories.find(
+      (c) => String(c?.name || "").trim().toLowerCase() === "general",
+    );
+    const generalId = general?.id != null ? Number(general.id) : null;
+    for (const s of svcs) {
+      const rawCatId = s?.category_id != null ? Number(s.category_id) : null;
+      const catId = rawCatId ?? generalId;
+      if (catId == null) continue;
+      if (!out.has(catId)) out.set(catId, []);
+      out.get(catId).push(s);
+    }
+    for (const [k, arr] of out.entries()) {
+      arr.sort((a, b) => String(a?.name || "").localeCompare(String(b?.name || "")));
+      out.set(k, arr);
+    }
+    return out;
+  }, [services, sortedCategories]);
 
   return (
     <div className="animate-fadeIn space-y-6 pb-16">
@@ -800,10 +897,181 @@ export default function SettingsView({
           <p className="text-[10px] text-[var(--bt-muted)] leading-relaxed mb-4">
             Tu cuenta solo ve los servicios de tu organización.
           </p>
-          {services.length > 0 && (
+          <div className="mb-4 rounded-2xl border border-[var(--bt-border)] bg-[var(--bt-bg)] p-4 space-y-3">
+            <p className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)]">
+              Categorías
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                placeholder="Nombre de categoría (ej. Mechas)"
+                className="flex-1 bg-white border border-[var(--bt-border)] py-3 px-4 rounded-2xl text-[10px] font-black tracking-widest"
+              />
+              <button
+                type="button"
+                onClick={createCategory}
+                disabled={categoryCreating || !String(newCategoryName || "").trim()}
+                className="shrink-0 rounded-full bg-[var(--bt-primary)] px-6 py-3 text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-50 hover:bg-[var(--bt-primary-hover)]"
+              >
+                {categoryCreating ? "Creando…" : "Crear"}
+              </button>
+              <button
+                type="button"
+                onClick={loadServiceCategories}
+                disabled={serviceCategoriesLoading}
+                className="shrink-0 rounded-full border border-[var(--bt-border)] bg-white px-6 py-3 text-[10px] font-black uppercase tracking-widest text-[var(--bt-primary)] disabled:opacity-50 hover:bg-[var(--bt-bg)]"
+              >
+                {serviceCategoriesLoading ? "Cargando…" : "Actualizar"}
+              </button>
+            </div>
+          </div>
+
+          {sortedCategories.length > 0 ? (
             <div className="mb-4 space-y-3 pb-4 border-b border-[var(--bt-border)]">
-              {services.map((s) =>
-                editingService?.id === s.id ? (
+              {sortedCategories.map((cat) => {
+                const catId = Number(cat.id);
+                const isOpen = openCategoryId === catId;
+                const catServices = servicesByCategoryId.get(catId) || [];
+                return (
+                  <div
+                    key={cat.id}
+                    className="rounded-2xl border border-[var(--bt-border)] bg-white overflow-hidden"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setOpenCategoryId((cur) => (cur === catId ? null : catId))}
+                      className="w-full flex items-center justify-between gap-3 px-4 py-4 text-left hover:bg-black/[0.02]"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-black tracking-widest text-[var(--bt-primary)] truncate">
+                          {cat.name}
+                        </p>
+                        <p className="text-[10px] text-[var(--bt-muted)]">
+                          {catServices.length} servicio{catServices.length === 1 ? "" : "s"}
+                        </p>
+                      </div>
+                      <ChevronDown
+                        className={[
+                          "h-5 w-5 shrink-0 text-[var(--bt-muted)] transition-transform duration-300",
+                          isOpen ? "rotate-180" : "",
+                        ].join(" ")}
+                        aria-hidden
+                      />
+                    </button>
+
+                    {isOpen ? (
+                      <div className="border-t border-[var(--bt-border)] bg-[var(--bt-bg)] p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-muted)]">
+                            Servicios
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAddServiceCategoryId((cur) =>
+                                cur === catId ? null : catId,
+                              );
+                              setSvcForm((prev) => ({
+                                ...prev,
+                                category_id: String(catId),
+                              }));
+                            }}
+                            className="rounded-full bg-[var(--bt-primary)] px-4 py-2 text-[9px] font-black uppercase tracking-widest text-white hover:bg-[var(--bt-primary-hover)]"
+                          >
+                            + Añadir servicio
+                          </button>
+                        </div>
+
+                        {addServiceCategoryId === catId ? (
+                          <form
+                            onSubmit={submitService}
+                            className="grid gap-2 rounded-2xl border border-[var(--bt-border)] bg-white p-4"
+                          >
+                            <p className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)] mb-1">
+                              Nuevo servicio ({cat.name})
+                            </p>
+                            <input
+                              type="text"
+                              placeholder="Nombre del servicio"
+                              className="w-full bg-[var(--bt-bg)] border border-[var(--bt-border)] py-3 px-4 rounded-2xl text-[10px] font-black tracking-widest"
+                              value={svcForm.name}
+                              onChange={(e) =>
+                                setSvcForm({ ...svcForm, name: e.target.value })
+                              }
+                            />
+                            <input
+                              type="text"
+                              placeholder="Descripción (opcional)"
+                              className="w-full bg-[var(--bt-bg)] border border-[var(--bt-border)] py-3 px-4 rounded-2xl text-[10px] font-black tracking-widest"
+                              value={svcForm.description}
+                              onChange={(e) =>
+                                setSvcForm({ ...svcForm, description: e.target.value })
+                              }
+                            />
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <label className="block text-[9px] font-black uppercase tracking-widest text-[var(--bt-muted)] ml-1">
+                                  Duración (min)
+                                </label>
+                                <input
+                                  type="number"
+                                  min={5}
+                                  inputMode="numeric"
+                                  className="w-full bg-[var(--bt-bg)] border border-[var(--bt-border)] py-3 px-4 rounded-2xl text-[10px] font-black"
+                                  value={svcForm.duration}
+                                  onChange={(e) =>
+                                    setSvcForm({ ...svcForm, duration: e.target.value })
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <label className="block text-[9px] font-black uppercase tracking-widest text-[var(--bt-muted)] ml-1">
+                                  Precio (€)
+                                </label>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step={0.5}
+                                  inputMode="decimal"
+                                  className="w-full bg-[var(--bt-bg)] border border-[var(--bt-border)] py-3 px-4 rounded-2xl text-[10px] font-black"
+                                  value={svcForm.price}
+                                  onChange={(e) =>
+                                    setSvcForm({ ...svcForm, price: e.target.value })
+                                  }
+                                />
+                              </div>
+                            </div>
+                            <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                              <button
+                                type="button"
+                                onClick={() => setAddServiceCategoryId(null)}
+                                disabled={svcSaving}
+                                className="flex-1 rounded-full border border-[var(--bt-border)] bg-white px-6 py-3 text-[10px] font-black uppercase tracking-widest text-[var(--bt-primary)] disabled:opacity-50 hover:bg-[var(--bt-bg)]"
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                type="submit"
+                                disabled={svcSaving || !svcForm.name.trim()}
+                                className="flex-1 rounded-full bg-[var(--bt-primary)] px-6 py-3 text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-50 hover:bg-[var(--bt-primary-hover)]"
+                              >
+                                {svcSaving ? "Guardando…" : "Añadir servicio"}
+                              </button>
+                            </div>
+                          </form>
+                        ) : null}
+
+                        {catServices.length === 0 ? (
+                          <div className="rounded-2xl border border-dashed border-[var(--bt-border)] bg-white px-4 py-8 text-center">
+                            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[var(--bt-muted)]">
+                              Sin servicios
+                            </p>
+                          </div>
+                        ) : (
+                          catServices.map((s) =>
+                            editingService?.id === s.id ? (
                   <form
                     key={s.id}
                     onSubmit={submitEditService}
@@ -812,6 +1080,22 @@ export default function SettingsView({
                     <p className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)]">
                       Editar servicio
                     </p>
+                    <select
+                      value={editingService.category_id ?? ""}
+                      onChange={(e) =>
+                        setEditingService({
+                          ...editingService,
+                          category_id: e.target.value || null,
+                        })
+                      }
+                      className="w-full bg-white border border-[var(--bt-border)] py-3 px-4 rounded-2xl text-[10px] font-black tracking-widest"
+                    >
+                      {sortedCategories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
                     <input
                       type="text"
                       required
@@ -920,6 +1204,7 @@ export default function SettingsView({
                             description: s.description || "",
                             duration: s.duration,
                             price: s.price,
+                            category_id: s.category_id ?? catId,
                           })
                         }
                         disabled={svcDeletingId != null}
@@ -942,97 +1227,23 @@ export default function SettingsView({
                     </div>
                   </div>
                 ),
-              )}
+                          )
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="mb-4 rounded-2xl border border-dashed border-[var(--bt-border)] bg-[var(--bt-bg)] px-4 py-8 text-center">
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[var(--bt-muted)]">
+                No hay categorías
+              </p>
             </div>
           )}
-          <form
-            onSubmit={submitService}
-            className="grid gap-2 pt-1"
-          >
-            <p className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)] mb-1">
-              Añadir servicio
-            </p>
-            <input
-              type="text"
-              placeholder="Nombre del servicio"
-              className="w-full bg-[var(--bt-bg)] border border-[var(--bt-border)] py-3 px-4 rounded-2xl text-[10px] font-black tracking-widest"
-              value={svcForm.name}
-              onChange={(e) =>
-                setSvcForm({ ...svcForm, name: e.target.value })
-              }
-            />
-            <input
-              type="text"
-              placeholder="Descripción (opcional)"
-              className="w-full bg-[var(--bt-bg)] border border-[var(--bt-border)] py-3 px-4 rounded-2xl text-[10px] font-black tracking-widest"
-              value={svcForm.description}
-              onChange={(e) =>
-                setSvcForm({ ...svcForm, description: e.target.value })
-              }
-            />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label
-                  htmlFor="settings-svc-duration"
-                  className="block text-[9px] font-black uppercase tracking-widest text-[var(--bt-muted)] ml-1"
-                >
-                  Duración del servicio
-                </label>
-                <p className="text-[9px] text-[var(--bt-muted)] ml-1 leading-snug">
-                  Tiempo en{" "}
-                  <span className="font-bold text-[var(--bt-primary)]">minutos</span> (ej.
-                  45 para una manicura).
-                </p>
-                <input
-                  id="settings-svc-duration"
-                  type="number"
-                  min={5}
-                  inputMode="numeric"
-                  placeholder="Ej. 45"
-                  aria-label="Duración en minutos"
-                  className="w-full bg-[var(--bt-bg)] border border-[var(--bt-border)] py-3 px-4 rounded-2xl text-[10px] font-black"
-                  value={svcForm.duration}
-                  onChange={(e) =>
-                    setSvcForm({ ...svcForm, duration: e.target.value })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <label
-                  htmlFor="settings-svc-price"
-                  className="block text-[9px] font-black uppercase tracking-widest text-[var(--bt-muted)] ml-1"
-                >
-                  Precio del servicio
-                </label>
-                <p className="text-[9px] text-[var(--bt-muted)] ml-1 leading-snug">
-                  Importe en{" "}
-                  <span className="font-bold text-[var(--bt-primary)]">euros (€)</span>;
-                  puedes usar decimales (ej. 25 o 32,50).
-                </p>
-                <input
-                  id="settings-svc-price"
-                  type="number"
-                  min={0}
-                  step={0.5}
-                  inputMode="decimal"
-                  placeholder="Ej. 25"
-                  aria-label="Precio en euros"
-                  className="w-full bg-[var(--bt-bg)] border border-[var(--bt-border)] py-3 px-4 rounded-2xl text-[10px] font-black"
-                  value={svcForm.price}
-                  onChange={(e) =>
-                    setSvcForm({ ...svcForm, price: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-            <button
-              type="submit"
-              disabled={svcSaving || !svcForm.name.trim()}
-              className="w-full bg-[var(--bt-primary)] text-white py-3 rounded-full text-[10px] font-black uppercase tracking-widest disabled:opacity-50 mt-2 hover:bg-[var(--bt-primary-hover)]"
-            >
-              {svcSaving ? "Guardando…" : "Añadir servicio"}
-            </button>
-          </form>
+
+          {/* Añadir servicio: ahora se hace dentro de cada categoría */}
         </SettingsAccordion>
       )}
 

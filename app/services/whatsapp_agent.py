@@ -76,7 +76,12 @@ def _get_or_create_conversation(
 
 
 def _list_services(db: Session, org_id: int) -> list[Service]:
-    return db.exec(select(Service).where(Service.organization_id == org_id)).all()
+    return db.exec(
+        select(Service).where(
+            Service.organization_id == org_id,
+            Service.is_active == True,  # noqa: E712
+        )
+    ).all()
 
 
 def _service_cache_from_services(services: list[Service]) -> list[dict]:

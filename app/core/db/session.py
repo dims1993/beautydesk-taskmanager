@@ -173,6 +173,21 @@ def init_db():
             conn.execute(
                 text('ALTER TABLE "service" ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE')
             )
+            conn.execute(
+                text(
+                    'CREATE TABLE IF NOT EXISTS service_category ('
+                    'id SERIAL PRIMARY KEY, '
+                    'organization_id INTEGER NOT NULL, '
+                    'name TEXT NOT NULL, '
+                    'sort_order INTEGER DEFAULT 0'
+                    ')'
+                )
+            )
+            conn.execute(
+                text(
+                    'ALTER TABLE "service" ADD COLUMN IF NOT EXISTS category_id INTEGER'
+                )
+            )
             for col, typ in (
                 ("legal_name", "TEXT"),
                 ("billing_address_line1", "TEXT"),

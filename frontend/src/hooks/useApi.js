@@ -37,13 +37,28 @@ export const useApi = () => {
     try {
       const response = await fetch(`${BASE_URL}${endpoint}`, fetchOpts);
 
+      // 204: No Content (avoid attempting to parse body)
+      if (response.status === 204) {
+        return null;
+      }
+
       const contentType = response.headers.get("content-type") || "";
       const isJson = contentType.includes("application/json");
 
+      const safeReadPayload = async () => {
+        const rawText = await response.text();
+        if (!rawText || rawText.trim() === "") return null;
+        if (!isJson) return rawText;
+        try {
+          return JSON.parse(rawText);
+        } catch {
+          // Fallback: return text if JSON is malformed/empty
+          return rawText;
+        }
+      };
+
       if (response.status === 401) {
-        const payload401 = isJson
-          ? await response.json()
-          : await response.text();
+        const payload401 = await safeReadPayload();
         if (!skipAuthRedirect) {
           localStorage.removeItem("token");
           window.location.href = "/login";
@@ -56,14 +71,12 @@ export const useApi = () => {
         );
       }
 
-      const payload = isJson ? await response.json() : await response.text();
+      const payload = await safeReadPayload();
 
       if (!response.ok) {
-        return Promise.reject(payload);
-      }
-
-      if (response.status === 204) {
-        return null;
+        return Promise.reject(
+          payload ?? { detail: `Request failed (${response.status})` },
+        );
       }
 
       if (!isJson) {
