@@ -170,6 +170,9 @@ def init_db():
             conn.execute(
                 text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS last_name TEXT')
             )
+            conn.execute(
+                text('ALTER TABLE "service" ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE')
+            )
             for col, typ in (
                 ("legal_name", "TEXT"),
                 ("billing_address_line1", "TEXT"),

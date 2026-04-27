@@ -292,6 +292,17 @@ export default function SettingsView({
         if (idx !== dayIdx) return d;
         const intervals = Array.isArray(d?.intervals) ? d.intervals : [];
         const next = intervals.filter((_, i) => i !== intervalIdx);
+        if (next.length <= 0) {
+          return {
+            ...d,
+            mode: "intensive",
+            intervals: [{ start: "09:00", end: "20:00" }],
+          };
+        }
+        if (next.length === 1) {
+          // If only one interval remains, treat the day as intensive.
+          return { ...d, mode: "intensive", intervals: next };
+        }
         return { ...d, mode: "split", intervals: next };
       });
     });
@@ -1173,7 +1184,7 @@ export default function SettingsView({
                         </label>
                       </div>
 
-                      {hoursShiftType === "split" ? (
+                      {(d?.mode || hoursShiftType) === "split" ? (
                     <div className="mt-3 space-y-3">
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-muted)]">
@@ -1202,14 +1213,10 @@ export default function SettingsView({
                                 </p>
                                 <button
                                   type="button"
-                                  disabled={!d.is_open || d.intervals.length <= 2}
+                                  disabled={!d.is_open}
                                   onClick={() => removeIntervalForDay(idx, itIdx)}
                                   className="rounded-full border border-[var(--bt-border)] bg-white px-3 py-1 text-[8px] font-black uppercase tracking-widest text-red-600 disabled:opacity-50 hover:bg-red-50"
-                                  title={
-                                    d.intervals.length <= 2
-                                      ? "Mínimo 2 tramos en jornada partida"
-                                      : "Eliminar tramo"
-                                  }
+                                  title="Eliminar tramo"
                                 >
                                   Eliminar
                                 </button>

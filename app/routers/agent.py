@@ -65,7 +65,9 @@ def agent_services(
     """
     org = _get_org_context(db, x_agent_key, current_user)
     org_id = int(org.id)
-    rows = db.exec(select(Service).where(Service.organization_id == org_id)).all()
+    rows = db.exec(
+        select(Service).where(Service.organization_id == org_id, Service.is_active == True)  # noqa: E712
+    ).all()
     return [
         {
             "id": int(s.id),

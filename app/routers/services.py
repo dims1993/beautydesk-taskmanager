@@ -47,7 +47,10 @@ def list_services(
     if current_user.organization_id is None:
         return []
     return db.exec(
-        select(Service).where(Service.organization_id == current_user.organization_id)
+        select(Service).where(
+            Service.organization_id == current_user.organization_id,
+            Service.is_active == True,  # noqa: E712
+        )
     ).all()
 
 
@@ -121,15 +124,22 @@ def delete_service(
         raise HTTPException(status_code=403, detail="No autorizado")
     svc = _get_service_for_org(db, service_id, current_user)
 
-    has_appointments = db.exec(
-        select(Appointment.id).where(Appointment.service_id == service_id).limit(1)
+    has_scheduled = db.exec(
+        select(Appointment.id)
+        .where(
+            Appointment.service_id == service_id,
+            Appointment.status == "scheduled",
+        )
+        .limit(1)
     ).first()
-    if has_appointments:
+    if has_scheduled:
         raise HTTPException(
             status_code=400,
-            detail="No se puede eliminar: hay citas asociadas a este servicio.",
+            detail="No se puede eliminar: hay citas pendientes con este servicio.",
         )
 
-    db.delete(svc)
+    # "Delete" means archive to keep historical appointments intact.
+    svc.is_active = False
+    db.add(svc)
     db.commit()
     return None

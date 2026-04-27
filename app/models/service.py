@@ -11,6 +11,7 @@ class Service(SQLModel, table=True):
     description: Optional[str] = None
     duration: int  # Duración en minutos
     price: float
+    is_active: bool = Field(default=True, index=True)
     organization_id: Optional[int] = Field(
         default=None, foreign_key="organization.id", index=True
     )
