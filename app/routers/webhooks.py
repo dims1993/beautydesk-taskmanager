@@ -53,9 +53,26 @@ def _twilio_signature_valid(
     return hmac.compare_digest(expected, twilio_signature.strip())
 
 
-def _twiml(message: str) -> str:
-    safe = (message or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    return f'<?xml version="1.0" encoding="UTF-8"?><Response><Message>{safe}</Message></Response>'
+def _twiml_escape(message: str) -> str:
+    return (message or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _twiml(messages: list[str]) -> str:
+    """
+    One or more <Message> nodes — Twilio sends each as a separate WhatsApp bubble.
+    """
+    parts: list[str] = []
+    for m in messages:
+        if m is None:
+            continue
+        s = str(m).strip()
+        if not s:
+            continue
+        parts.append(f"<Message>{_twiml_escape(s)}</Message>")
+    if not parts:
+        parts.append("<Message></Message>")
+    inner = "".join(parts)
+    return f'<?xml version="1.0" encoding="UTF-8"?><Response>{inner}</Response>'
 
 
 def _pick_org_for_twilio(db: Session) -> Organization:
@@ -135,5 +152,6 @@ async def twilio_whatsapp_inbound(
         to_addr=to_addr,
         body=incoming_text,
     )
-    return Response(content=_twiml(reply), media_type="application/xml")
+    bubbles = reply if isinstance(reply, list) else [reply]
+    return Response(content=_twiml(bubbles), media_type="application/xml")
 

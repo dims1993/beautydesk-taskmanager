@@ -2,14 +2,16 @@ import json
 import os
 import re
 import unicodedata
-from datetime import datetime, timedelta, date, time
+from datetime import datetime, timedelta, date, time, timezone
 from zoneinfo import ZoneInfo
 from urllib.parse import quote
 
 from fastapi import HTTPException
+from sqlalchemy import and_, or_
 from sqlmodel import Session, select
 
 from app.models import Conversation, Organization, Service
+from app.models import ServiceCategory
 from app.models.appointment import Appointment
 from app.models.client import Client
 from app.models.user import User
@@ -21,7 +23,11 @@ from app.routers.agent import (
     _total_minutes,
 )
 from app.schemas.agent import BookRequest
-from app.services.deposit_booking import book_with_deposit_checkout, org_accepts_online_deposit
+from app.services.deposit_booking import (
+    DEPOSIT_PERCENT,
+    book_with_deposit_checkout,
+    org_accepts_online_deposit,
+)
 
 
 TZ = ZoneInfo("Europe/Madrid")
@@ -86,6 +92,246 @@ def _list_services(db: Session, org_id: int) -> list[Service]:
             Service.is_active == True,  # noqa: E712
         )
     ).all()
+
+
+def _list_categories_for_org(db: Session, org_id: int) -> list[ServiceCategory]:
+    rows = db.exec(
+        select(ServiceCategory).where(ServiceCategory.organization_id == org_id)
+    ).all()
+    rows.sort(key=lambda c: (int(c.sort_order or 0), (c.name or "").lower()))
+    return rows
+
+
+def _collect_category_menu_entries(
+    db: Session, org_id: int, *, exclude_service_ids: set[int]
+) -> list[dict]:
+    """
+    Each entry: {"cid": int category id, OR null for uncategorized, OR -1 for all-in-one bucket}.
+    """
+    services = [s for s in _list_services(db, org_id) if s.id is not None and int(s.id) not in exclude_service_ids]
+    if not services:
+        return []
+    cats = _list_categories_for_org(db, org_id)
+    cat_by_id = {int(c.id): c for c in cats if c.id is not None}
+    cat_ids_in_use: set[int] = set()
+    has_uncat = False
+    for s in services:
+        cid = getattr(s, "category_id", None)
+        if cid is None or int(cid) not in cat_by_id:
+            has_uncat = True
+        else:
+            cat_ids_in_use.add(int(cid))
+    out: list[dict] = []
+    for c in cats:
+        if c.id is not None and int(c.id) in cat_ids_in_use:
+            out.append({"cid": int(c.id), "name": (c.name or "Categoría").strip()})
+    if has_uncat:
+        out.append({"cid": None, "name": "Sin categoría"})
+    if not out:
+        out.append({"cid": -1, "name": "Todos los servicios"})
+    return out
+
+
+def _services_for_category_bucket(
+    db: Session, org_id: int, *, bucket_cid: int | None, exclude_service_ids: set[int]
+) -> list[Service]:
+    services = [s for s in _list_services(db, org_id) if s.id is not None and int(s.id) not in exclude_service_ids]
+    cats = _list_categories_for_org(db, org_id)
+    cat_by_id = {int(c.id): c for c in cats if c.id is not None}
+    if bucket_cid == -1:
+        return services
+    if bucket_cid is None:
+        return [
+            s
+            for s in services
+            if getattr(s, "category_id", None) is None
+            or int(s.category_id) not in cat_by_id
+        ]
+    return [s for s in services if getattr(s, "category_id", None) is not None and int(s.category_id) == int(bucket_cid)]
+
+
+def _format_category_page_message(entries: list[dict], offset: int, title: str) -> tuple[str, bool]:
+    """
+    Lists up to 9 categories plus optional 10) Ver más. Returns (message, used_more_slot).
+    """
+    rest = entries[offset:]
+    lines = [title, ""]
+    if len(rest) <= 10:
+        for i, e in enumerate(rest, start=1):
+            lines.append(f"{i}) {e['name']}")
+        lines.append("")
+        lines.append("Responde con el número de la categoría.")
+        return "\n".join(lines), False
+    page = rest[:9]
+    for i, e in enumerate(page, start=1):
+        lines.append(f"{i}) {e['name']}")
+    lines.append("10) Ver más categorías…")
+    lines.append("")
+    lines.append("Responde con el número (1–10).")
+    return "\n".join(lines), True
+
+
+def _format_service_page_in_category(
+    services: list[Service], offset: int, title: str
+) -> tuple[str, bool]:
+    rest = services[offset:]
+    lines = [title, ""]
+    if len(rest) <= 10:
+        for i, s in enumerate(rest, start=1):
+            meta: list[str] = []
+            if getattr(s, "duration", None) is not None:
+                meta.append(f"{int(s.duration)}min")
+            if getattr(s, "price", None) is not None:
+                meta.append(f"{float(s.price):g}€")
+            suf = f" ({' · '.join(meta)})" if meta else ""
+            lines.append(f"{i}) {s.name}{suf}")
+        lines.append("")
+        lines.append("Responde con el número del servicio.")
+        return "\n".join(lines), False
+    page = rest[:9]
+    for i, s in enumerate(page, start=1):
+        meta = []
+        if getattr(s, "duration", None) is not None:
+            meta.append(f"{int(s.duration)}min")
+        if getattr(s, "price", None) is not None:
+            meta.append(f"{float(s.price):g}€")
+        suf = f" ({' · '.join(meta)})" if meta else ""
+        lines.append(f"{i}) {s.name}{suf}")
+    lines.append("10) Ver más servicios…")
+    lines.append("")
+    lines.append("Responde con el número (1–10).")
+    return "\n".join(lines), True
+
+
+def _day_has_any_slot(
+    db: Session,
+    org_id: int,
+    org: Organization,
+    day: date,
+    service_ids: list[int],
+    staff_id: int | None,
+) -> bool:
+    staff_i = int(staff_id) if staff_id is not None else None
+    m = _slots_for_day_band(db, org_id, org, day, service_ids, staff_i, time(9, 0), time(13, 0), limit=1)
+    if m:
+        return True
+    a = _slots_for_day_band(db, org_id, org, day, service_ids, staff_i, time(15, 0), time(19, 0), limit=1)
+    return bool(a)
+
+
+def _collect_next_available_days(
+    db: Session,
+    org_id: int,
+    org: Organization,
+    *,
+    service_ids: list[int],
+    staff_id: int | None,
+    start_from: date,
+    max_scan_days: int,
+    want: int,
+    skip: int,
+) -> list[date]:
+    """First `skip` matching days are skipped; then collect up to `want` days that have ≥1 slot."""
+    found: list[date] = []
+    skip_left = int(skip)
+    for i in range(max_scan_days):
+        d = start_from + timedelta(days=i)
+        if _org_is_closed_on_date(org, day=d):
+            continue
+        if not _day_has_any_slot(db, org_id, org, d, service_ids, staff_id):
+            continue
+        if skip_left > 0:
+            skip_left -= 1
+            continue
+        found.append(d)
+        if len(found) >= want:
+            break
+    return found
+
+
+def _available_days_page(
+    db: Session,
+    org_id: int,
+    org: Organization,
+    *,
+    service_ids: list[int],
+    staff_id: int | None,
+    start_from: date,
+    skip: int,
+    max_scan_days: int = 120,
+) -> tuple[list[date], bool]:
+    """Up to 10 days to show; has_more if an 11th exists after skip."""
+    batch = _collect_next_available_days(
+        db,
+        org_id,
+        org,
+        service_ids=service_ids,
+        staff_id=staff_id,
+        start_from=start_from,
+        max_scan_days=max_scan_days,
+        want=11,
+        skip=skip,
+    )
+    has_more = len(batch) > 10
+    return batch[:10], has_more
+
+
+def _format_day_row_es(d: date) -> str:
+    wds = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
+    mos = (
+        "enero",
+        "febrero",
+        "marzo",
+        "abril",
+        "mayo",
+        "junio",
+        "julio",
+        "agosto",
+        "septiembre",
+        "octubre",
+        "noviembre",
+        "diciembre",
+    )
+    return f"{wds[d.weekday()]} {d.day} de {mos[d.month - 1]} ({d.isoformat()})"
+
+
+def _day_pick_level1_text() -> str:
+    today = datetime.now(TZ).date()
+    tmr = today + timedelta(days=1)
+    day_after = today + timedelta(days=2)
+    return (
+        "¿Qué día prefieres?\n\n"
+        f"1) Hoy ({today.isoformat()})\n"
+        f"2) Mañana ({tmr.isoformat()})\n"
+        f"3) Pasado mañana ({day_after.isoformat()})\n"
+        "4) Otros días (te muestro una lista con huecos; máx. 10 por pantalla)\n\n"
+        "Responde con 1, 2, 3 o 4."
+    )
+
+
+def _first_day_for_alternatives_list(today: date) -> date:
+    """Primer día que puede salir en la lista de 'Otros días' (sin repetir 1–3 del nivel 1)."""
+    return today + timedelta(days=3)
+
+
+def _day_alternatives_message(
+    days: list[date], *, has_more: bool, start_index: int = 1
+) -> str:
+    lines = [
+        "Otros días con hueco (no aparecen aquí hoy, mañana ni pasado mañana):",
+        "",
+    ]
+    n = start_index
+    for d in days:
+        lines.append(f"{n}) {_format_day_row_es(d)}")
+        n += 1
+    if has_more:
+        lines.append(f"{n}) Ver más días…")
+        n += 1
+    lines.append(f"{n}) Escribir fecha manualmente (AAAA-MM-DD)")
+    lines.append("")
+    lines.append("Responde solo con el número.")
+    return "\n".join(lines)
 
 
 def _service_cache_from_services(services: list[Service]) -> list[dict]:
@@ -239,10 +485,6 @@ def _local_now_naive() -> datetime:
     return datetime.now(TZ).replace(tzinfo=None)
 
 
-def _greeting(org: Organization) -> str:
-    return f"Hola, soy el asistente personal de {org.name}."
-
-
 def _public_booking_line(org: Organization) -> str | None:
     tok = getattr(org, "booking_public_token", None)
     if not tok or not str(tok).strip():
@@ -251,60 +493,37 @@ def _public_booking_line(org: Organization) -> str | None:
     return f"{base}/reservar?token={quote(str(tok).strip(), safe='')}"
 
 
-def _main_menu_message(org: Organization) -> str:
-    """
-    Utility-style root menu (similar to corporate WhatsApp bots): clear numbered options.
-    """
-    lines = [
-        _greeting(org),
-        "",
-        "Elige una opción escribiendo el número:",
-        "1) Servicios y precios",
-        "2) Reservar cita",
-        "3) Cancelar mi cita",
-        "4) Datos de contacto del salón",
-        "",
-        "También puedes escribir: SERVICIOS, CITA, CANCELAR, AYUDA u OPCIONES.",
-    ]
-    return "\n".join(lines)
+def _wake_intro_text(org: Organization) -> str:
+    return (
+        f"Hola, soy el asistente personal de {org.name}. "
+        "Aquí podrás obtener información sobre los servicios que ofrecemos y la disponibilidad "
+        "de horario en nuestra agenda. También podrás hacer tu reserva o cancelarla en caso de "
+        "haber sufrido algún inconveniente. ¿En qué te puedo ayudar?"
+    )
 
 
-def _contact_message(org: Organization) -> str:
-    parts: list[str] = ["Datos de contacto del salón:", ""]
-    ph = (getattr(org, "billing_phone", None) or "").strip()
-    em = (getattr(org, "billing_email", None) or "").strip()
-    if ph:
-        parts.append(f"Teléfono: {ph}")
-    else:
-        parts.append("Teléfono: (no publicado) Pregunta al salón.")
-    if em:
-        parts.append(f"Email: {em}")
-    else:
-        parts.append("Email: (no publicado)")
-    pub = _public_booking_line(org)
-    if pub:
-        parts.append("")
-        parts.append("Reserva online (web):")
-        parts.append(pub)
-    parts.append("")
-    parts.append("Para volver al menú escribe OPCIONES o MENU.")
-    return "\n".join(parts)
+def _root_menu_text() -> str:
+    return "\n".join(
+        [
+            "Pulsa una de las siguientes opciones (elige el número o escribe el nombre de la opción):",
+            "",
+            "1) Reservar una cita",
+            "2) Cancelar una cita",
+            "3) Mis citas",
+            "4) Ubicación y horario",
+            "5) Volver a comenzar",
+            "",
+            "Responde con el número de la opción (o Sí/No cuando te lo pidamos).",
+        ]
+    )
 
 
-def _start_cita_flow(db: Session, conv: Conversation, org: Organization) -> str:
-    services = _list_services(db, int(org.id))
-    if not services:
-        return "Ahora mismo no hay servicios configurados en el salón."
-    state = {
-        "step": "awaiting_service",
-        "services_cache": [{"id": int(s.id), "name": s.name} for s in services if s.id is not None][:30],
-    }
-    _save_state(db, conv, state)
-    return f"{_greeting(org)}\n" + _format_services_menu(services)
+def _wake_messages(org: Organization) -> list[str]:
+    return [_wake_intro_text(org), _root_menu_text()]
 
 
 def _try_cancel_last_appointment(db: Session, org: Organization, from_addr: str) -> str:
-    """Shared by CANCELAR and main-menu option 3."""
+    """Shared by CANCELAR and main-menu option 2."""
     phone_digits = _norm_phone_es(_digits_only(from_addr))
     if not phone_digits:
         return "Para cancelar necesito que me escribas desde el mismo WhatsApp de la reserva."
@@ -317,13 +536,21 @@ def _try_cancel_last_appointment(db: Session, org: Organization, from_addr: str)
     if not client or client.id is None:
         return "No encuentro ninguna cita asociada a este número."
     now_local = _local_now_naive()
+    now_utc = datetime.now(timezone.utc)
     appo = db.exec(
         select(Appointment)
         .where(
             Appointment.organization_id == org.id,
             Appointment.client_id == int(client.id),
-            Appointment.status == "scheduled",
             Appointment.start_time >= now_local,
+            or_(
+                Appointment.status == "scheduled",
+                and_(
+                    Appointment.status == "pending_deposit",
+                    Appointment.deposit_expires_at.is_not(None),
+                    Appointment.deposit_expires_at > now_utc,
+                ),
+            ),
         )
         .order_by(Appointment.start_time.asc())
     ).first()
@@ -357,6 +584,13 @@ def _list_staff_for_org(db: Session, org_id: int) -> list[User]:
     return rows
 
 
+def _staff_by_id(db: Session, org_id: int, staff_id: int) -> User | None:
+    for u in _list_staff_for_org(db, org_id):
+        if int(u.id or 0) == int(staff_id):
+            return u
+    return None
+
+
 def _format_staff_menu(staff: list[User]) -> tuple[str, list[dict]]:
     cache: list[dict] = []
     lines: list[str] = []
@@ -365,7 +599,10 @@ def _format_staff_menu(staff: list[User]) -> tuple[str, list[dict]]:
             continue
         cache.append({"id": int(u.id), "name": _staff_display_name(u)})
         lines.append(f"{idx}) {cache[-1]['name']}")
-    return "¿Con quién te gustaría la cita? Responde con el número:\n" + "\n".join(lines), cache
+    extra = ""
+    if len(staff) > 10:
+        extra = "\n\n(Hay más profesionales en el salón; solo mostramos 10. Llama al salón si no ves a alguien.)"
+    return "¿Con quién te gustaría la cita? Responde con el número:\n" + "\n".join(lines) + extra, cache
 
 
 def _parse_staff_choice(txt: str, staff_cache: list[dict]) -> int | None:
@@ -484,154 +721,341 @@ def _compute_slots(
     return slots
 
 
-def _compute_slots_near_preferred_time(
+_SPANISH_WEEKDAYS = (
+    "lunes",
+    "martes",
+    "miércoles",
+    "jueves",
+    "viernes",
+    "sábado",
+    "domingo",
+)
+_SPANISH_MONTHS = (
+    "enero",
+    "febrero",
+    "marzo",
+    "abril",
+    "mayo",
+    "junio",
+    "julio",
+    "agosto",
+    "septiembre",
+    "octubre",
+    "noviembre",
+    "diciembre",
+)
+
+
+def _format_slot_confirm_es(dt: datetime) -> str:
+    d = dt.date()
+    wd = _SPANISH_WEEKDAYS[d.weekday()]
+    mo = _SPANISH_MONTHS[d.month - 1]
+    return f"{wd} {d.day} de {mo} a las {dt.strftime('%H:%M')}"
+
+
+def _day_segments_clipped(
+    org: Organization,
+    day: date,
+    band_lo: time,
+    band_hi: time,
+) -> list[tuple[datetime, datetime]]:
+    """Intersect salon windows with [band_lo, band_hi] on that calendar day (naive local)."""
+    out: list[tuple[datetime, datetime]] = []
+    b0 = datetime.combine(day, band_lo)
+    b1 = datetime.combine(day, band_hi)
+    for open_t, close_t in _org_open_windows_for_day(org, dow=day.weekday()):
+        w0 = datetime.combine(day, open_t)
+        w1 = datetime.combine(day, close_t)
+        cs = max(w0, b0)
+        ce = min(w1, b1)
+        if cs < ce:
+            out.append((cs, ce))
+    return out
+
+
+def _round_up_to_slot_step(dt: datetime, step_minutes: int) -> datetime:
+    d0 = datetime.combine(dt.date(), time(0))
+    elapsed = int((dt - d0).total_seconds() // 60)
+    rem = elapsed % step_minutes
+    base = dt.replace(second=0, microsecond=0)
+    if rem == 0:
+        return base
+    return base + timedelta(minutes=step_minutes - rem)
+
+
+def _slots_for_day_band(
     db: Session,
-    *,
     org_id: int,
     org: Organization,
-    service_ids: list[int],
     day: date,
-    preferred: time,
-    step_minutes: int = 15,
+    service_ids: list[int],
+    staff_id: int | None,
+    band_lo: time,
+    band_hi: time,
+    *,
+    step_minutes: int = 30,
     min_notice_minutes: int = 30,
-    limit: int = 3,
-) -> list[tuple[datetime, int]]:
-    """
-    Try to honor a requested start time; otherwise propose nearest alternatives.
-    Returns naive local datetimes (see _compute_slots).
-    """
-    services = _services_for_org(db, org_id, service_ids)
-    minutes = _total_minutes(services)
-    if minutes <= 0:
-        return []
-
+    limit: int = 48,
+) -> list[dict]:
     if _org_is_closed_on_date(org, day=day):
         return []
-
-    dow = day.weekday()
-    windows = _org_open_windows_for_day(org, dow=dow)
-    if not windows:
+    try:
+        minutes = _total_minutes(_services_for_org(db, org_id, service_ids))
+    except HTTPException:
         return []
-
-    requested = datetime.combine(day, preferred)
-
+    if minutes <= 0:
+        return []
+    segments = _day_segments_clipped(org, day, band_lo, band_hi)
+    if not segments:
+        return []
     now_local = _local_now_naive()
     min_start = now_local + timedelta(minutes=min_notice_minutes)
-    if requested < min_start:
-        requested = min_start
-
-    staff_ids = _staff_ids_for_org(db, org_id)
-
-    def within_some_window(start_dt: datetime) -> bool:
-        end_dt = start_dt + timedelta(minutes=minutes)
-        for open_t, close_t in windows:
-            w_open = datetime.combine(day, open_t)
-            w_close = datetime.combine(day, close_t)
-            if start_dt >= w_open and end_dt <= w_close:
-                return True
-        return False
-
-    def fits(start_dt: datetime) -> tuple[datetime, int] | None:
-        end_dt = start_dt + timedelta(minutes=minutes)
-        if not within_some_window(start_dt):
-            return None
-        for staff_id in staff_ids:
-            if not _has_collision(db, org_id, staff_id, start_dt, end_dt):
-                return (start_dt, staff_id)
-        return None
-
-    # 1) Exact (rounded to step)
-    # round down to nearest step
-    base_minutes = (requested.hour * 60 + requested.minute)
+    staff_order = [int(staff_id)] if staff_id is not None else _staff_ids_for_org(db, org_id)
+    if not staff_order:
+        return []
+    out: list[dict] = []
     step = max(5, int(step_minutes))
-    rounded = (base_minutes // step) * step
-    exact = datetime.combine(day, time(rounded // 60, rounded % 60))
-    hit = fits(exact)
-    if hit:
-        return [hit]
-
-    # 2) Nearest alternatives (across windows) based on distance to exact
-    all_candidates: list[tuple[datetime, int]] = []
-    step_td = timedelta(minutes=step)
-    for open_t, close_t in windows:
-        w_open = datetime.combine(day, open_t)
-        w_close = datetime.combine(day, close_t)
-        cursor = max(w_open, min_start)
-        while cursor + timedelta(minutes=minutes) <= w_close:
-            h = fits(cursor)
-            if h:
-                all_candidates.append(h)
-            cursor = cursor + step_td
-    all_candidates.sort(key=lambda x: abs((x[0] - exact).total_seconds()))
-    return all_candidates[:limit]
-
-
-def _compute_slots_for_specific_staff_near_time(
-    db: Session,
-    *,
-    org_id: int,
-    org: Organization,
-    staff_id: int,
-    service_ids: list[int],
-    day: date,
-    preferred: time,
-    step_minutes: int = 15,
-    min_notice_minutes: int = 30,
-    limit: int = 3,
-) -> list[datetime]:
-    """Try requested time first, then nearest alternatives, for a specific staff."""
-    services = _services_for_org(db, org_id, service_ids)
-    minutes = _total_minutes(services)
-    if minutes <= 0:
-        return []
-
-    if _org_is_closed_on_date(org, day=day):
-        return []
-
-    dow = day.weekday()
-    windows = _org_open_windows_for_day(org, dow=dow)
-    if not windows:
-        return []
-
-    requested = datetime.combine(day, preferred)
-
-    min_start = _local_now_naive() + timedelta(minutes=min_notice_minutes)
-    if requested < min_start:
-        requested = min_start
-
-    def within_some_window(start_dt: datetime) -> bool:
-        end_dt = start_dt + timedelta(minutes=minutes)
-        for open_t, close_t in windows:
-            w_open = datetime.combine(day, open_t)
-            w_close = datetime.combine(day, close_t)
-            if start_dt >= w_open and end_dt <= w_close:
-                return True
-        return False
-
-    def fits(start_dt: datetime) -> bool:
-        end_dt = start_dt + timedelta(minutes=minutes)
-        if not within_some_window(start_dt):
-            return False
-        return not _has_collision(db, org_id, staff_id, start_dt, end_dt)
-
-    base_minutes = requested.hour * 60 + requested.minute
-    step = max(5, int(step_minutes))
-    rounded = (base_minutes // step) * step
-    exact = datetime.combine(day, time(rounded // 60, rounded % 60))
-
-    out: list[datetime] = []
-    if fits(exact):
-        out.append(exact)
-        return out
-
-    for delta_steps in range(1, 16):
-        for sign in (-1, 1):
-            cand = exact + timedelta(minutes=sign * delta_steps * step)
-            if fits(cand):
-                out.append(cand)
+    for cs, ce in segments:
+        cursor = max(cs, min_start)
+        if cursor >= ce:
+            continue
+        cursor = _round_up_to_slot_step(cursor, step)
+        while cursor + timedelta(minutes=minutes) <= ce:
+            end_dt = cursor + timedelta(minutes=minutes)
+            chosen: int | None = None
+            if staff_id is not None:
+                if not _has_collision(db, org_id, int(staff_id), cursor, end_dt):
+                    chosen = int(staff_id)
+            else:
+                for sid in staff_order:
+                    if not _has_collision(db, org_id, sid, cursor, end_dt):
+                        chosen = sid
+                        break
+            if chosen is not None:
+                out.append({"start": cursor.isoformat(timespec="minutes"), "staff_id": int(chosen)})
                 if len(out) >= limit:
                     return out
+            cursor += timedelta(minutes=step)
     return out
+
+
+def _parse_root_menu_choice(txt: str) -> int | None:
+    raw = (txt or "").strip()
+    if not raw:
+        return None
+    n = _parse_choice_number(raw, 5)
+    if n:
+        return n
+    low = _strip_accents(raw.lower())
+    if "reservar" in low:
+        return 1
+    if "cancelar" in low:
+        return 2
+    if "mis cita" in low:
+        return 3
+    if "ubicacion" in low or "horario" in low:
+        return 4
+    if "volver" in low or "comenzar" in low:
+        return 5
+    return None
+
+
+def _location_hours_text(org: Organization) -> str:
+    lines: list[str] = ["Ubicación y horario", ""]
+    a1 = (getattr(org, "billing_address_line1", None) or "").strip()
+    city = (getattr(org, "city", None) or "").strip()
+    pc = (getattr(org, "postal_code", None) or "").strip()
+    addr = ", ".join(x for x in (a1, pc, city) if x)
+    if addr:
+        lines.append(f"Dirección: {addr}")
+    else:
+        lines.append("Dirección: no publicada en la app.")
+    ph = (getattr(org, "billing_phone", None) or "").strip()
+    em = (getattr(org, "billing_email", None) or "").strip()
+    if ph:
+        lines.append(f"Teléfono: {ph}")
+    if em:
+        lines.append(f"Email: {em}")
+    pub = _public_booking_line(org)
+    if pub:
+        lines.append("")
+        lines.append(f"Reserva online: {pub}")
+    raw = (getattr(org, "salon_hours_json", None) or "").strip()
+    lines.append("")
+    if raw:
+        lines.append("Horario del salón está configurado en la app (varía por día). Puedes reservar por web o seguir aquí con la opción 1.")
+    else:
+        lines.append("Horario: consulta por teléfono o email si no aparece en la web.")
+    lines.append("")
+    lines.append("Elige otra opción (1–5) o escribe MENÚ.")
+    return "\n".join(lines)
+
+
+def _mis_citas_text(db: Session, org: Organization, from_addr: str) -> str:
+    phone_digits = _norm_phone_es(_digits_only(from_addr))
+    if not phone_digits:
+        return "No puedo leer tu número. Escribe desde el mismo WhatsApp con el que reservaste."
+    client = db.exec(
+        select(Client).where(
+            Client.organization_id == org.id,
+            Client.telefono == phone_digits,
+        )
+    ).first()
+    if not client or client.id is None:
+        return "No hay citas asociadas a este número.\n\nElige otra opción (1–5)."
+    now_local = _local_now_naive()
+    now_utc = datetime.now(timezone.utc)
+    rows = db.exec(
+        select(Appointment)
+        .where(
+            Appointment.organization_id == org.id,
+            Appointment.client_id == int(client.id),
+            Appointment.start_time >= now_local,
+            or_(
+                Appointment.status == "scheduled",
+                and_(
+                    Appointment.status == "pending_deposit",
+                    Appointment.deposit_expires_at.is_not(None),
+                    Appointment.deposit_expires_at > now_utc,
+                ),
+            ),
+        )
+        .order_by(Appointment.start_time.asc())
+    ).all()
+    if not rows:
+        return "No tienes citas futuras registradas con este número.\n\nElige otra opción (1–5)."
+    lines = ["Tus próximas citas:", ""]
+    for a in rows[:8]:
+        st = a.start_time
+        if st is None:
+            continue
+        stn = st.replace(tzinfo=None) if getattr(st, "tzinfo", None) else st
+        st_label = _format_slot_confirm_es(stn)
+        st_txt = "pendiente de pago" if (a.status or "") == "pending_deposit" else (a.status or "")
+        lines.append(f"- {st_label} — {st_txt}")
+    lines.append("")
+    lines.append("Elige otra opción (1–5) o escribe MENÚ.")
+    return "\n".join(lines)
+
+
+def _known_steps() -> frozenset[str]:
+    return frozenset(
+        {
+            "idle",
+            "awaiting_main_menu",
+            "book_ask_specific_staff",
+            "book_await_staff_pick",
+            "book_await_service_category",
+            "book_await_service_pick",
+            "book_await_more_services",
+            "book_await_day_pick",
+            "book_await_day_alternatives",
+            "book_await_custom_date",
+            "book_await_day_period",
+            "book_await_slot_pick",
+            "book_await_final_confirm",
+            "book_await_fix_choice",
+        }
+    )
+
+
+def _enter_service_category_step(
+    db: Session,
+    conv: Conversation,
+    org: Organization,
+    state: dict,
+    *,
+    intro: str,
+    adding_extra: bool,
+) -> str:
+    org_id = int(org.id)
+    exclude = {int(x) for x in (state.get("service_ids") or [])} if adding_extra else set()
+    entries = _collect_category_menu_entries(db, org_id, exclude_service_ids=exclude)
+    if not entries:
+        state["step"] = "awaiting_main_menu" if not adding_extra else "book_await_more_services"
+        _save_state(db, conv, state)
+        if adding_extra:
+            return "No hay más servicios para añadir en esta categorización. Responde NO si has terminado."
+        return "No hay servicios activos.\n\n" + _root_menu_text()
+    state["step"] = "book_await_service_category"
+    state["adding_extra"] = bool(adding_extra)
+    state["category_menu_entries"] = entries
+    state["category_pick_offset"] = 0
+    state.pop("service_pick_offset", None)
+    state.pop("pick_category_cid", None)
+    state.pop("services_cache", None)
+    _save_state(db, conv, state)
+    title = f"{intro}\n\n¿Qué tipo de servicio buscas?" if intro else "¿Qué tipo de servicio buscas?"
+    msg, _ = _format_category_page_message(entries, 0, title)
+    return msg
+
+
+def _format_slot_choice_message(slots: list[dict], day: date) -> str:
+    lines = [
+        f"Horas libres el {day.isoformat()} (cada 30 min; duración total y agenda ya aplicadas):",
+        "",
+    ]
+    for i, opt in enumerate(slots[:24], start=1):
+        dt = datetime.fromisoformat(str(opt["start"]))
+        lines.append(f"{i}) {dt.strftime('%H:%M')}")
+    lines.append("")
+    lines.append(
+        "Responde con el número. Si ninguna te encaja: RESET = volver a empezar esta reserva; "
+        "MENÚ = menú principal del salón."
+    )
+    return "\n".join(lines)
+
+
+def _advance_to_period_step(
+    db: Session,
+    conv: Conversation,
+    org: Organization,
+    state: dict,
+    day: date,
+) -> str:
+    org_id = int(org.id)
+    service_ids = [int(x) for x in (state.get("service_ids") or [])]
+    staff_id = state.get("staff_id")
+    staff_id_i = int(staff_id) if staff_id is not None else None
+    m_slots = _slots_for_day_band(
+        db, org_id, org, day, service_ids, staff_id_i, time(9, 0), time(13, 0)
+    )
+    a_slots = _slots_for_day_band(
+        db, org_id, org, day, service_ids, staff_id_i, time(15, 0), time(19, 0)
+    )
+    state["pick_day"] = day.isoformat()
+    state.pop("slot_options", None)
+    if not m_slots and not a_slots:
+        state["step"] = "book_await_day_pick"
+        _save_state(db, conv, state)
+        return (
+            "No hay huecos libres ese día con la duración total de tu reserva. "
+            "Prueba otro día.\n\n" + _day_pick_level1_text()
+        )
+    if m_slots and not a_slots:
+        state["step"] = "book_await_slot_pick"
+        state["slot_options"] = m_slots
+        _save_state(db, conv, state)
+        return _format_slot_choice_message(m_slots, day)
+    if a_slots and not m_slots:
+        state["step"] = "book_await_slot_pick"
+        state["slot_options"] = a_slots
+        _save_state(db, conv, state)
+        return _format_slot_choice_message(a_slots, day)
+    po: dict[str, list[dict]] = {"1": m_slots, "2": a_slots}
+    state["period_options"] = po
+    state["step"] = "book_await_day_period"
+    _save_state(db, conv, state)
+    return "\n".join(
+        [
+            "Perfecto. ¿En qué momento del día prefieres?",
+            "",
+            "1) Mañana (9:00–13:00)",
+            "2) Tarde (15:00–19:00)",
+            "",
+            "Responde con 1 o 2.",
+        ]
+    )
 
 
 def _book_appointment(
@@ -703,13 +1127,10 @@ def handle_inbound_whatsapp(
     from_addr: str,
     to_addr: str,
     body: str,
-) -> str:
+) -> str | list[str]:
     """
-    Stateless interface:
-    - Loads conversation state from DB
-    - Runs state machine
-    - Persists state
-    - Returns reply text
+    Loads conversation state, runs the state machine, persists state.
+    Returns one string or several (separate WhatsApp bubbles via TwiML).
     """
     conv = _get_or_create_conversation(
         db,
@@ -719,348 +1140,434 @@ def handle_inbound_whatsapp(
         to_addr=to_addr,
     )
     state = _load_state(conv)
-
     txt = (body or "").strip()
     txt_upper = txt.upper()
+    step = str(state.get("step") or "idle")
 
-    # Global commands
-    if txt_upper in ("RESET", "REINICIAR"):
+    if step not in _known_steps():
         state = {"step": "idle"}
         _save_state(db, conv, state)
-        return "Listo. Empezamos de cero. Escribe OPCIONES para ver el menú, CITA para reservar o SERVICIOS para el catálogo."
+        step = "idle"
+
+    org_id = int(org.id)
+
+    if txt_upper in ("RESET", "REINICIAR"):
+        state = {"step": "awaiting_main_menu"}
+        _save_state(db, conv, state)
+        return _wake_messages(org)
+
+    if txt_upper in ("MENU", "MENÚ", "OPCIONES", "AYUDA", "HELP", "START"):
+        state["step"] = "awaiting_main_menu"
+        _save_state(db, conv, state)
+        return _root_menu_text()
 
     if txt_upper in ("CANCELAR", "CANCEL", "ANULAR"):
-        return _try_cancel_last_appointment(db, org, from_addr)
-
-    if txt_upper in ("CAMBIAR FECHA", "FECHA", "OTRO DIA", "OTRO DÍA"):
-        service_ids = [int(x) for x in (state.get("service_ids") or [])]
-        if not service_ids:
-            return "Primero dime qué quieres reservar: escribe CITA."
-        state["step"] = "awaiting_date"
+        msg = _try_cancel_last_appointment(db, org, from_addr)
+        state = {"step": "awaiting_main_menu"}
         _save_state(db, conv, state)
-        return "Perfecto. Dime la fecha (YYYY-MM-DD)."
-
-    if txt_upper in ("HI", "HOLA", "HELP", "AYUDA", "MENU", "MENÚ", "START", "OPCIONES"):
-        return _main_menu_message(org)
+        return msg + "\n\n" + _root_menu_text()
 
     if txt_upper.startswith("SERVICIOS"):
-        services = _list_services(db, int(org.id))
+        services = _list_services(db, org_id)
         if not services:
             return "Aún no hay servicios configurados."
-        # allow: "SERVICIOS uñas" -> filtered list
         parts = txt.split(maxsplit=1)
         if len(parts) == 2 and parts[1].strip():
             filtered = _filter_services_by_keyword(services, parts[1])
             if not filtered:
-                return "No encuentro servicios con esa palabra. Escribe SERVICIOS para ver el catálogo completo."
+                return "No encuentro servicios con esa palabra. Elige 1 en el menú para reservar."
             return (
                 "Servicios encontrados:\n"
                 + "\n".join(f"- {s.name}" for s in filtered[:30])
-                + "\n\nDi: CITA"
+                + "\n\nVuelve al menú con MENÚ y pulsa 1 para reservar."
             )
-        return "Servicios disponibles:\n" + "\n".join(f"- {s.name}" for s in services[:30]) + "\n\nDi: CITA"
+        return (
+            "Servicios disponibles:\n"
+            + "\n".join(f"- {s.name}" for s in services[:30])
+            + "\n\nVuelve al menú con MENÚ y pulsa 1 para reservar."
+        )
 
-    step = state.get("step") or "idle"
+    if txt_upper == "CITA":
+        state = {
+            "step": "book_ask_specific_staff",
+            "service_ids": [],
+            "staff_id": None,
+            "staff_pick_required": None,
+        }
+        _save_state(db, conv, state)
+        return (
+            "Nos alegra que cuentes con nosotras/os. "
+            "¿Te gustaría reservar con alguno/a de nuestros/as profesionales en concreto?\n\n"
+            "Responde: SÍ o NO"
+        )
 
-    # Main menu shortcuts (idle only) — must run before NL and before generic idle→CITA funnel.
-    if step == "idle" and txt.strip() in ("1", "2", "3", "4"):
-        choice = int(txt.strip())
-        if choice == 1:
-            services = _list_services(db, int(org.id))
-            if not services:
-                return "Aún no hay servicios configurados."
+    if step == "idle":
+        state = {"step": "awaiting_main_menu"}
+        _save_state(db, conv, state)
+        return _wake_messages(org)
+
+    if step == "awaiting_main_menu":
+        choice = _parse_root_menu_choice(txt)
+        if not choice:
             return (
-                "Servicios y precios:\n"
-                + "\n".join(f"- {s.name}" for s in services[:30])
-                + "\n\nPara reservar escribe 2 o CITA."
+                "No te he entendido. Responde con un número del 1 al 5 o escribe MENÚ.\n\n" + _root_menu_text()
+            )
+        if choice == 1:
+            state = {
+                "step": "book_ask_specific_staff",
+                "service_ids": [],
+                "staff_id": None,
+                "staff_pick_required": None,
+            }
+            _save_state(db, conv, state)
+            return (
+                "Nos alegra que cuentes con nosotras/os. "
+                "¿Te gustaría reservar con alguno/a de nuestros/as profesionales en concreto?\n\n"
+                "Responde: SÍ o NO"
             )
         if choice == 2:
-            return _start_cita_flow(db, conv, org)
-        if choice == 3:
-            return _try_cancel_last_appointment(db, org, from_addr)
-        return _contact_message(org)
-
-    # Natural language assist: capture date/time/service from free text when idle.
-    if step == "idle" and txt and txt_upper not in ("CITA", "SERVICIOS"):
-        rel_d = _parse_relative_date_es(txt)
-        abs_d = _parse_date_yyyy_mm_dd(txt)
-        t = _parse_time_hhmm_es(txt)
-        svc_ids = _match_service_ids_from_text(db, int(org.id), txt)
-        if rel_d or abs_d:
-            state["preferred_day"] = (abs_d or rel_d).isoformat()
-        if t:
-            state["preferred_time"] = t.strftime("%H:%M")
-        if svc_ids:
-            state["service_ids"] = [int(svc_ids[0])]
-        if any(k in state for k in ("preferred_day", "preferred_time", "service_ids")):
-            if not state.get("service_ids"):
-                services = _list_services(db, int(org.id))
-                # If the message contains a keyword, show a filtered menu instead of full list
-                keyword_hits = _filter_services_by_keyword(services, txt)
-                shown = keyword_hits if 0 < len(keyword_hits) < len(services) else services
-                state["services_cache"] = _service_cache_from_services(shown)
-                state["step"] = "awaiting_service"
-            else:
-                state["step"] = "awaiting_date"
+            msg = _try_cancel_last_appointment(db, org, from_addr)
+            state = {"step": "awaiting_main_menu"}
             _save_state(db, conv, state)
-            if state["step"] == "awaiting_service":
-                services = _list_services(db, int(org.id))
-                shown = _filter_services_by_keyword(services, txt)
-                if 0 < len(shown) < len(services):
-                    return (
-                        "He encontrado estos servicios relacionados. Responde con el número o el nombre:\n"
-                        + _format_services_menu(shown)
-                    )
-                return (
-                    "Entendido. Para reservar necesito el servicio.\n"
-                    + _format_services_menu(services)
-                )
-            # If we already have a service, ask date (or use captured date)
-            if state.get("preferred_day"):
-                state["step"] = "awaiting_date"
-                _save_state(db, conv, state)
-                return (
-                    "Perfecto. He entendido la fecha.\n"
-                    "Confírmame el día escribiendo YYYY-MM-DD (por ejemplo 2026-04-30)."
-                )
-            return "Perfecto. ¿Qué día quieres? Escribe la fecha en formato YYYY-MM-DD (ej: 2026-04-30)."
-
-    if txt_upper == "CITA" or step == "idle":
-        return _start_cita_flow(db, conv, org)
-
-    if step == "awaiting_service":
-        cached = state.get("services_cache") or []
-        service_id = _best_service_id_from_text_or_number(
-            db, int(org.id), txt, cached
-        )
-        if not service_id:
-            # ensure cache exists for next attempt
-            if not cached:
-                services = _list_services(db, int(org.id))
-                # If user typed a keyword (not just a number), filter the menu
-                shown = _filter_services_by_keyword(services, txt)
-                if 0 < len(shown) < len(services):
-                    state["services_cache"] = _service_cache_from_services(shown)
-                else:
-                    state["services_cache"] = _service_cache_from_services(services)
-                _save_state(db, conv, state)
-            return (
-                "No te he entendido.\n"
-                "Responde con el número del servicio (ej: 1) o escribe su nombre (ej: 'manicura')."
-            )
-        state["service_ids"] = [service_id]
-        state["step"] = "awaiting_more_services"
+            return msg + "\n\n" + _root_menu_text()
+        if choice == 3:
+            msg = _mis_citas_text(db, org, from_addr)
+            state = {"step": "awaiting_main_menu"}
+            _save_state(db, conv, state)
+            return msg
+        if choice == 4:
+            msg = _location_hours_text(org)
+            state = {"step": "awaiting_main_menu"}
+            _save_state(db, conv, state)
+            return msg
+        state = {"step": "awaiting_main_menu"}
         _save_state(db, conv, state)
-        return (
-            "Perfecto. ¿Quieres añadir otro servicio a la misma cita?\n"
-            "Responde: SI / NO"
-        )
+        return _wake_messages(org)
 
-    if step == "awaiting_more_services":
+    if step == "book_ask_specific_staff":
         yn = _parse_yes_no(txt)
         if yn is None:
-            return "Responde SI o NO. (También puedes escribir RESET para empezar de cero)."
+            return "Responde solo: SÍ o NO. (También puedes escribir RESET para volver al inicio.)"
+        staff_list = _list_staff_for_org(db, org_id)
+        if not staff_list:
+            state = {"step": "awaiting_main_menu"}
+            _save_state(db, conv, state)
+            return "No hay profesionales configurados en el salón.\n\n" + _root_menu_text()
         if yn is False:
-            state["step"] = "awaiting_date"
+            state["staff_pick_required"] = False
+            state["staff_id"] = None
+            services = _list_services(db, org_id)
+            if not services:
+                state = {"step": "awaiting_main_menu"}
+                _save_state(db, conv, state)
+                return "No hay servicios activos.\n\n" + _root_menu_text()
             _save_state(db, conv, state)
-            return "Genial. ¿Qué día quieres? Escribe la fecha en formato YYYY-MM-DD (ej: 2026-04-30)."
-
-        # yes -> show menu again to pick an additional service
-        services = _list_services(db, int(org.id))
-        if not services:
-            state["step"] = "awaiting_date"
-            _save_state(db, conv, state)
-            return "No veo servicios para añadir. Dime la fecha (YYYY-MM-DD)."
-        state["step"] = "awaiting_additional_service"
-        state["services_cache"] = [{"id": int(s.id), "name": s.name} for s in services if s.id is not None][:30]
-        _save_state(db, conv, state)
-        return "Elige el servicio adicional escribiendo el número:\n" + "\n".join(
-            f"{i}) {s.name}" for i, s in enumerate(services[:30], start=1)
-        )
-
-    if step == "awaiting_additional_service":
-        cached = state.get("services_cache") or []
-        choice = _parse_choice_number(txt, len(cached))
-        if not choice:
-            return "No te he entendido. Escribe el número del servicio adicional (ej: 2)."
-        service_id = int(cached[choice - 1]["id"])
-        service_ids = [int(x) for x in (state.get("service_ids") or [])]
-        if service_id in service_ids:
-            return "Ese servicio ya está añadido. Elige otro número o responde RESET."
-        service_ids.append(service_id)
-        state["service_ids"] = service_ids
-        state["step"] = "awaiting_more_services"
-        _save_state(db, conv, state)
-        return "Añadido. ¿Quieres añadir otro servicio?\nResponde: SI / NO"
-
-    if step == "awaiting_date":
-        # Enforce: we must know the service(s) before offering availability.
-        service_ids = [int(x) for x in (state.get("service_ids") or [])]
-        if not service_ids:
-            services = _list_services(db, int(org.id))
-            state["step"] = "awaiting_service"
-            state["services_cache"] = _service_cache_from_services(services)
-            _save_state(db, conv, state)
-            return "Antes necesito el servicio para calcular la duración.\n" + _format_services_menu(services)
-
-        d = _parse_date_yyyy_mm_dd(txt) or _parse_relative_date_es(txt)
-        if not d:
-            return (
-                "Formato de fecha inválido.\n"
-                "Ejemplos válidos:\n"
-                "- 2026-04-30\n"
-                "- mañana\n"
-                "- mañana a las 15:00"
+            return _enter_service_category_step(
+                db, conv, org, state, intro="¿Qué servicio te gustaría reservar?", adding_extra=False
             )
-
-        # If the user provided a time in this same message, capture it as preferred_time
-        t_in_msg = _parse_time_hhmm_es(txt)
-        if t_in_msg:
-            state["preferred_time"] = t_in_msg.strftime("%H:%M")
-
-        pref = (state.get("preferred_time") or "").strip()
-        pref_t = _parse_time_hhmm_es(pref) if pref else None
-        if not pref_t:
-            state["step"] = "awaiting_time"
-            state["preferred_day"] = d.isoformat()
-            _save_state(db, conv, state)
-            return "Perfecto. ¿A qué hora te gustaría? (ej: 15:00)"
-
-        state["preferred_day"] = d.isoformat()
-
-        staff = _list_staff_for_org(db, int(org.id))
-        if len(staff) > 1:
-            menu, cache = _format_staff_menu(staff)
-            state["step"] = "awaiting_staff"
-            state["staff_cache"] = cache
-            _save_state(db, conv, state)
-            return menu
-
-        # 0 or 1 staff -> pick automatically
-        staff_id = int(staff[0].id) if staff and staff[0].id is not None else None
-        if not staff_id:
-            return "No encuentro profesionales disponibles. Revisa el equipo del salón."
-
-        options_dt = _compute_slots_for_specific_staff_near_time(
-            db,
-            org_id=int(org.id),
-            org=org,
-            staff_id=staff_id,
-            service_ids=service_ids,
-            day=d,
-            preferred=pref_t,
-            limit=3,
-        )
-        if not options_dt:
-            return "Ese profesional está ocupado a esa hora. Prueba con otra hora o fecha."
-
-        options = [{"start": dt.isoformat(), "staff_id": staff_id} for dt in options_dt]
-        state["step"] = "awaiting_slot_choice"
-        state["slot_options"] = options
-        state["slot_day"] = d.isoformat()
+        state["staff_pick_required"] = True
+        state["step"] = "book_await_staff_pick"
+        _, cache = _format_staff_menu(staff_list)
+        state["staff_cache"] = cache
         _save_state(db, conv, state)
-        lines = []
-        for idx, opt in enumerate(options, start=1):
-            dt = datetime.fromisoformat(opt["start"])
-            lines.append(f"{idx}) {dt.strftime('%H:%M')}")
-        return (
-            f"Huecos disponibles para {d.isoformat()}:\n"
-            + "\n".join(lines)
-            + "\n\nElige una opción (1, 2, 3)."
-        )
+        body_menu = "\n".join(f"{i}) {c['name']}" for i, c in enumerate(cache, start=1))
+        return "Selecciona un profesional respondiendo con el número:\n\n" + body_menu
 
-    if step == "awaiting_time":
-        t = _parse_time_hhmm_es(txt)
-        if not t:
-            return "Hora inválida. Ejemplo: 15:00"
-        state["preferred_time"] = t.strftime("%H:%M")
-        state["step"] = "awaiting_date"
-        _save_state(db, conv, state)
-        return "Perfecto. Ahora dime el día (hoy/mañana o YYYY-MM-DD)."
-
-    if step == "awaiting_staff":
+    if step == "book_await_staff_pick":
         cache = state.get("staff_cache") or []
         sid = _parse_staff_choice(txt, cache)
         if not sid:
-            return "No te he entendido. Responde con el número del profesional."
+            return "Responde con el número del profesional (1, 2, …)."
         state["staff_id"] = int(sid)
-        # Reuse the flow by re-entering date step with stored preferred day/time
-        d_raw = (state.get("preferred_day") or "").strip()
-        t_raw = (state.get("preferred_time") or "").strip()
-        d = _parse_date_yyyy_mm_dd(d_raw) or _parse_relative_date_es(d_raw)
-        pref_t = _parse_time_hhmm_es(t_raw) if t_raw else None
-        service_ids = [int(x) for x in (state.get("service_ids") or [])]
-        if not d or not pref_t or not service_ids:
-            state["step"] = "awaiting_date"
+        services = _list_services(db, org_id)
+        if not services:
+            state = {"step": "awaiting_main_menu"}
             _save_state(db, conv, state)
-            return "Perfecto. Dime el día (hoy/mañana o YYYY-MM-DD)."
-
-        options_dt = _compute_slots_for_specific_staff_near_time(
-            db,
-            org_id=int(org.id),
-            org=org,
-            staff_id=int(sid),
-            service_ids=service_ids,
-            day=d,
-            preferred=pref_t,
-            limit=3,
-        )
-        if not options_dt:
-            return "Ese profesional está ocupado a esa hora. Prueba con otra hora o fecha."
-        options = [{"start": dt.isoformat(), "staff_id": int(sid)} for dt in options_dt]
-        state["step"] = "awaiting_slot_choice"
-        state["slot_options"] = options
-        state["slot_day"] = d.isoformat()
+            return "No hay servicios activos.\n\n" + _root_menu_text()
+        stf_u = _staff_by_id(db, org_id, int(sid))
+        nm = _staff_display_name(stf_u) if stf_u else "el profesional elegido"
         _save_state(db, conv, state)
-        lines = []
-        for idx, opt in enumerate(options, start=1):
-            dt = datetime.fromisoformat(opt["start"])
-            lines.append(f"{idx}) {dt.strftime('%H:%M')}")
-        return (
-            f"Huecos disponibles para {d.isoformat()} con ese profesional:\n"
-            + "\n".join(lines)
-            + "\n\nElige una opción (1, 2, 3)."
+        return _enter_service_category_step(
+            db,
+            conv,
+            org,
+            state,
+            intro=f"¿Qué servicio te gustaría reservar con {nm}?",
+            adding_extra=False,
         )
 
-    if step == "awaiting_slot_choice":
+    if step == "book_await_service_category":
+        entries: list[dict] = state.get("category_menu_entries") or []
+        offset = int(state.get("category_pick_offset") or 0)
+        if not entries:
+            state["step"] = "awaiting_main_menu"
+            _save_state(db, conv, state)
+            return "Se ha perdido el menú de categorías. Escribe MENÚ.\n\n" + _root_menu_text()
+        rest = entries[offset:]
+        if not rest:
+            state["category_pick_offset"] = 0
+            offset = 0
+            rest = entries
+        if len(rest) <= 10:
+            mx = len(rest)
+        else:
+            mx = 10
+        ch = _parse_choice_number(txt, mx)
+        if not ch:
+            return "Responde con el número de una de las categorías de la lista."
+        if len(rest) > 10 and ch == 10:
+            state["category_pick_offset"] = offset + 9
+            _save_state(db, conv, state)
+            title = "¿Qué tipo de servicio buscas?"
+            msg, _ = _format_category_page_message(entries, offset + 9, title)
+            return msg
+        picked = rest[ch - 1]
+        cid = picked.get("cid")
+        state["pick_category_cid"] = cid
+        state["service_pick_offset"] = 0
+        state["step"] = "book_await_service_pick"
+        exclude = {int(x) for x in (state.get("service_ids") or [])} if state.get("adding_extra") else set()
+        svc_list = _services_for_category_bucket(db, org_id, bucket_cid=cid, exclude_service_ids=exclude)
+        if not svc_list:
+            state["step"] = "book_await_service_category"
+            state.pop("pick_category_cid", None)
+            state["category_pick_offset"] = 0
+            _save_state(db, conv, state)
+            ent2 = state.get("category_menu_entries") or []
+            msg2, _ = _format_category_page_message(ent2, 0, "¿Qué tipo de servicio buscas?")
+            return "No hay servicios en esa categoría.\n\n" + msg2
+        _save_state(db, conv, state)
+        title = f"Servicios — {picked.get('name', 'Categoría')}"
+        msg, _ = _format_service_page_in_category(svc_list, 0, title)
+        return msg
+
+    if step == "book_await_service_pick":
+        cid = state.get("pick_category_cid")
+        exclude = {int(x) for x in (state.get("service_ids") or [])} if state.get("adding_extra") else set()
+        svc_list = _services_for_category_bucket(db, org_id, bucket_cid=cid, exclude_service_ids=exclude)
+        offset = int(state.get("service_pick_offset") or 0)
+        rest = svc_list[offset:]
+        if not rest:
+            state["step"] = "book_await_service_category"
+            state.pop("pick_category_cid", None)
+            _save_state(db, conv, state)
+            return "No quedan servicios aquí. Vuelve a elegir categoría (responde MENÚ si te pierdes)."
+        if len(rest) <= 10:
+            mx = len(rest)
+        else:
+            mx = 10
+        ch = _parse_choice_number(txt, mx)
+        if not ch:
+            return "Responde con el número del servicio de la lista."
+        if len(rest) > 10 and ch == 10:
+            state["service_pick_offset"] = offset + 9
+            _save_state(db, conv, state)
+            title = f"Servicios — más opciones"
+            msg, _ = _format_service_page_in_category(svc_list, offset + 9, title)
+            return msg
+        svc = rest[ch - 1]
+        if svc.id is None:
+            return "Servicio inválido."
+        sid_new = int(svc.id)
+        adding = bool(state.get("adding_extra"))
+        if adding:
+            cur = [int(x) for x in (state.get("service_ids") or [])]
+            if sid_new in cur:
+                return "Ese servicio ya está en la cita. Elige otro."
+            cur.append(sid_new)
+            state["service_ids"] = cur
+        else:
+            state["service_ids"] = [sid_new]
+        state["step"] = "book_await_more_services"
+        state.pop("adding_extra", None)
+        state.pop("pick_category_cid", None)
+        state.pop("category_menu_entries", None)
+        state.pop("category_pick_offset", None)
+        state.pop("service_pick_offset", None)
+        _save_state(db, conv, state)
+        return (
+            "¡Perfecto! ¿Te gustaría agendar algún otro servicio en la misma cita?\n\nResponde: SÍ o NO"
+        )
+
+    if step == "book_await_more_services":
+        yn = _parse_yes_no(txt)
+        if yn is None:
+            return "Responde SÍ o NO."
+        if yn is False:
+            state["step"] = "book_await_day_pick"
+            _save_state(db, conv, state)
+            return _day_pick_level1_text()
+        return _enter_service_category_step(
+            db, conv, org, state, intro="Elige otro servicio para la misma cita.", adding_extra=True
+        )
+
+    if step == "book_await_day_pick":
+        raw_u = txt.upper()
+        today = datetime.now(TZ).date()
+        chosen: date | None = None
+        dch = _parse_choice_number(txt, 4)
+        if dch == 1 or raw_u == "HOY":
+            chosen = today
+        elif dch == 2 or raw_u in ("MAÑANA", "MANANA"):
+            chosen = today + timedelta(days=1)
+        elif dch == 3 or "PASADO" in raw_u:
+            chosen = today + timedelta(days=2)
+        elif dch == 4 or "OTRO" in raw_u or "LISTA" in raw_u:
+            service_ids = [int(x) for x in (state.get("service_ids") or [])]
+            staff_id = state.get("staff_id")
+            start_from = _first_day_for_alternatives_list(today)
+            skip = 0
+            days, has_more = _available_days_page(
+                db,
+                org_id,
+                org,
+                service_ids=service_ids,
+                staff_id=int(staff_id) if staff_id is not None else None,
+                start_from=start_from,
+                skip=skip,
+            )
+            if not days:
+                state["step"] = "book_await_custom_date"
+                _save_state(db, conv, state)
+                return (
+                    "No encontramos más días con huecos en la lista automática. "
+                    "Escribe la fecha en formato AAAA-MM-DD (ej: 2026-06-15)."
+                )
+            state["step"] = "book_await_day_alternatives"
+            state["day_alt_skip"] = 0
+            _save_state(db, conv, state)
+            return _day_alternatives_message(days, has_more=has_more)
+        if not chosen:
+            return "Responde 1, 2, 3 o 4 según la lista anterior."
+        return _advance_to_period_step(db, conv, org, state, chosen)
+
+    if step == "book_await_day_alternatives":
+        service_ids = [int(x) for x in (state.get("service_ids") or [])]
+        staff_id = state.get("staff_id")
+        today = datetime.now(TZ).date()
+        start_from = _first_day_for_alternatives_list(today)
+        skip = int(state.get("day_alt_skip") or 0)
+        days, has_more = _available_days_page(
+            db,
+            org_id,
+            org,
+            service_ids=service_ids,
+            staff_id=int(staff_id) if staff_id is not None else None,
+            start_from=start_from,
+            skip=skip,
+        )
+        nd = len(days)
+        if nd == 0 and not has_more:
+            state["step"] = "book_await_custom_date"
+            _save_state(db, conv, state)
+            return "No hay más días con huecos en la lista. Escribe la fecha (AAAA-MM-DD)."
+        manual_at = nd + (2 if has_more else 1)
+        max_ch = manual_at
+        ch = _parse_choice_number(txt, max_ch)
+        if not ch:
+            return f"Responde con un número del 1 al {max_ch}."
+        if 1 <= ch <= nd:
+            chosen = days[ch - 1]
+            state.pop("day_alt_skip", None)
+            _save_state(db, conv, state)
+            return _advance_to_period_step(db, conv, org, state, chosen)
+        if has_more and ch == nd + 1:
+            state["day_alt_skip"] = skip + nd
+            _save_state(db, conv, state)
+            days2, has_more2 = _available_days_page(
+                db,
+                org_id,
+                org,
+                service_ids=service_ids,
+                staff_id=int(staff_id) if staff_id is not None else None,
+                start_from=start_from,
+                skip=state["day_alt_skip"],
+            )
+            if not days2:
+                state["step"] = "book_await_custom_date"
+                _save_state(db, conv, state)
+                return "No hay más días en la lista. Escribe la fecha (AAAA-MM-DD)."
+            _save_state(db, conv, state)
+            return _day_alternatives_message(days2, has_more=has_more2)
+        if ch == manual_at:
+            state["step"] = "book_await_custom_date"
+            state.pop("day_alt_skip", None)
+            _save_state(db, conv, state)
+            return (
+                "Escribe solo la fecha en formato AAAA-MM-DD "
+                "(ejemplo: 2026-05-01). Para cancelar y volver al menú principal, escribe MENÚ."
+            )
+        return f"Responde con un número del 1 al {max_ch}."
+
+    if step == "book_await_custom_date":
+        d = _parse_date_yyyy_mm_dd(txt) or _parse_relative_date_es(txt)
+        if not d:
+            return (
+                "No reconozco esa fecha. Usa el formato AAAA-MM-DD, por ejemplo 2026-05-01. "
+                "También puedes escribir «mañana» o «hoy». O escribe MENÚ para salir."
+            )
+        return _advance_to_period_step(db, conv, org, state, d)
+
+    if step == "book_await_day_period":
+        po = state.get("period_options") or {}
+        key = txt.strip()
+        slots = po.get(key)
+        if not slots:
+            return "Responde 1 o 2 según la franja que prefieras."
+        state["step"] = "book_await_slot_pick"
+        state["slot_options"] = slots
+        d_raw = (state.get("pick_day") or "").strip()
+        try:
+            d = date.fromisoformat(d_raw)
+        except Exception:
+            state["step"] = "book_await_day_pick"
+            _save_state(db, conv, state)
+            return "He perdido el día elegido.\n\n" + _day_pick_level1_text()
+        _save_state(db, conv, state)
+        return _format_slot_choice_message(slots, d)
+
+    if step == "book_await_slot_pick":
         options = state.get("slot_options") or []
         choice = _parse_choice_number(txt, len(options))
         if not choice:
-            return "Escribe 1, 2 o 3 para elegir un horario."
+            return "Responde con el número de una de las horas listadas."
         opt = options[choice - 1]
-        start = datetime.fromisoformat(opt["start"])
+        start = datetime.fromisoformat(str(opt["start"]))
         staff_id = int(opt["staff_id"])
         service_ids = [int(x) for x in (state.get("service_ids") or [])]
-        state["step"] = "awaiting_booking_confirmation"
+        state["step"] = "book_await_final_confirm"
         state["selected_slot"] = {"start": opt["start"], "staff_id": staff_id}
         _save_state(db, conv, state)
-        # Build service summary
-        svcs = _services_for_org(db, int(org.id), service_ids)
+        svcs = _services_for_org(db, org_id, service_ids)
         svc_names = ", ".join([s.name for s in svcs]) if svcs else "Servicio"
+        human = _format_slot_confirm_es(start)
         return (
-            "Perfecto, voy a reservar esto:\n"
-            f"- Servicio(s): {svc_names}\n"
-            f"- Día/hora: {start.strftime('%Y-%m-%d %H:%M')}\n\n"
-            "¿Confirmas la cita?\nResponde: SI / NO"
+            "Entendido, la reserva se efectuará para el "
+            f"{human}.\n"
+            f"Servicio(s): {svc_names}.\n\n"
+            "¿Es correcto?\n\n"
+            "Responde: SÍ o NO"
         )
 
-    if step == "awaiting_booking_confirmation":
+    if step == "book_await_final_confirm":
         yn = _parse_yes_no(txt)
         if yn is None:
-            return "Responde SI o NO. (También puedes escribir CAMBIAR FECHA o RESET)."
+            return "Responde SÍ o NO."
         if yn is False:
-            # Keep selected services but allow choosing a new date
-            state["step"] = "awaiting_date"
-            state.pop("selected_slot", None)
-            state.pop("slot_options", None)
+            state["step"] = "book_await_fix_choice"
             _save_state(db, conv, state)
-            return "Vale. Dime otra fecha (YYYY-MM-DD) y te doy huecos disponibles."
-
+            return (
+                "¿Qué te gustaría cambiar?\n\n"
+                "1) Profesional\n"
+                "2) Servicio(s)\n"
+                "3) Fecha y hora\n\n"
+                "Responde con 1, 2 o 3."
+            )
         selected = state.get("selected_slot") or {}
         if not selected.get("start") or not selected.get("staff_id"):
-            state["step"] = "awaiting_date"
+            state["step"] = "book_await_day_pick"
             _save_state(db, conv, state)
-            return "He perdido el horario seleccionado. Dime la fecha (YYYY-MM-DD) y lo intentamos de nuevo."
+            return "He perdido la selección.\n\n" + _day_pick_level1_text()
         start = datetime.fromisoformat(str(selected["start"]))
         staff_id = int(selected["staff_id"])
         service_ids = [int(x) for x in (state.get("service_ids") or [])]
@@ -1069,10 +1576,7 @@ def handle_inbound_whatsapp(
         if not phone_digits:
             state = {"step": "idle"}
             _save_state(db, conv, state)
-            return (
-                "No puedo leer tu número de teléfono desde WhatsApp. "
-                "Escribe CITA para intentarlo de nuevo."
-            )
+            return "No puedo leer tu número de teléfono desde WhatsApp. Escribe de nuevo para reactivar el menú."
 
         existing = db.exec(
             select(Client).where(
@@ -1099,25 +1603,27 @@ def handle_inbound_whatsapp(
                 )
                 res = book_with_deposit_checkout(db, org, body, checkout_return="guest")
                 pay = (res.payment_url or "").strip()
-                state = {"step": "idle"}
+                state = {"step": "awaiting_main_menu"}
                 _save_state(db, conv, state)
+                pct = int(round(float(DEPOSIT_PERCENT) * 100))
                 if not pay:
                     return (
-                        "No se pudo generar el enlace de pago. Escribe CITA para intentarlo de nuevo "
+                        "No se pudo generar el enlace de pago. Escribe MENÚ para intentarlo de nuevo "
                         "o contacta con el salón."
                     )
                 return (
-                    "Para confirmar la cita, paga el depósito (25%) en este enlace "
-                    "(tienes unos minutos; tarjeta o Bizum):\n"
+                    f"Para confirmar la reserva se solicita un depósito del {pct}% sobre el importe.\n"
+                    "Completa el pago en este enlace (tarjeta o Bizum):\n"
                     f"{pay}\n\n"
-                    "Al completar el pago, la cita quedará confirmada sola. "
-                    "Si quieres otra cita después, escribe CITA."
+                    "Cuando Stripe confirme el pago (webhook), la cita quedará registrada automáticamente. "
+                    "Si no pagas a tiempo, el hueco se libera.\n\n"
+                    f"Gracias por contar con {org.name}."
                 )
             except HTTPException as e:
                 d = e.detail if isinstance(e.detail, str) else str(e.detail)
-                state = {"step": "idle"}
+                state = {"step": "awaiting_main_menu"}
                 _save_state(db, conv, state)
-                return f"No se pudo preparar el pago: {d} Escribe CITA para intentarlo de nuevo."
+                return f"No se pudo preparar el pago: {d}\n\n" + _root_menu_text()
 
         appo = _book_appointment(
             db,
@@ -1127,18 +1633,54 @@ def handle_inbound_whatsapp(
             start_time=start,
             staff_id=staff_id,
         )
-        state = {"step": "idle"}
+        state = {"step": "awaiting_main_menu"}
         _save_state(db, conv, state)
+        human = _format_slot_confirm_es(start)
         return (
-            "¡Gracias! Tu cita ha sido agendada.\n"
-            f"- Cita #{int(appo.id)}\n"
-            f"- Día/hora: {start.strftime('%Y-%m-%d %H:%M')}\n"
-            "(Este salón aún no tiene activado el depósito online; la reserva queda sin pago por la app.)\n"
-            "Si quieres otra cita, escribe CITA."
+            f"Su reserva ha sido registrada con éxito para el {human}. "
+            f"Gracias por contar con {org.name}.\n"
+            f"(Cita #{int(appo.id)} — este salón no usa depósito online por la app.)"
         )
 
-    # Fallback
-    state["step"] = "idle"
+    if step == "book_await_fix_choice":
+        raw = txt.strip()
+        if raw not in ("1", "2", "3"):
+            return "Responde con 1, 2 o 3."
+        if raw == "1":
+            state.pop("staff_id", None)
+            state["step"] = "book_ask_specific_staff"
+            state["staff_pick_required"] = None
+            state.pop("selected_slot", None)
+            state.pop("slot_options", None)
+            state.pop("period_options", None)
+            _save_state(db, conv, state)
+            return (
+                "De acuerdo. ¿Te gustaría reservar con alguno/a de nuestros/as profesionales en concreto?\n\n"
+                "Responde: SÍ o NO"
+            )
+        if raw == "2":
+            state["service_ids"] = []
+            state.pop("selected_slot", None)
+            state.pop("slot_options", None)
+            state.pop("period_options", None)
+            _save_state(db, conv, state)
+            sid = state.get("staff_id")
+            if sid:
+                stf_u = _staff_by_id(db, org_id, int(sid))
+                nm = _staff_display_name(stf_u) if stf_u else "el profesional elegido"
+                intro = f"¿Qué servicio te gustaría reservar con {nm}?"
+            else:
+                intro = "¿Qué servicio te gustaría reservar?"
+            return _enter_service_category_step(db, conv, org, state, intro=intro, adding_extra=False)
+        state["step"] = "book_await_day_pick"
+        state.pop("selected_slot", None)
+        state.pop("slot_options", None)
+        state.pop("period_options", None)
+        state.pop("day_alt_skip", None)
+        _save_state(db, conv, state)
+        return "Vamos a cambiar fecha y hora.\n\n" + _day_pick_level1_text()
+
+    state["step"] = "awaiting_main_menu"
     _save_state(db, conv, state)
-    return "No te he entendido. Escribe OPCIONES, MENU o AYUDA para ver el menú."
+    return "No te he entendido en este paso.\n\n" + _root_menu_text()
 
