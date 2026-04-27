@@ -98,12 +98,12 @@ const SalonClientsView = ({
   }, [clients, searchTerm, showAllContacts]);
 
   const visibleClients = useMemo(() => {
-    if (compactOnSelect && selectedClientId) {
+    if (selectedClientId) {
       const only = clients.find((c) => Number(c.id) === Number(selectedClientId));
       return only ? [only] : [];
     }
     return filteredClients;
-  }, [clients, filteredClients, compactOnSelect, selectedClientId]);
+  }, [clients, filteredClients, selectedClientId]);
 
   const selectedClient = useMemo(() => {
     if (!selectedClientId) return null;
@@ -398,88 +398,6 @@ const SalonClientsView = ({
             tu espacio.
           </p>
         )}
-        {!blockedMessage && (
-          <div className="rounded-[2.5rem] border border-[var(--bt-border)] bg-white shadow-sm overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setSyncOpen((v) => !v)}
-              className="w-full flex items-center justify-between gap-4 px-6 py-5 text-left hover:bg-black/[0.02]"
-            >
-              <div className="min-w-0">
-                <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--bt-muted)]">
-                  Sincronizar con tu agenda
-                </p>
-                <p className="mt-1 text-[10px] text-[var(--bt-muted)] leading-relaxed">
-                  Importa/Exporta desde el teléfono o archivos .vcf.
-                </p>
-              </div>
-              <ChevronRight
-                className={[
-                  "h-5 w-5 shrink-0 text-[var(--bt-muted)] transition-transform duration-300",
-                  syncOpen ? "rotate-90" : "",
-                ].join(" ")}
-                aria-hidden
-              />
-            </button>
-
-            {syncOpen ? (
-              <div className="border-t border-[var(--bt-border)] bg-[var(--bt-bg)] px-6 py-6 space-y-4">
-                <p className="text-[10px] text-[var(--bt-muted)] leading-relaxed">
-                  Los duplicados se unen por número de teléfono.
-                </p>
-                <input
-                  ref={vcfInputRef}
-                  type="file"
-                  accept=".vcf,.vcard,text/vcard"
-                  className="hidden"
-                  onChange={handleVcfFile}
-                />
-                <div className="flex flex-wrap gap-2">
-                  {contactsPickerSupported() && (
-                    <button
-                      type="button"
-                      disabled={syncBusy}
-                      onClick={handlePickDeviceContacts}
-                      className="inline-flex items-center gap-2 rounded-xl bg-white border border-[var(--bt-border)] px-3 py-2 text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)] hover:border-[var(--bt-border-strong)] disabled:opacity-50"
-                    >
-                      <Smartphone className="w-3.5 h-3.5" strokeWidth={2} />
-                      Elegir contactos
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    disabled={syncBusy}
-                    onClick={() => vcfInputRef.current?.click()}
-                    className="inline-flex items-center gap-2 rounded-xl bg-white border border-[var(--bt-border)] px-3 py-2 text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)] hover:border-[var(--bt-border-strong)] disabled:opacity-50"
-                  >
-                    <Upload className="w-3.5 h-3.5" strokeWidth={2} />
-                    Importar .vcf
-                  </button>
-                  <button
-                    type="button"
-                    disabled={syncBusy || !clients.length}
-                    onClick={handleExportVcf}
-                    className="inline-flex items-center gap-2 rounded-xl bg-[var(--bt-primary)] text-white px-3 py-2 text-[9px] font-black uppercase tracking-widest hover:bg-[var(--bt-primary-hover)] disabled:opacity-40"
-                  >
-                    <Download className="w-3.5 h-3.5" strokeWidth={2} />
-                    Exportar .vcf
-                  </button>
-                </div>
-                {syncBusy && (
-                  <p className="text-[10px] font-bold text-[var(--bt-border-strong)]">
-                    Importando…
-                  </p>
-                )}
-                {syncMessage && !syncBusy && (
-                  <p className="text-[10px] font-medium text-[var(--bt-primary)] leading-relaxed">
-                    {syncMessage}
-                  </p>
-                )}
-              </div>
-            ) : null}
-          </div>
-        )}
-
         <div className="rounded-[2.5rem] border border-[var(--bt-border)] bg-white shadow-sm p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -585,14 +503,14 @@ const SalonClientsView = ({
               </div>
             ) : (
               <div className="divide-y divide-black/5 overflow-hidden rounded-2xl border border-[var(--bt-border)]">
-                {compactOnSelect && selectedClient ? (
+                {selectedClient ? (
                   <div className="bg-[var(--bt-bg)] px-4 py-3 flex items-center justify-between gap-3">
                     <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--bt-muted)]">
                       Vista compacta
                     </p>
                     <button
                       type="button"
-                      onClick={() => setCompactOnSelect(false)}
+                      onClick={() => setSelectedClientId(null)}
                       className="rounded-full border border-[var(--bt-border)] bg-white px-4 py-2 text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)] hover:bg-[var(--bt-bg)]"
                     >
                       Volver a la lista
@@ -609,13 +527,11 @@ const SalonClientsView = ({
                       tabIndex={0}
                       onClick={() => {
                         setSelectedClientId(client.id);
-                        if (showAllContacts) setCompactOnSelect(true);
                       }}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") {
                           e.preventDefault();
                           setSelectedClientId(client.id);
-                          if (showAllContacts) setCompactOnSelect(true);
                         }
                       }}
                       className={[
@@ -1107,6 +1023,88 @@ const SalonClientsView = ({
               </div>
             )}
           </div>
+
+          {!blockedMessage && (
+            <div className="mt-6 rounded-[2.5rem] border border-[var(--bt-border)] bg-white shadow-sm overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setSyncOpen((v) => !v)}
+                className="w-full flex items-center justify-between gap-4 px-6 py-5 text-left hover:bg-black/[0.02]"
+              >
+                <div className="min-w-0">
+                  <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--bt-muted)]">
+                    Sincronizar con tu agenda
+                  </p>
+                  <p className="mt-1 text-[10px] text-[var(--bt-muted)] leading-relaxed">
+                    Importa/Exporta desde el teléfono o archivos .vcf.
+                  </p>
+                </div>
+                <ChevronRight
+                  className={[
+                    "h-5 w-5 shrink-0 text-[var(--bt-muted)] transition-transform duration-300",
+                    syncOpen ? "rotate-90" : "",
+                  ].join(" ")}
+                  aria-hidden
+                />
+              </button>
+
+              {syncOpen ? (
+                <div className="border-t border-[var(--bt-border)] bg-[var(--bt-bg)] px-6 py-6 space-y-4">
+                  <p className="text-[10px] text-[var(--bt-muted)] leading-relaxed">
+                    Los duplicados se unen por número de teléfono.
+                  </p>
+                  <input
+                    ref={vcfInputRef}
+                    type="file"
+                    accept=".vcf,.vcard,text/vcard"
+                    className="hidden"
+                    onChange={handleVcfFile}
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    {contactsPickerSupported() && (
+                      <button
+                        type="button"
+                        disabled={syncBusy}
+                        onClick={handlePickDeviceContacts}
+                        className="inline-flex items-center gap-2 rounded-xl bg-white border border-[var(--bt-border)] px-3 py-2 text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)] hover:border-[var(--bt-border-strong)] disabled:opacity-50"
+                      >
+                        <Smartphone className="w-3.5 h-3.5" strokeWidth={2} />
+                        Elegir contactos
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      disabled={syncBusy}
+                      onClick={() => vcfInputRef.current?.click()}
+                      className="inline-flex items-center gap-2 rounded-xl bg-white border border-[var(--bt-border)] px-3 py-2 text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)] hover:border-[var(--bt-border-strong)] disabled:opacity-50"
+                    >
+                      <Upload className="w-3.5 h-3.5" strokeWidth={2} />
+                      Importar .vcf
+                    </button>
+                    <button
+                      type="button"
+                      disabled={syncBusy || !clients.length}
+                      onClick={handleExportVcf}
+                      className="inline-flex items-center gap-2 rounded-xl bg-[var(--bt-primary)] text-white px-3 py-2 text-[9px] font-black uppercase tracking-widest hover:bg-[var(--bt-primary-hover)] disabled:opacity-40"
+                    >
+                      <Download className="w-3.5 h-3.5" strokeWidth={2} />
+                      Exportar .vcf
+                    </button>
+                  </div>
+                  {syncBusy && (
+                    <p className="text-[10px] font-bold text-[var(--bt-border-strong)]">
+                      Importando…
+                    </p>
+                  )}
+                  {syncMessage && !syncBusy && (
+                    <p className="text-[10px] font-medium text-[var(--bt-primary)] leading-relaxed">
+                      {syncMessage}
+                    </p>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          )}
         </div>
       </div>
     </div>

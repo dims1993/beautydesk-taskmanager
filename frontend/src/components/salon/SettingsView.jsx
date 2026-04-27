@@ -1,5 +1,5 @@
-import React, { useId, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import React, { useEffect, useId, useMemo, useState } from "react";
+import { useLocation, useSearchParams } from "react-router-dom";
 import { getPendingPlanFromSession } from "../../utils/billingPlan";
 import {
   AlertTriangle,
@@ -35,6 +35,7 @@ function SettingsAccordion({
   title,
   description,
   defaultOpen = false,
+  resetSignal,
   icon: Icon,
   children,
 }) {
@@ -42,6 +43,10 @@ function SettingsAccordion({
   const baseId = useId();
   const headerId = `settings-acc-h-${baseId}`;
   const panelId = `settings-acc-p-${baseId}`;
+
+  useEffect(() => {
+    setOpen(Boolean(defaultOpen));
+  }, [defaultOpen, resetSignal]);
 
   return (
     <div className="rounded-[2.5rem] border border-[var(--bt-border)] bg-white/90 shadow-sm backdrop-blur-md overflow-hidden">
@@ -100,6 +105,8 @@ export default function SettingsView({
   services = [],
 }) {
   const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const accordionResetSignal = location.key;
   const [subscriptionOpenDefault] = useState(() => false);
   const { apiRequest } = useApi();
 
@@ -153,6 +160,8 @@ export default function SettingsView({
   const [hoursLoading, setHoursLoading] = useState(false);
   const [hoursSaving, setHoursSaving] = useState(false);
   const [hoursMsg, setHoursMsg] = useState("");
+  const [hoursEditing, setHoursEditing] = useState(false);
+  const [hoursDayOpen, setHoursDayOpen] = useState(null); // idx 0..6
 
   const [closedDates, setClosedDates] = useState(null);
   const [closedDatesLoading, setClosedDatesLoading] = useState(false);
@@ -312,6 +321,8 @@ export default function SettingsView({
       setHours(normalized);
       const anySplit = normalized.some((d) => d?.is_open && d?.mode === "split");
       setHoursShiftType(anySplit ? "split" : "intensive");
+      setHoursEditing(true);
+      setHoursDayOpen(null);
     } catch (err) {
       onError?.(formatErr(err));
     } finally {
@@ -390,6 +401,8 @@ export default function SettingsView({
       });
       setHoursMsg("Horario guardado.");
       await onRefresh?.();
+      setHoursEditing(false);
+      setHoursDayOpen(null);
     } catch (err) {
       setHoursMsg(formatErr(err));
       onError?.(formatErr(err));
@@ -548,60 +561,61 @@ export default function SettingsView({
       {/* Interfaz / paleta */}
       {currentUser?.organization_id != null &&
         String(currentUser?.role || "").toUpperCase() === "OWNER" && (
-          <div className="bg-white/90 backdrop-blur-md rounded-[2.5rem] p-6 shadow-sm border border-[var(--bt-border)] space-y-4">
-            <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--bt-primary)] flex items-center gap-2">
-              <Palette className="w-4 h-4" />
-              Interfaz
-            </h3>
-            <p className="text-[11px] text-[var(--bt-muted)] leading-relaxed">
-              Puedes cambiar la paleta aunque tu servicio principal sugiera otra.
-            </p>
-            <div className="grid gap-2">
-              <label className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-muted)] ml-1">
-                Paleta
-              </label>
-              <select
-                value={uiTheme}
-                onChange={(e) => {
-                  setUiThemeOk(false);
-                  setUiTheme(e.target.value);
-                }}
-                className="w-full bg-[var(--bt-bg)] border border-[var(--bt-border)] py-3 px-4 rounded-2xl text-[10px] font-black tracking-widest text-[var(--bt-primary)] focus:outline-none focus:border-[var(--bt-primary)]"
-              >
-                <option value="nails">Uñas / estética (actual)</option>
-                <option value="hair">Peluquería / barbería / spa</option>
-              </select>
+          <SettingsAccordion
+            title="Interfaz"
+            description="Puedes cambiar la paleta aunque tu servicio principal sugiera otra."
+            icon={Palette}
+            defaultOpen={false}
+            resetSignal={accordionResetSignal}
+          >
+            <div className="space-y-3">
+              <div className="grid gap-2">
+                <label className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-muted)] ml-1">
+                  Opciones
+                </label>
+                <select
+                  value={uiTheme}
+                  onChange={(e) => {
+                    setUiThemeOk(false);
+                    setUiTheme(e.target.value);
+                  }}
+                  className="w-full bg-[var(--bt-bg)] border border-[var(--bt-border)] py-3 px-4 rounded-2xl text-[10px] font-black tracking-widest text-[var(--bt-primary)] focus:outline-none focus:border-[var(--bt-primary)]"
+                >
+                  <option value="nails">Uñas / estética (actual)</option>
+                  <option value="hair">Peluquería / barbería / spa</option>
+                </select>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between pt-1">
+                <button
+                  type="button"
+                  disabled={uiThemeBusy || uiTheme === currentUiTheme}
+                  onClick={async () => {
+                    setUiThemeBusy(true);
+                    setUiThemeOk(false);
+                    try {
+                      await apiRequest("/users/me/organization/ui-theme", "PATCH", {
+                        ui_theme: uiTheme,
+                      });
+                      setUiThemeOk(true);
+                      await onRefresh?.();
+                    } catch (err) {
+                      onError?.(formatErr(err));
+                    } finally {
+                      setUiThemeBusy(false);
+                    }
+                  }}
+                  className="inline-flex items-center justify-center rounded-full bg-[var(--bt-primary)] px-6 py-3 text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-50"
+                >
+                  {uiThemeBusy ? "Guardando…" : "Guardar interfaz"}
+                </button>
+                {uiThemeOk && (
+                  <p className="text-[10px] font-bold text-emerald-700 uppercase">
+                    Interfaz actualizada.
+                  </p>
+                )}
+              </div>
             </div>
-            <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between pt-1">
-              <button
-                type="button"
-                disabled={uiThemeBusy || uiTheme === currentUiTheme}
-                onClick={async () => {
-                  setUiThemeBusy(true);
-                  setUiThemeOk(false);
-                  try {
-                    await apiRequest("/users/me/organization/ui-theme", "PATCH", {
-                      ui_theme: uiTheme,
-                    });
-                    setUiThemeOk(true);
-                    await onRefresh?.();
-                  } catch (err) {
-                    onError?.(formatErr(err));
-                  } finally {
-                    setUiThemeBusy(false);
-                  }
-                }}
-                className="inline-flex items-center justify-center rounded-full bg-[var(--bt-primary)] px-6 py-3 text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-50"
-              >
-                {uiThemeBusy ? "Guardando…" : "Guardar interfaz"}
-              </button>
-              {uiThemeOk && (
-                <p className="text-[10px] font-bold text-emerald-700 uppercase">
-                  Interfaz actualizada.
-                </p>
-              )}
-            </div>
-          </div>
+          </SettingsAccordion>
         )}
 
       {needsFiscal && (
@@ -760,36 +774,6 @@ export default function SettingsView({
         </div>
       )}
 
-      {!needsFiscal &&
-        String(currentUser?.role || "").toUpperCase() === "OWNER" && (
-          <SettingsAccordion
-            title="Facturación"
-            description="Estado de los datos fiscales registrados para tu negocio."
-            icon={Building2}
-            defaultOpen={false}
-          >
-            <p className="text-[11px] text-[var(--bt-muted)] leading-relaxed">
-              Los datos fiscales de tu negocio ya están registrados. Si necesitas
-              cambios administrativos, contacta con soporte.
-            </p>
-          </SettingsAccordion>
-        )}
-
-      {isOwnerWithOrg && (
-        <SettingsAccordion
-          title="Suscripción y pago"
-          description="Contrata o cambia tu plan con Stripe; los permisos se aplican según el plan activo."
-          icon={CreditCard}
-          defaultOpen={subscriptionOpenDefault}
-        >
-          <BillingSubscriptionPanel
-            currentUser={currentUser}
-            onRefresh={onRefresh}
-            onError={onError}
-          />
-        </SettingsAccordion>
-      )}
-
       {isOwnerWithOrg && (
         <SettingsAccordion
           title="Servicios del negocio"
@@ -800,6 +784,7 @@ export default function SettingsView({
           }
           icon={Scissors}
           defaultOpen={focusServices}
+          resetSignal={accordionResetSignal}
         >
           <p className="text-[10px] text-[var(--bt-muted)] leading-relaxed mb-4">
             Tu cuenta solo ve los servicios de tu organización.
@@ -1046,6 +1031,7 @@ export default function SettingsView({
           description="Define a qué horas está abierto el negocio para calcular huecos disponibles y automatizar reservas."
           icon={Clock}
           defaultOpen={focusHours}
+          resetSignal={accordionResetSignal}
         >
           <div className="flex items-center justify-between gap-3 mb-4">
             <p className="text-[10px] text-[var(--bt-muted)] leading-relaxed">
@@ -1053,11 +1039,22 @@ export default function SettingsView({
             </p>
             <button
               type="button"
-              onClick={loadHours}
+              onClick={() => {
+                if (hoursEditing) {
+                  setHoursEditing(false);
+                  setHoursDayOpen(null);
+                  return;
+                }
+                loadHours();
+              }}
               disabled={hoursLoading}
               className="shrink-0 rounded-full border border-[var(--bt-border)] bg-white px-4 py-2 text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)] disabled:opacity-50"
             >
-              {hoursLoading ? "Cargando…" : "Cargar"}
+              {hoursLoading
+                ? "Cargando…"
+                : currentUser?.salon_hours_configured
+                  ? "Horario actual"
+                  : "Configurar"}
             </button>
           </div>
 
@@ -1073,13 +1070,13 @@ export default function SettingsView({
             </p>
           )}
 
-          {!hours && (
+          {!hours && !hoursEditing && (
             <p className="text-[10px] text-[var(--bt-muted)]">
-              Pulsa <strong>Cargar</strong> para ver tu horario actual.
+              Pulsa <strong>Configurar</strong> para definir tu horario.
             </p>
           )}
 
-          {Array.isArray(hours) && hours.length === 7 && (
+          {hoursEditing && Array.isArray(hours) && hours.length === 7 && (
             <div className="space-y-3">
               <div className="rounded-2xl border border-[var(--bt-border)] bg-white p-4">
                 <label className="block text-[8px] font-black uppercase text-[var(--bt-muted)] mb-1">
@@ -1105,55 +1102,78 @@ export default function SettingsView({
                   key={d.day_of_week ?? idx}
                   className="rounded-2xl border border-[var(--bt-border)] bg-[var(--bt-bg)] p-4"
                 >
-                  <div className="flex items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setHoursDayOpen((cur) => (cur === idx ? null : idx))
+                    }
+                    className="w-full flex items-center justify-between gap-3 text-left"
+                  >
                     <p className="text-[10px] font-black tracking-widest text-[var(--bt-primary)]">
                       {dayLabel(d.day_of_week)}
                     </p>
-                    <label className="inline-flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-[var(--bt-muted)]">
-                      <input
-                        type="checkbox"
-                        checked={!!d.is_open}
-                        onChange={(e) =>
-                          setHours((prev) =>
-                            prev.map((x, i) =>
-                              i === idx
-                                ? {
-                                    ...x,
-                                    is_open: e.target.checked,
-                                    mode: hoursShiftType,
-                                    intervals: e.target.checked
-                                      ? hoursShiftType === "split"
-                                        ? Array.isArray(x?.intervals) &&
-                                          x.intervals.length === 2
-                                          ? x.intervals
-                                          : [
-                                              { start: "09:00", end: "14:00" },
-                                              { start: "16:00", end: "20:00" },
-                                            ]
-                                        : [
-                                            {
-                                              start:
-                                                (Array.isArray(x?.intervals) &&
-                                                  x.intervals[0]?.start) ||
-                                                "09:00",
-                                              end:
-                                                (Array.isArray(x?.intervals) &&
-                                                  x.intervals[x.intervals.length - 1]
-                                                    ?.end) ||
-                                                "20:00",
-                                            },
-                                          ]
-                                      : x.intervals,
-                                  }
-                                : x,
-                            ),
-                          )
-                        }
-                      />
-                      Abierto
-                    </label>
-                  </div>
-                  {hoursShiftType === "split" ? (
+                    <ChevronDown
+                      className={[
+                        "h-5 w-5 shrink-0 text-[var(--bt-muted)] transition-transform duration-300",
+                        hoursDayOpen === idx ? "rotate-180" : "",
+                      ].join(" ")}
+                      aria-hidden
+                    />
+                  </button>
+
+                  {hoursDayOpen === idx ? (
+                    <>
+                      <div className="mt-3 flex items-center justify-between gap-3">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-muted)]">
+                          Estado
+                        </p>
+                        <label className="inline-flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-[var(--bt-muted)]">
+                          <input
+                            type="checkbox"
+                            checked={!!d.is_open}
+                            onChange={(e) =>
+                              setHours((prev) =>
+                                prev.map((x, i) =>
+                                  i === idx
+                                    ? {
+                                        ...x,
+                                        is_open: e.target.checked,
+                                        mode: hoursShiftType,
+                                        intervals: e.target.checked
+                                          ? hoursShiftType === "split"
+                                            ? Array.isArray(x?.intervals) &&
+                                              x.intervals.length >= 2
+                                              ? x.intervals
+                                              : [
+                                                  { start: "09:00", end: "14:00" },
+                                                  { start: "16:00", end: "20:00" },
+                                                ]
+                                            : [
+                                                {
+                                                  start:
+                                                    (Array.isArray(x?.intervals) &&
+                                                      x.intervals[0]?.start) ||
+                                                    "09:00",
+                                                  end:
+                                                    (Array.isArray(x?.intervals) &&
+                                                      x.intervals[
+                                                        x.intervals.length - 1
+                                                      ]?.end) ||
+                                                    "20:00",
+                                                },
+                                              ]
+                                          : x.intervals,
+                                      }
+                                    : x,
+                                ),
+                              )
+                            }
+                          />
+                          Abierto
+                        </label>
+                      </div>
+
+                      {hoursShiftType === "split" ? (
                     <div className="mt-3 space-y-3">
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-muted)]">
@@ -1237,7 +1257,7 @@ export default function SettingsView({
                         </p>
                       )}
                     </div>
-                  ) : (
+                      ) : (
                     <div className="mt-3 grid grid-cols-2 gap-3">
                       <div>
                         <label className="block text-[8px] font-black uppercase text-[var(--bt-muted)] mb-1">
@@ -1298,7 +1318,9 @@ export default function SettingsView({
                         />
                       </div>
                     </div>
-                  )}
+                      )}
+                    </>
+                  ) : null}
                 </div>
               ))}
               <button
@@ -1307,7 +1329,11 @@ export default function SettingsView({
                 disabled={hoursSaving}
                 className="w-full rounded-full bg-[var(--bt-primary)] py-3 text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-50 hover:bg-[var(--bt-primary-hover)]"
               >
-                {hoursSaving ? "Guardando…" : "Guardar horario"}
+                {hoursSaving
+                  ? "Guardando…"
+                  : currentUser?.salon_hours_configured
+                    ? "Actualizar horario"
+                    : "Guardar horario"}
               </button>
             </div>
           )}
@@ -1324,7 +1350,15 @@ export default function SettingsView({
               </div>
               <button
                 type="button"
-                onClick={loadClosedDates}
+                onClick={() => {
+                  if (closedDatesLoading) return;
+                  if (Array.isArray(closedDates)) {
+                    setClosedDates(null);
+                    setClosedDatesMsg("");
+                    return;
+                  }
+                  loadClosedDates();
+                }}
                 disabled={closedDatesLoading}
                 className="shrink-0 rounded-full border border-[var(--bt-border)] bg-white px-4 py-2 text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)] disabled:opacity-50"
               >
@@ -1426,6 +1460,39 @@ export default function SettingsView({
           </div>
         </SettingsAccordion>
       )}
+
+      {/* Move billing sections to the bottom */}
+      {isOwnerWithOrg && (
+        <SettingsAccordion
+          title="Suscripción y pago"
+          description="Contrata o cambia tu plan con Stripe; los permisos se aplican según el plan activo."
+          icon={CreditCard}
+          defaultOpen={subscriptionOpenDefault}
+          resetSignal={accordionResetSignal}
+        >
+          <BillingSubscriptionPanel
+            currentUser={currentUser}
+            onRefresh={onRefresh}
+            onError={onError}
+          />
+        </SettingsAccordion>
+      )}
+
+      {!needsFiscal &&
+        String(currentUser?.role || "").toUpperCase() === "OWNER" && (
+          <SettingsAccordion
+            title="Facturación"
+            description="Estado de los datos fiscales registrados para tu negocio."
+            icon={Building2}
+            defaultOpen={false}
+            resetSignal={accordionResetSignal}
+          >
+            <p className="text-[11px] text-[var(--bt-muted)] leading-relaxed">
+              Los datos fiscales de tu negocio ya están registrados. Si necesitas
+              cambios administrativos, contacta con soporte.
+            </p>
+          </SettingsAccordion>
+        )}
 
       {serviceToDelete && (
         <div

@@ -28,8 +28,8 @@ const STATS_INTRO = {
     <>
       Aquí podrás revisar <strong>gráficos e indicadores</strong> del salón, la{" "}
       <strong>caja diaria</strong> y el informe mensual. Conforme deslices hacia
-      abajo tendrás un histórico de tu progreso y las citas archivadas.{" "}
-      <strong>histórico</strong> y las citas archivadas.
+      abajo tendrás el <strong>Histórico</strong> de tu progreso y las citas
+      archivadas.
     </>
   ),
 };
@@ -60,7 +60,7 @@ const BASE_TOUR = [
         Bienvenido a tu <strong>Agenda</strong> de reservas: en Reserva de
         Experiencias puedes crear <strong>nuevas reservas</strong>; una vez
         registrada una nueva experiencia en el apartado inferior podrás ver las{" "}
-        <strong>citas próximas de la semana</strong>. Es será tu vista diaria.
+        <strong>citas próximas de la semana</strong>. Esta será tu vista diaria.
       </>
     ),
   },
@@ -420,8 +420,9 @@ export default function FirstVisitGuide({
                   })}
                 </div>
                 <p className="mt-3 text-[10px] text-[var(--bt-muted)] leading-relaxed">
-                  Consejo: configura el <strong>horario</strong> para que el agente
-                  de WhatsApp pueda proponerte huecos reales según el día.
+                  Consejo: configura el <strong>horario</strong> para que el
+                  agente de WhatsApp pueda proponerte huecos reales según el
+                  día.
                 </p>
               </div>
               <button
@@ -509,7 +510,9 @@ export default function FirstVisitGuide({
                 <span
                   key={i}
                   className={`h-1.5 rounded-full transition-all duration-300 ${
-                    i === stepIndex ? "w-6 bg-[var(--bt-primary)]" : "w-1.5 bg-[var(--bt-border)]"
+                    i === stepIndex
+                      ? "w-6 bg-[var(--bt-primary)]"
+                      : "w-1.5 bg-[var(--bt-border)]"
                   }`}
                   aria-hidden
                 />
