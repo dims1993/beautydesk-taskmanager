@@ -13,6 +13,7 @@ import stripe
 from sqlmodel import Session, select
 
 from app.billing.subscription import PaymentMethod, SubscriptionPlan
+from app.models.appointment import Appointment
 from app.models.organization import Organization
 
 
@@ -332,6 +333,40 @@ def handle_checkout_session_completed(db: Session, session_obj: dict) -> None:
     sub_payload = sub.to_dict() if hasattr(sub, "to_dict") else sub
     org.billing_trial_consumed = True
     sync_org_from_stripe_subscription(db, org, sub_payload)
+
+
+def handle_deposit_checkout_session_completed(db: Session, session_obj: dict) -> None:
+    """
+    Deposit checkout: mark appointment as paid and confirm it.
+    Expected session metadata: {kind:"deposit", appointment_id:"...", organization_id:"..."}
+    """
+    if session_obj.get("mode") != "payment":
+        return
+    md = session_obj.get("metadata") or {}
+    if (md.get("kind") or "").strip().lower() != "deposit":
+        return
+    appo_id_raw = md.get("appointment_id")
+    if not appo_id_raw:
+        return
+    try:
+        appo_id = int(appo_id_raw)
+    except (TypeError, ValueError):
+        return
+
+    appo = db.get(Appointment, appo_id)
+    if not appo:
+        return
+
+    # If session id doesn't match, ignore (prevents cross-linking).
+    sid = session_obj.get("id")
+    if sid and getattr(appo, "stripe_checkout_session_id", None) and appo.stripe_checkout_session_id != sid:
+        return
+
+    appo.deposit_paid = True
+    appo.stripe_payment_intent_id = session_obj.get("payment_intent")
+    appo.status = "scheduled"
+    db.add(appo)
+    db.commit()
 
 
 def handle_subscription_updated(db: Session, sub_obj: dict) -> None:

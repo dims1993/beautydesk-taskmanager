@@ -58,6 +58,12 @@ class Organization(SQLModel, table=True):
     stripe_trial_ends_at: Optional[datetime] = Field(default=None)
     stripe_current_period_ends_at: Optional[datetime] = Field(default=None)
 
+    # Stripe Connect (for customer deposits paid directly to the salon/owner)
+    stripe_connect_account_id: Optional[str] = Field(default=None, index=True)
+    stripe_connect_details_submitted: bool = Field(default=False)
+    stripe_connect_charges_enabled: bool = Field(default=False)
+    stripe_connect_payouts_enabled: bool = Field(default=False)
+
     # Datos de facturación / negocio
     legal_name: Optional[str] = Field(default=None)
     billing_address_line1: Optional[str] = Field(default=None)
@@ -91,3 +97,6 @@ class Organization(SQLModel, table=True):
 
     # WhatsApp inbound routing (multi-tenant). Store digits-only E.164 without '+' (e.g. "14155238886").
     whatsapp_to_digits: Optional[str] = Field(default=None, index=True)
+
+    # Public online booking page (/reservar?token=…); opaque per-org token (not the agent API key).
+    booking_public_token: Optional[str] = Field(default=None, index=True)

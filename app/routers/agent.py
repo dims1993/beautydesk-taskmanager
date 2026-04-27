@@ -1,19 +1,20 @@
 import hashlib
-import json
 from datetime import datetime, timedelta, time
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlmodel import Session, select
+from sqlalchemy import or_, and_
+from datetime import timezone
 
 from app.core.db.session import get_session
-from app.dependencies import get_current_user_for_app, get_current_user_optional
+from app.dependencies import get_current_user_optional
 from app.models.appointment import Appointment
-from app.models.client import Client
 from app.models.organization import Organization
 from app.models.service_category import ServiceCategory
 from app.models.service import Service
 from app.models.user import User, UserRole
+from app.services.deposit_booking import book_with_deposit_checkout
 from app.schemas.agent import (
     AvailabilityRequest,
     AvailabilityResponse,
@@ -25,6 +26,7 @@ from app.schemas.agent import (
 )
 
 router = APIRouter(prefix="/agent", tags=["agent"])
+
 
 def _org_from_agent_key(db: Session, key: str) -> Organization | None:
     raw = (key or "").strip()
@@ -164,10 +166,18 @@ def _staff_ids_for_org(db: Session, org_id: int) -> list[int]:
 
 
 def _has_collision(db: Session, org_id: int, staff_id: int, start: datetime, end: datetime) -> bool:
+    now_utc = datetime.now(timezone.utc)
     stmt = select(Appointment).where(
         Appointment.organization_id == org_id,
         Appointment.staff_id == staff_id,
-        Appointment.status == "scheduled",
+        or_(
+            Appointment.status == "scheduled",
+            and_(
+                Appointment.status == "pending_deposit",
+                Appointment.deposit_expires_at.is_not(None),
+                Appointment.deposit_expires_at > now_utc,
+            ),
+        ),
         start < Appointment.end_time,
         end > Appointment.start_time,
     )
@@ -255,112 +265,5 @@ def agent_book(
     current_user: User | None = Depends(get_current_user_optional),
 ):
     org = _get_org_context(db, x_agent_key, current_user)
-    org_id = int(org.id)
-    tz = _tz()
-
-    start = body.start_time
-    if start.tzinfo is None:
-        start = start.replace(tzinfo=tz)
-    else:
-        start = start.astimezone(tz)
-
-    if start < datetime.now(tz) + timedelta(minutes=int(body.min_notice_minutes)):
-        raise HTTPException(status_code=400, detail="Reserva con poca antelación (mínimo 30 min)")
-
-    services = _services_for_org(db, org_id, list(body.service_ids))
-    minutes = _total_minutes(services)
-    price = _total_price(services)
-    end = start + timedelta(minutes=minutes)
-
-    staff_ids = [int(body.preferred_staff_id)] if body.preferred_staff_id else _staff_ids_for_org(db, org_id)
-    if not staff_ids:
-        raise HTTPException(status_code=400, detail="No hay profesionales disponibles")
-
-    chosen_staff: int | None = None
-    for sid in staff_ids:
-        if not _has_collision(db, org_id, sid, start, end):
-            chosen_staff = sid
-            break
-    if chosen_staff is None:
-        raise HTTPException(status_code=400, detail="No hay disponibilidad para esa hora")
-
-    # Client upsert by normalized phone (org-scoped)
-    phone_norm = _norm_phone_es(body.phone)
-    if not phone_norm:
-        raise HTTPException(status_code=400, detail="Teléfono requerido")
-
-    existing_clients = db.exec(select(Client).where(Client.organization_id == org_id)).all()
-    client_row = None
-    for c in existing_clients:
-        if _norm_phone_es(c.telefono) == phone_norm:
-            client_row = c
-            break
-
-    first = (body.first_name or "").strip() or "Cliente"
-    last = (body.last_name or "").strip() or None
-    email = (body.email or "").strip() or None
-
-    if client_row is None:
-        client_row = Client(
-            nombre=first,
-            apellidos=last,
-            telefono=str(body.phone).strip(),
-            email=email,
-            organization_id=org_id,
-        )
-        db.add(client_row)
-        db.flush()
-        db.refresh(client_row)
-    else:
-        # best-effort refresh fields
-        changed = False
-        if first and first != client_row.nombre:
-            client_row.nombre = first
-            changed = True
-        if body.last_name is not None:
-            if (last or None) != client_row.apellidos:
-                client_row.apellidos = last
-                changed = True
-        if email and email != client_row.email:
-            client_row.email = email
-            changed = True
-        if str(body.phone).strip() and str(body.phone).strip() != client_row.telefono:
-            client_row.telefono = str(body.phone).strip()
-            changed = True
-        if changed:
-            db.add(client_row)
-
-    primary = services[0]
-    extras = [int(s.id) for s in services[1:]]
-
-    appo = Appointment(
-        client_id=client_row.id,
-        client_name=" ".join([first, last or ""]).strip(),
-        client_phone=str(body.phone).strip(),
-        client_email=email,
-        start_time=start,
-        end_time=end,
-        status="scheduled",
-        notes=(body.notes or "").strip() or None,
-        staff_id=chosen_staff,
-        service_id=int(primary.id),
-        additional_service_ids_json=json.dumps(extras) if extras else None,
-        organization_id=org_id,
-    )
-
-    db.add(appo)
-    db.commit()
-    db.refresh(appo)
-
-    deposit_amount = round(price * 0.25, 2)
-    return BookResponse(
-        appointment_id=int(appo.id),
-        staff_id=chosen_staff,
-        client_id=int(client_row.id),
-        start_time=appo.start_time,
-        end_time=appo.end_time,
-        total_minutes=minutes,
-        total_price=price,
-        deposit_amount=deposit_amount,
-    )
+    return book_with_deposit_checkout(db, org, body, checkout_return="app")
 

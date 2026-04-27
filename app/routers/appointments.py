@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlmodel import Session, select
 from typing import List, Optional  # Añadimos Optional
 from datetime import timedelta, datetime
+from sqlalchemy import or_, and_
+from datetime import timezone
 from pydantic import BaseModel      # Añadimos BaseModel
 from app.core.db.session import get_session
 from app.models.appointment import Appointment
@@ -167,7 +169,14 @@ async def create_appointment(
 
     collision_stmt = select(Appointment).where(
         Appointment.staff_id == current_user.id,
-        Appointment.status == "scheduled",
+        or_(
+            Appointment.status == "scheduled",
+            and_(
+                Appointment.status == "pending_deposit",
+                Appointment.deposit_expires_at.is_not(None),
+                Appointment.deposit_expires_at > datetime.now(timezone.utc),
+            ),
+        ),
         new_appo.start_time < Appointment.end_time,
         new_appo.end_time > Appointment.start_time,
     )
@@ -266,7 +275,14 @@ def update_appointment(
     if appo.status == "scheduled":
         collision_stmt = select(Appointment).where(
             Appointment.staff_id == appo.staff_id,
-            Appointment.status == "scheduled",
+            or_(
+                Appointment.status == "scheduled",
+                and_(
+                    Appointment.status == "pending_deposit",
+                    Appointment.deposit_expires_at.is_not(None),
+                    Appointment.deposit_expires_at > datetime.now(timezone.utc),
+                ),
+            ),
             Appointment.id != appointment_id,
             new_start < Appointment.end_time,
             new_end > Appointment.start_time,

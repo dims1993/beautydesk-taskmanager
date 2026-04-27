@@ -30,6 +30,14 @@ class Appointment(SQLModel, table=True):
     final_price: Optional[float] = Field(default=0.0)
     payment_method: Optional[str] = Field(default="efectivo")
 
+    # Deposit flow (Stripe Connect + Checkout)
+    deposit_percent: Optional[float] = Field(default=None)  # e.g. 0.25
+    deposit_amount: Optional[float] = Field(default=None)
+    deposit_paid: bool = Field(default=False)
+    deposit_expires_at: Optional[datetime] = Field(default=None)
+    stripe_checkout_session_id: Optional[str] = Field(default=None, index=True)
+    stripe_payment_intent_id: Optional[str] = Field(default=None, index=True)
+
     # Claves foráneas
     staff_id: int = Field(foreign_key="user.id")
     service_id: int = Field(foreign_key="service.id")

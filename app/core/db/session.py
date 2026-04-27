@@ -151,6 +151,39 @@ def init_db():
                     'ALTER TABLE "appointment" ADD COLUMN IF NOT EXISTS additional_service_ids_json TEXT'
                 )
             )
+            for col in (
+                "deposit_percent",
+                "deposit_amount",
+                "deposit_paid",
+                "deposit_expires_at",
+                "stripe_checkout_session_id",
+                "stripe_payment_intent_id",
+            ):
+                # best-effort: add columns if missing
+                if col in ("deposit_percent", "deposit_amount"):
+                    conn.execute(
+                        text(
+                            f'ALTER TABLE "appointment" ADD COLUMN IF NOT EXISTS {col} DOUBLE PRECISION'
+                        )
+                    )
+                elif col == "deposit_paid":
+                    conn.execute(
+                        text(
+                            'ALTER TABLE "appointment" ADD COLUMN IF NOT EXISTS deposit_paid BOOLEAN DEFAULT FALSE'
+                        )
+                    )
+                elif col == "deposit_expires_at":
+                    conn.execute(
+                        text(
+                            'ALTER TABLE "appointment" ADD COLUMN IF NOT EXISTS deposit_expires_at TIMESTAMP WITH TIME ZONE'
+                        )
+                    )
+                else:
+                    conn.execute(
+                        text(
+                            f'ALTER TABLE "appointment" ADD COLUMN IF NOT EXISTS {col} TEXT'
+                        )
+                    )
             conn.execute(
                 text(
                     'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS integrations_access BOOLEAN DEFAULT TRUE'
@@ -210,6 +243,17 @@ def init_db():
                     'ALTER TABLE "organization" ADD COLUMN IF NOT EXISTS salon_category_primary TEXT'
                 )
             )
+            for col, typ in (
+                ("stripe_connect_account_id", "TEXT"),
+                ("stripe_connect_details_submitted", "BOOLEAN DEFAULT FALSE"),
+                ("stripe_connect_charges_enabled", "BOOLEAN DEFAULT FALSE"),
+                ("stripe_connect_payouts_enabled", "BOOLEAN DEFAULT FALSE"),
+            ):
+                conn.execute(
+                    text(
+                        f'ALTER TABLE "organization" ADD COLUMN IF NOT EXISTS {col} {typ}'
+                    )
+                )
             conn.execute(
                 text(
                     'ALTER TABLE "organization" ADD COLUMN IF NOT EXISTS salon_categories_json TEXT'
@@ -253,6 +297,17 @@ def init_db():
             conn.execute(
                 text(
                     'ALTER TABLE "organization" ADD COLUMN IF NOT EXISTS whatsapp_to_digits TEXT'
+                )
+            )
+            conn.execute(
+                text(
+                    'ALTER TABLE "organization" ADD COLUMN IF NOT EXISTS booking_public_token TEXT'
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_organization_booking_public_token "
+                    "ON organization (booking_public_token)"
                 )
             )
             _normalize_org_plan_payment_enums_to_varchar(conn)

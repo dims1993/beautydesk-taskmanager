@@ -18,6 +18,8 @@ from app.routers.agent import (
     _staff_ids_for_org,
     _total_minutes,
 )
+from app.schemas.agent import BookRequest
+from app.services.deposit_booking import book_with_deposit_checkout, org_accepts_online_deposit
 
 
 TZ = ZoneInfo("Europe/Madrid")
@@ -993,6 +995,61 @@ def handle_inbound_whatsapp(
         start = datetime.fromisoformat(str(selected["start"]))
         staff_id = int(selected["staff_id"])
         service_ids = [int(x) for x in (state.get("service_ids") or [])]
+
+        phone_digits = _norm_phone_es(_digits_only(from_addr))
+        if not phone_digits:
+            state = {"step": "idle"}
+            _save_state(db, conv, state)
+            return (
+                "No puedo leer tu número de teléfono desde WhatsApp. "
+                "Escribe CITA para intentarlo de nuevo."
+            )
+
+        existing = db.exec(
+            select(Client).where(
+                Client.organization_id == org.id,
+                Client.telefono == phone_digits,
+            )
+        ).first()
+        first = (getattr(existing, "nombre", None) or "").strip() or "Cliente"
+        last = (getattr(existing, "apellidos", None) or "").strip() or None
+        email = (getattr(existing, "email", None) or "").strip() or None
+
+        if org_accepts_online_deposit(org):
+            try:
+                body = BookRequest(
+                    first_name=first,
+                    last_name=last or None,
+                    phone=str(phone_digits),
+                    email=email or None,
+                    service_ids=service_ids,
+                    start_time=start,
+                    preferred_staff_id=staff_id,
+                    notes="Reserva por WhatsApp (depósito).",
+                    min_notice_minutes=30,
+                )
+                res = book_with_deposit_checkout(db, org, body, checkout_return="guest")
+                pay = (res.payment_url or "").strip()
+                state = {"step": "idle"}
+                _save_state(db, conv, state)
+                if not pay:
+                    return (
+                        "No se pudo generar el enlace de pago. Escribe CITA para intentarlo de nuevo "
+                        "o contacta con el salón."
+                    )
+                return (
+                    "Para confirmar la cita, paga el depósito (25%) en este enlace "
+                    "(tienes unos minutos; tarjeta o Bizum):\n"
+                    f"{pay}\n\n"
+                    "Al completar el pago, la cita quedará confirmada sola. "
+                    "Si quieres otra cita después, escribe CITA."
+                )
+            except HTTPException as e:
+                d = e.detail if isinstance(e.detail, str) else str(e.detail)
+                state = {"step": "idle"}
+                _save_state(db, conv, state)
+                return f"No se pudo preparar el pago: {d} Escribe CITA para intentarlo de nuevo."
+
         appo = _book_appointment(
             db,
             org=org,
@@ -1007,6 +1064,7 @@ def handle_inbound_whatsapp(
             "¡Gracias! Tu cita ha sido agendada.\n"
             f"- Cita #{int(appo.id)}\n"
             f"- Día/hora: {start.strftime('%Y-%m-%d %H:%M')}\n"
+            "(Este salón aún no tiene activado el depósito online; la reserva queda sin pago por la app.)\n"
             "Si quieres otra cita, escribe CITA."
         )
 

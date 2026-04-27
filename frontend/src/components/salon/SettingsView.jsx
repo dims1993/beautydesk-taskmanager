@@ -109,6 +109,13 @@ export default function SettingsView({
   const accordionResetSignal = location.key;
   const [subscriptionOpenDefault] = useState(() => false);
   const { apiRequest } = useApi();
+  const [connectStatus, setConnectStatus] = useState(null);
+  const [connectLoading, setConnectLoading] = useState(false);
+  const [connectOnboarding, setConnectOnboarding] = useState(false);
+  const [connectError, setConnectError] = useState("");
+  const [publicBookingUrl, setPublicBookingUrl] = useState("");
+  const [publicBookingBusy, setPublicBookingBusy] = useState(false);
+  const [publicBookingCopied, setPublicBookingCopied] = useState(false);
 
   const focus = String(searchParams.get("focus") || "").toLowerCase();
   const focusServices = false;
@@ -132,6 +139,59 @@ export default function SettingsView({
     billing_phone: "",
     billing_email: "",
   });
+
+  async function loadConnectStatus() {
+    setConnectError("");
+    setConnectLoading(true);
+    try {
+      const st = await apiRequest("/payments/connect/status", "GET");
+      setConnectStatus(st || null);
+    } catch (e) {
+      setConnectError(formatErr(e));
+    } finally {
+      setConnectLoading(false);
+    }
+  }
+
+  async function startConnectOnboarding() {
+    setConnectError("");
+    setConnectOnboarding(true);
+    try {
+      const res = await apiRequest("/payments/connect/onboard", "POST", {});
+      const url = String(res?.url || "").trim();
+      if (!url) throw new Error("No se recibió URL de Stripe.");
+      window.location.href = url;
+    } catch (e) {
+      setConnectError(formatErr(e));
+      setConnectOnboarding(false);
+    }
+  }
+
+  async function ensurePublicBookingLink() {
+    setConnectError("");
+    setPublicBookingBusy(true);
+    setPublicBookingCopied(false);
+    try {
+      const r = await apiRequest("/users/me/organization/public-booking-link", "POST", {});
+      setPublicBookingUrl(String(r?.url || "").trim());
+    } catch (e) {
+      setConnectError(formatErr(e));
+    } finally {
+      setPublicBookingBusy(false);
+    }
+  }
+
+  async function copyPublicBookingUrl() {
+    const u = String(publicBookingUrl || "").trim();
+    if (!u) return;
+    try {
+      await navigator.clipboard.writeText(u);
+      setPublicBookingCopied(true);
+      window.setTimeout(() => setPublicBookingCopied(false), 2000);
+    } catch {
+      setConnectError("No se pudo copiar al portapapeles.");
+    }
+  }
 
   const currentUiTheme = String(currentUser?.organization_ui_theme || "nails")
     .trim()
@@ -1680,6 +1740,103 @@ export default function SettingsView({
       )}
 
       {/* Move billing sections to the bottom */}
+      {isOwnerWithOrg && (
+        <SettingsAccordion
+          title="Cobros (depósitos)"
+          description="Conecta Stripe para cobrar un depósito online en las reservas (tarjeta y Bizum)."
+          icon={Shield}
+          defaultOpen={false}
+          resetSignal={accordionResetSignal}
+        >
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-[var(--bt-border)] bg-[var(--bt-bg)] p-4">
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[var(--bt-muted)] mb-2">
+                Estado de Stripe Connect
+              </p>
+
+              {connectStatus ? (
+                <div className="space-y-1 text-[11px] text-[var(--bt-muted)]">
+                  <p>
+                    <strong className="text-[var(--bt-primary)]">Cuenta:</strong>{" "}
+                    {connectStatus.connect_account_id ? "Conectada" : "No conectada"}
+                  </p>
+                  <p>
+                    <strong className="text-[var(--bt-primary)]">Pagos:</strong>{" "}
+                    {connectStatus.charges_enabled ? "Activos" : "Pendientes"}
+                  </p>
+                  <p>
+                    <strong className="text-[var(--bt-primary)]">Cobros al salón:</strong>{" "}
+                    {connectStatus.payouts_enabled ? "Activos" : "Pendientes"}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-[11px] text-[var(--bt-muted)]">
+                  Pulsa “Comprobar estado” para ver si tu cuenta está lista.
+                </p>
+              )}
+            </div>
+
+            {!!connectError && (
+              <p className="text-[11px] font-bold text-red-600">{connectError}</p>
+            )}
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={loadConnectStatus}
+                disabled={connectLoading}
+                className="w-full rounded-full border border-[var(--bt-border)] bg-white py-3 text-[10px] font-black uppercase tracking-widest text-[var(--bt-muted)] hover:bg-[var(--bt-bg)] disabled:opacity-50"
+              >
+                {connectLoading ? "Comprobando…" : "Comprobar estado"}
+              </button>
+              <button
+                type="button"
+                onClick={startConnectOnboarding}
+                disabled={connectOnboarding}
+                className="w-full rounded-full bg-[var(--bt-primary)] py-3 text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-50 hover:bg-[var(--bt-primary-hover)]"
+              >
+                {connectOnboarding ? "Abriendo Stripe…" : "Conectar Stripe"}
+              </button>
+            </div>
+
+            <div className="rounded-2xl border border-[var(--bt-border)] bg-[var(--bt-bg)] p-4 space-y-3">
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[var(--bt-muted)]">
+                Página pública de reserva
+              </p>
+              <p className="text-[11px] text-[var(--bt-muted)] leading-relaxed">
+                Comparte este enlace con tus clientes para que reserven solos y paguen
+                el depósito online (además del flujo por WhatsApp con el mismo enlace de
+                pago que genera el agente).
+              </p>
+              <button
+                type="button"
+                onClick={ensurePublicBookingLink}
+                disabled={publicBookingBusy}
+                className="w-full rounded-full border border-[var(--bt-border)] bg-white py-3 text-[10px] font-black uppercase tracking-widest text-[var(--bt-muted)] hover:bg-white/80 disabled:opacity-50"
+              >
+                {publicBookingBusy ? "Generando…" : publicBookingUrl ? "Actualizar enlace" : "Obtener enlace"}
+              </button>
+              {!!publicBookingUrl && (
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <input
+                    readOnly
+                    value={publicBookingUrl}
+                    className="min-w-0 flex-1 rounded-2xl border border-[var(--bt-border)] bg-white px-3 py-2 text-[10px] text-[var(--bt-primary)]"
+                  />
+                  <button
+                    type="button"
+                    onClick={copyPublicBookingUrl}
+                    className="shrink-0 rounded-full bg-[var(--bt-primary)] px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white hover:bg-[var(--bt-primary-hover)]"
+                  >
+                    {publicBookingCopied ? "Copiado" : "Copiar"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </SettingsAccordion>
+      )}
+
       {isOwnerWithOrg && (
         <SettingsAccordion
           title="Suscripción y pago"

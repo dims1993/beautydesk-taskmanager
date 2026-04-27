@@ -19,6 +19,7 @@ import Landing from "./components/marketing/Landing";
 import ContactoView from "./components/marketing/ContactoView";
 import TermsView from "./components/marketing/TermsView";
 import PrivacyView from "./components/marketing/PrivacyView";
+import PublicBookingView from "./components/public/PublicBookingView";
 import LoginView from "./components/auth/LoginView";
 import RegisterView from "./components/auth/RegisterView";
 import RoleGuard from "./components/auth/RoleGuard";
@@ -403,6 +404,7 @@ function App() {
           <Route path="/contacto" element={<ContactoView />} />
           <Route path="/legal/terms" element={<TermsView />} />
           <Route path="/legal/privacy" element={<PrivacyView />} />
+          <Route path="/reservar" element={<PublicBookingView />} />
 
           <Route
             path="/register"

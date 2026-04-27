@@ -65,4 +65,6 @@ class BookResponse(BaseModel):
     total_price: float
     deposit_percent: int = 25
     deposit_amount: float
+    payment_url: Optional[str] = None
+    deposit_expires_at: Optional[datetime] = None
 

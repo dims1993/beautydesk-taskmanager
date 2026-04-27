@@ -15,6 +15,7 @@ from app.billing.stripe_service import (
     create_billing_portal_session,
     create_checkout_session,
     handle_checkout_session_completed,
+    handle_deposit_checkout_session_completed,
     handle_subscription_deleted,
     handle_subscription_updated,
     modify_subscription_to_plan,
@@ -269,7 +270,12 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_session)):
 
     try:
         if etype == "checkout.session.completed":
-            handle_checkout_session_completed(db, data)
+            md = data.get("metadata") if isinstance(data, dict) else None
+            kind = ((md or {}).get("kind") or "").strip().lower() if isinstance(md, dict) else ""
+            if kind == "deposit" or ((md or {}).get("appointment_id") if isinstance(md, dict) else None):
+                handle_deposit_checkout_session_completed(db, data)
+            else:
+                handle_checkout_session_completed(db, data)
         elif etype == "customer.subscription.updated":
             handle_subscription_updated(db, data)
         elif etype == "customer.subscription.deleted":

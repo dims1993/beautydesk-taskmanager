@@ -24,6 +24,8 @@ from app.routers import (
     clients,
     geocode,
     organizations,
+    payments,
+    public_booking,
     services,
     users,
     webhooks,
@@ -95,9 +97,11 @@ app.include_router(services.router)
 app.include_router(organizations.router, prefix="/users")
 app.include_router(auth.router)
 app.include_router(billing.router)
+app.include_router(payments.router)
 app.include_router(agent.router)
 app.include_router(webhooks.router)
 app.include_router(geocode.router)
+app.include_router(public_booking.router)
 
 # --- ENDPOINTS DE AUTENTICACIÓN ---
 

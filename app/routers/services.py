@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlmodel import Session, select
+from sqlalchemy import or_, and_
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from app.core.db.session import get_session
@@ -336,7 +338,14 @@ def delete_service(
         select(Appointment.id)
         .where(
             Appointment.service_id == service_id,
-            Appointment.status == "scheduled",
+            or_(
+                Appointment.status == "scheduled",
+                and_(
+                    Appointment.status == "pending_deposit",
+                    Appointment.deposit_expires_at.is_not(None),
+                    Appointment.deposit_expires_at > datetime.now(timezone.utc),
+                ),
+            ),
         )
         .limit(1)
     ).first()

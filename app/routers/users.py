@@ -2,6 +2,7 @@ import logging
 import os
 import secrets
 from datetime import datetime
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from google.auth.transport import requests as google_requests
@@ -467,6 +468,45 @@ def set_closed_dates(
     db.add(org)
     db.commit()
     return {"success": True}
+
+
+@router.post("/me/organization/public-booking-link")
+def ensure_public_booking_link(
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user_for_app),
+):
+    """Genera (si falta) un token opaco para la página pública de reservas /reservar?token=…"""
+    if current_user.role != UserRole.OWNER:
+        raise HTTPException(status_code=403, detail="Solo el titular puede obtener el enlace.")
+    if not current_user.organization_id:
+        raise HTTPException(status_code=400, detail="No perteneces a una organización.")
+    org = db.get(Organization, current_user.organization_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+
+    tok = getattr(org, "booking_public_token", None)
+    if not tok or not str(tok).strip():
+        for _ in range(12):
+            candidate = secrets.token_urlsafe(18)
+            clash = db.exec(
+                select(Organization).where(Organization.booking_public_token == candidate)
+            ).first()
+            if not clash:
+                org.booking_public_token = candidate
+                db.add(org)
+                db.commit()
+                db.refresh(org)
+                tok = org.booking_public_token
+                break
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail="No se pudo generar el enlace. Reintenta en unos segundos.",
+            )
+
+    base = (os.getenv("FRONTEND_URL") or "http://localhost:5173").rstrip("/")
+    url = f"{base}/reservar?token={quote(str(tok).strip(), safe='')}"
+    return {"token": str(tok).strip(), "url": url}
 
 
 def _country_code_for_org(org: Organization) -> str | None:
