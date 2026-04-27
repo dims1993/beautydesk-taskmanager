@@ -272,6 +272,66 @@ def _parse_staff_choice(txt: str, staff_cache: list[dict]) -> int | None:
     return int(staff_cache[choice - 1]["id"])
 
 
+def _parse_hhmm_to_time(s: str, *, fallback: time) -> time:
+    try:
+        hh, mm = [int(x) for x in str(s).strip().split(":")]
+        return time(hh, mm)
+    except Exception:
+        return fallback
+
+
+def _org_open_windows_for_day(org: Organization, *, dow: int) -> list[tuple[time, time]]:
+    """
+    Returns 0..N open windows for a day, supporting both:
+    - New schema: {"mode": "...", "intervals": [{"start","end"}, ...]}
+    - Legacy schema: {"open_time","close_time"}
+    """
+    raw = (getattr(org, "salon_hours_json", None) or "").strip()
+    if not raw:
+        return [(time(9, 0), time(20, 0))]
+    try:
+        days = json.loads(raw) or []
+        row = next((d for d in days if int(d.get("day_of_week", -1)) == dow), None)
+    except Exception:
+        row = None
+    if not isinstance(row, dict):
+        return [(time(9, 0), time(20, 0))]
+    if not bool(row.get("is_open", True)):
+        return []
+
+    intervals = row.get("intervals")
+    if isinstance(intervals, list) and intervals:
+        out: list[tuple[time, time]] = []
+        for it in intervals:
+            if not isinstance(it, dict):
+                continue
+            st = _parse_hhmm_to_time(it.get("start", "09:00"), fallback=time(9, 0))
+            en = _parse_hhmm_to_time(it.get("end", "20:00"), fallback=time(20, 0))
+            if st < en:
+                out.append((st, en))
+        return out or [(time(9, 0), time(20, 0))]
+
+    open_t = _parse_hhmm_to_time(row.get("open_time", "09:00"), fallback=time(9, 0))
+    close_t = _parse_hhmm_to_time(row.get("close_time", "20:00"), fallback=time(20, 0))
+    if open_t >= close_t:
+        return [(time(9, 0), time(20, 0))]
+    return [(open_t, close_t)]
+
+
+def _org_is_closed_on_date(org: Organization, *, day: date) -> bool:
+    raw = (getattr(org, "salon_closed_dates_json", None) or "").strip()
+    if not raw:
+        return False
+    try:
+        dates = json.loads(raw) or []
+        if not isinstance(dates, list):
+            return False
+        s = day.isoformat()
+        return any(str(x).strip() == s for x in dates)
+    except Exception:
+        return False
+
+
 def _compute_slots(
     db: Session,
     *,
@@ -288,46 +348,36 @@ def _compute_slots(
     if minutes <= 0:
         raise HTTPException(status_code=400, detail="Invalid service duration")
 
+    if _org_is_closed_on_date(org, day=day):
+        return []
+
     dow = day.weekday()  # Mon=0 .. Sun=6
-    open_t = time(9, 0)
-    close_t = time(20, 0)
-    is_open = True
-    raw = (getattr(org, "salon_hours_json", None) or "").strip()
-    if raw:
-        try:
-            days = json.loads(raw)
-            row = next((d for d in days if int(d.get("day_of_week", -1)) == dow), None)
-            if row:
-                is_open = bool(row.get("is_open", True))
-                if is_open:
-                    oh, om = [int(x) for x in str(row.get("open_time", "09:00")).split(":")]
-                    ch, cm = [int(x) for x in str(row.get("close_time", "20:00")).split(":")]
-                    open_t = time(oh, om)
-                    close_t = time(ch, cm)
-        except Exception:
-            pass
-    if not is_open:
+    windows = _org_open_windows_for_day(org, dow=dow)
+    if not windows:
         return []
 
     # IMPORTANT: Appointment.start_time is stored as naive local time in DB (timestamp without tz).
     # If we pass tz-aware datetimes, Postgres will convert to UTC and we end up with a 2h shift.
-    day_open = datetime.combine(day, open_t)
-    day_close = datetime.combine(day, close_t)
     now_local = _local_now_naive()
     min_start = now_local + timedelta(minutes=min_notice_minutes)
-    cursor = max(day_open, min_start)
 
     staff_ids = _staff_ids_for_org(db, org_id)
     slots: list[tuple[datetime, int]] = []
 
     # Simple strategy: first-fit across staff
-    while cursor + timedelta(minutes=minutes) <= day_close and len(slots) < limit:
-        end = cursor + timedelta(minutes=minutes)
-        for staff_id in staff_ids:
-            if not _has_collision(db, org_id, staff_id, cursor, end):
-                slots.append((cursor, staff_id))
-                break
-        cursor = cursor + timedelta(minutes=step_minutes)
+    for open_t, close_t in windows:
+        day_open = datetime.combine(day, open_t)
+        day_close = datetime.combine(day, close_t)
+        cursor = max(day_open, min_start)
+        while cursor + timedelta(minutes=minutes) <= day_close and len(slots) < limit:
+            end = cursor + timedelta(minutes=minutes)
+            for staff_id in staff_ids:
+                if not _has_collision(db, org_id, staff_id, cursor, end):
+                    slots.append((cursor, staff_id))
+                    break
+            cursor = cursor + timedelta(minutes=step_minutes)
+        if len(slots) >= limit:
+            break
     return slots
 
 
@@ -352,29 +402,14 @@ def _compute_slots_near_preferred_time(
     if minutes <= 0:
         return []
 
-    dow = day.weekday()
-    open_t = time(9, 0)
-    close_t = time(20, 0)
-    is_open = True
-    raw = (getattr(org, "salon_hours_json", None) or "").strip()
-    if raw:
-        try:
-            days = json.loads(raw)
-            row = next((d for d in days if int(d.get("day_of_week", -1)) == dow), None)
-            if row:
-                is_open = bool(row.get("is_open", True))
-                if is_open:
-                    oh, om = [int(x) for x in str(row.get("open_time", "09:00")).split(":")]
-                    ch, cm = [int(x) for x in str(row.get("close_time", "20:00")).split(":")]
-                    open_t = time(oh, om)
-                    close_t = time(ch, cm)
-        except Exception:
-            pass
-    if not is_open:
+    if _org_is_closed_on_date(org, day=day):
         return []
 
-    day_open = datetime.combine(day, open_t)
-    day_close = datetime.combine(day, close_t)
+    dow = day.weekday()
+    windows = _org_open_windows_for_day(org, dow=dow)
+    if not windows:
+        return []
+
     requested = datetime.combine(day, preferred)
 
     now_local = _local_now_naive()
@@ -384,9 +419,18 @@ def _compute_slots_near_preferred_time(
 
     staff_ids = _staff_ids_for_org(db, org_id)
 
+    def within_some_window(start_dt: datetime) -> bool:
+        end_dt = start_dt + timedelta(minutes=minutes)
+        for open_t, close_t in windows:
+            w_open = datetime.combine(day, open_t)
+            w_close = datetime.combine(day, close_t)
+            if start_dt >= w_open and end_dt <= w_close:
+                return True
+        return False
+
     def fits(start_dt: datetime) -> tuple[datetime, int] | None:
         end_dt = start_dt + timedelta(minutes=minutes)
-        if start_dt < day_open or end_dt > day_close:
+        if not within_some_window(start_dt):
             return None
         for staff_id in staff_ids:
             if not _has_collision(db, org_id, staff_id, start_dt, end_dt):
@@ -403,17 +447,20 @@ def _compute_slots_near_preferred_time(
     if hit:
         return [hit]
 
-    # 2) Nearest alternatives around exact
-    out: list[tuple[datetime, int]] = []
-    for delta_steps in range(1, 16):  # search up to ~4h each side (15m * 16)
-        for sign in (-1, 1):
-            cand = exact + timedelta(minutes=sign * delta_steps * step)
-            h = fits(cand)
+    # 2) Nearest alternatives (across windows) based on distance to exact
+    all_candidates: list[tuple[datetime, int]] = []
+    step_td = timedelta(minutes=step)
+    for open_t, close_t in windows:
+        w_open = datetime.combine(day, open_t)
+        w_close = datetime.combine(day, close_t)
+        cursor = max(w_open, min_start)
+        while cursor + timedelta(minutes=minutes) <= w_close:
+            h = fits(cursor)
             if h:
-                out.append(h)
-                if len(out) >= limit:
-                    return out
-    return out
+                all_candidates.append(h)
+            cursor = cursor + step_td
+    all_candidates.sort(key=lambda x: abs((x[0] - exact).total_seconds()))
+    return all_candidates[:limit]
 
 
 def _compute_slots_for_specific_staff_near_time(
@@ -435,38 +482,32 @@ def _compute_slots_for_specific_staff_near_time(
     if minutes <= 0:
         return []
 
-    dow = day.weekday()
-    open_t = time(9, 0)
-    close_t = time(20, 0)
-    is_open = True
-    raw = (getattr(org, "salon_hours_json", None) or "").strip()
-    if raw:
-        try:
-            days = json.loads(raw)
-            row = next((d for d in days if int(d.get("day_of_week", -1)) == dow), None)
-            if row:
-                is_open = bool(row.get("is_open", True))
-                if is_open:
-                    oh, om = [int(x) for x in str(row.get("open_time", "09:00")).split(":")]
-                    ch, cm = [int(x) for x in str(row.get("close_time", "20:00")).split(":")]
-                    open_t = time(oh, om)
-                    close_t = time(ch, cm)
-        except Exception:
-            pass
-    if not is_open:
+    if _org_is_closed_on_date(org, day=day):
         return []
 
-    day_open = datetime.combine(day, open_t)
-    day_close = datetime.combine(day, close_t)
+    dow = day.weekday()
+    windows = _org_open_windows_for_day(org, dow=dow)
+    if not windows:
+        return []
+
     requested = datetime.combine(day, preferred)
 
     min_start = _local_now_naive() + timedelta(minutes=min_notice_minutes)
     if requested < min_start:
         requested = min_start
 
+    def within_some_window(start_dt: datetime) -> bool:
+        end_dt = start_dt + timedelta(minutes=minutes)
+        for open_t, close_t in windows:
+            w_open = datetime.combine(day, open_t)
+            w_close = datetime.combine(day, close_t)
+            if start_dt >= w_open and end_dt <= w_close:
+                return True
+        return False
+
     def fits(start_dt: datetime) -> bool:
         end_dt = start_dt + timedelta(minutes=minutes)
-        if start_dt < day_open or end_dt > day_close:
+        if not within_some_window(start_dt):
             return False
         return not _has_collision(db, org_id, staff_id, start_dt, end_dt)
 

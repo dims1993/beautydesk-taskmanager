@@ -153,14 +153,158 @@ export default function SettingsView({
   const [serviceToDelete, setServiceToDelete] = useState(null);
 
   const [hours, setHours] = useState(null);
+  const [hoursShiftType, setHoursShiftType] = useState("intensive"); // intensive | split
   const [hoursLoading, setHoursLoading] = useState(false);
   const [hoursSaving, setHoursSaving] = useState(false);
   const [hoursMsg, setHoursMsg] = useState("");
+
+  const [closedDates, setClosedDates] = useState(null);
+  const [closedDatesLoading, setClosedDatesLoading] = useState(false);
+  const [closedDatesSaving, setClosedDatesSaving] = useState(false);
+  const [closedDatesMsg, setClosedDatesMsg] = useState("");
+  const [newClosedDate, setNewClosedDate] = useState("");
+  const [holidaySuggesting, setHolidaySuggesting] = useState(false);
+
+  const formatDateEs = (iso) => {
+    const s = String(iso || "").trim();
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return s;
+    return `${m[3]}/${m[2]}/${m[1]}`;
+  };
 
   const dayLabel = (dow) =>
     ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"][
       Number(dow) || 0
     ];
+
+  const normalizeHoursDays = (days) => {
+    const out = [];
+    for (let dow = 0; dow < 7; dow++) {
+      const row = Array.isArray(days)
+        ? days.find((d) => Number(d?.day_of_week) === dow)
+        : null;
+      const isOpen = row ? !!row.is_open : dow !== 6;
+      let mode = String(row?.mode || "").trim().toLowerCase();
+      let intervals = Array.isArray(row?.intervals) ? row.intervals : null;
+
+      // Backward compat: open_time/close_time
+      if (!Array.isArray(intervals) || intervals.length === 0) {
+        const ot = String(row?.open_time || "09:00");
+        const ct = String(row?.close_time || "20:00");
+        intervals = [{ start: ot, end: ct }];
+        mode = "intensive";
+      }
+
+      if (mode !== "intensive" && mode !== "split") {
+        mode = intervals.length === 2 ? "split" : "intensive";
+      }
+
+      // Ensure split has 2 intervals (typical lunch break default)
+      if (mode === "split" && intervals.length === 1) {
+        intervals = [
+          { start: intervals[0]?.start || "09:00", end: "14:00" },
+          { start: "16:00", end: intervals[0]?.end || "20:00" },
+        ];
+      }
+      if (mode === "intensive" && intervals.length !== 1) {
+        intervals = [
+          {
+            start: String(intervals[0]?.start || "09:00"),
+            end: String(intervals[intervals.length - 1]?.end || "20:00"),
+          },
+        ];
+      }
+
+      out.push({
+        day_of_week: dow,
+        is_open: isOpen,
+        mode,
+        intervals,
+      });
+    }
+    return out;
+  };
+
+  const applyShiftTypeToAll = (type) => {
+    const t = String(type || "intensive").toLowerCase();
+    setHoursShiftType(t);
+    setHours((prev) => {
+      if (!Array.isArray(prev) || prev.length !== 7) return prev;
+      return prev.map((d) => {
+        if (!d?.is_open) return { ...d, mode: t };
+        const current = Array.isArray(d?.intervals) ? d.intervals : [];
+        if (t === "split") {
+          const base =
+            current.length >= 1
+              ? current[0]
+              : { start: "09:00", end: "20:00" };
+          return {
+            ...d,
+            mode: "split",
+            intervals:
+              current.length >= 2
+                ? current
+                : [
+                    { start: base.start || "09:00", end: "14:00" },
+                    { start: "16:00", end: base.end || "20:00" },
+                  ],
+          };
+        }
+        // intensive
+        const start = current[0]?.start || "09:00";
+        const end =
+          current.length >= 2 ? current[current.length - 1]?.end : current[0]?.end;
+        return { ...d, mode: "intensive", intervals: [{ start, end: end || "20:00" }] };
+      });
+    });
+  };
+
+  const addIntervalForDay = (dayIdx) => {
+    setHours((prev) => {
+      if (!Array.isArray(prev) || prev.length !== 7) return prev;
+      return prev.map((d, idx) => {
+        if (idx !== dayIdx) return d;
+        const intervals = Array.isArray(d?.intervals) ? d.intervals : [];
+        const lastEnd = intervals.length
+          ? String(intervals[intervals.length - 1]?.end || "14:00")
+          : "14:00";
+        // naive default: 2h break then 4h open
+        const nextStart = lastEnd < "20:00" ? lastEnd : "16:00";
+        const nextEnd = nextStart < "20:00" ? "20:00" : nextStart;
+        return {
+          ...d,
+          mode: "split",
+          intervals: [...intervals, { start: nextStart, end: nextEnd }],
+        };
+      });
+    });
+  };
+
+  const removeIntervalForDay = (dayIdx, intervalIdx) => {
+    setHours((prev) => {
+      if (!Array.isArray(prev) || prev.length !== 7) return prev;
+      return prev.map((d, idx) => {
+        if (idx !== dayIdx) return d;
+        const intervals = Array.isArray(d?.intervals) ? d.intervals : [];
+        const next = intervals.filter((_, i) => i !== intervalIdx);
+        return { ...d, mode: "split", intervals: next };
+      });
+    });
+  };
+
+  const updateIntervalForDay = (dayIdx, intervalIdx, patch) => {
+    setHours((prev) => {
+      if (!Array.isArray(prev) || prev.length !== 7) return prev;
+      return prev.map((d, idx) => {
+        if (idx !== dayIdx) return d;
+        const intervals = Array.isArray(d?.intervals) ? d.intervals : [];
+        const next = intervals.map((it, i) =>
+          i === intervalIdx ? { ...it, ...patch } : it,
+        );
+        return { ...d, mode: "split", intervals: next };
+      });
+    });
+  };
 
   const loadHours = async () => {
     if (!isOwnerWithOrg) return;
@@ -168,11 +312,70 @@ export default function SettingsView({
     setHoursMsg("");
     try {
       const r = await apiRequest("/users/me/organization/salon-hours", "GET");
-      setHours(Array.isArray(r?.days) ? r.days : []);
+      const normalized = normalizeHoursDays(r?.days);
+      setHours(normalized);
+      const anySplit = normalized.some((d) => d?.is_open && d?.mode === "split");
+      setHoursShiftType(anySplit ? "split" : "intensive");
     } catch (err) {
       onError?.(formatErr(err));
     } finally {
       setHoursLoading(false);
+    }
+  };
+
+  const loadClosedDates = async () => {
+    if (!isOwnerWithOrg) return;
+    setClosedDatesLoading(true);
+    setClosedDatesMsg("");
+    try {
+      const r = await apiRequest("/users/me/organization/closed-dates", "GET");
+      setClosedDates(Array.isArray(r?.dates) ? r.dates : []);
+    } catch (err) {
+      onError?.(formatErr(err));
+    } finally {
+      setClosedDatesLoading(false);
+    }
+  };
+
+  const saveClosedDates = async () => {
+    if (!Array.isArray(closedDates)) return;
+    setClosedDatesSaving(true);
+    setClosedDatesMsg("");
+    try {
+      await apiRequest("/users/me/organization/closed-dates", "PATCH", {
+        dates: closedDates,
+      });
+      setClosedDatesMsg("Festivos guardados.");
+      await onRefresh?.();
+    } catch (err) {
+      setClosedDatesMsg(formatErr(err));
+      onError?.(formatErr(err));
+    } finally {
+      setClosedDatesSaving(false);
+    }
+  };
+
+  const suggestHolidays = async () => {
+    if (!isOwnerWithOrg) return;
+    setHolidaySuggesting(true);
+    setClosedDatesMsg("");
+    try {
+      const year = new Date().getFullYear();
+      const r = await apiRequest(
+        `/users/me/organization/holiday-suggestions?year=${year}`,
+        "GET",
+      );
+      const dates = Array.isArray(r?.dates) ? r.dates : [];
+      setClosedDates((prev) => {
+        const base = Array.isArray(prev) ? prev : [];
+        return Array.from(new Set([...base, ...dates])).sort();
+      });
+      setClosedDatesMsg("Festivos sugeridos cargados. Revisa y guarda.");
+    } catch (err) {
+      setClosedDatesMsg(formatErr(err));
+      onError?.(formatErr(err));
+    } finally {
+      setHolidaySuggesting(false);
     }
   };
 
@@ -182,7 +385,12 @@ export default function SettingsView({
     setHoursMsg("");
     try {
       await apiRequest("/users/me/organization/salon-hours", "PATCH", {
-        days: hours,
+        days: hours.map((d) => ({
+          day_of_week: Number(d.day_of_week) || 0,
+          is_open: !!d.is_open,
+          mode: String(d.mode || hoursShiftType || "intensive").toLowerCase(),
+          intervals: Array.isArray(d.intervals) ? d.intervals : [],
+        })),
       });
       setHoursMsg("Horario guardado.");
       await onRefresh?.();
@@ -877,6 +1085,25 @@ export default function SettingsView({
 
           {Array.isArray(hours) && hours.length === 7 && (
             <div className="space-y-3">
+              <div className="rounded-2xl border border-[var(--bt-border)] bg-white p-4">
+                <label className="block text-[8px] font-black uppercase text-[var(--bt-muted)] mb-1">
+                  Tipo de jornada
+                </label>
+                <select
+                  value={hoursShiftType}
+                  onChange={(e) => applyShiftTypeToAll(e.target.value)}
+                  className="w-full rounded-xl border border-[var(--bt-border)] bg-[var(--bt-bg)] px-3 py-3 text-[10px] font-black tracking-widest text-[var(--bt-primary)] focus:outline-none focus:border-[var(--bt-primary)]"
+                >
+                  <option value="intensive">Jornada intensiva (sin descanso)</option>
+                  <option value="split">Jornada partida (descanso / comida)</option>
+                </select>
+                {hoursShiftType === "split" && (
+                  <p className="mt-2 text-[10px] text-[var(--bt-muted)]">
+                    Configura 2 tramos por día (mañana y tarde) para que el sistema no
+                    ofrezca citas durante el descanso.
+                  </p>
+                )}
+              </div>
               {hours.map((d, idx) => (
                 <div
                   key={d.day_of_week ?? idx}
@@ -893,7 +1120,36 @@ export default function SettingsView({
                         onChange={(e) =>
                           setHours((prev) =>
                             prev.map((x, i) =>
-                              i === idx ? { ...x, is_open: e.target.checked } : x,
+                              i === idx
+                                ? {
+                                    ...x,
+                                    is_open: e.target.checked,
+                                    mode: hoursShiftType,
+                                    intervals: e.target.checked
+                                      ? hoursShiftType === "split"
+                                        ? Array.isArray(x?.intervals) &&
+                                          x.intervals.length === 2
+                                          ? x.intervals
+                                          : [
+                                              { start: "09:00", end: "14:00" },
+                                              { start: "16:00", end: "20:00" },
+                                            ]
+                                        : [
+                                            {
+                                              start:
+                                                (Array.isArray(x?.intervals) &&
+                                                  x.intervals[0]?.start) ||
+                                                "09:00",
+                                              end:
+                                                (Array.isArray(x?.intervals) &&
+                                                  x.intervals[x.intervals.length - 1]
+                                                    ?.end) ||
+                                                "20:00",
+                                            },
+                                          ]
+                                      : x.intervals,
+                                  }
+                                : x,
                             ),
                           )
                         }
@@ -901,46 +1157,152 @@ export default function SettingsView({
                       Abierto
                     </label>
                   </div>
-                  <div className="mt-3 grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[8px] font-black uppercase text-[var(--bt-muted)] mb-1">
-                        Apertura
-                      </label>
-                      <input
-                        type="time"
-                        value={d.open_time || "09:00"}
-                        disabled={!d.is_open}
-                        onChange={(e) =>
-                          setHours((prev) =>
-                            prev.map((x, i) =>
-                              i === idx ? { ...x, open_time: e.target.value } : x,
-                            ),
-                          )
-                        }
-                        className="w-full rounded-xl border border-[var(--bt-border)] bg-white px-3 py-2 text-[10px] font-black text-[var(--bt-primary)] disabled:opacity-50"
-                      />
+                  {hoursShiftType === "split" ? (
+                    <div className="mt-3 space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-muted)]">
+                          Tramos de apertura
+                        </p>
+                        <button
+                          type="button"
+                          disabled={!d.is_open}
+                          onClick={() => addIntervalForDay(idx)}
+                          className="rounded-full border border-[var(--bt-border)] bg-white px-4 py-2 text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)] disabled:opacity-50 hover:bg-[var(--bt-bg)]"
+                        >
+                          + Añadir tramo
+                        </button>
+                      </div>
+
+                      {Array.isArray(d?.intervals) && d.intervals.length > 0 ? (
+                        <div className="space-y-2">
+                          {d.intervals.map((it, itIdx) => (
+                            <div
+                              key={`${d.day_of_week}-${itIdx}`}
+                              className="rounded-2xl border border-[var(--bt-border)] bg-white p-3"
+                            >
+                              <div className="flex items-center justify-between gap-3 mb-2">
+                                <p className="text-[9px] font-black tracking-widest text-[var(--bt-primary)]">
+                                  Tramo {itIdx + 1}
+                                </p>
+                                <button
+                                  type="button"
+                                  disabled={!d.is_open || d.intervals.length <= 2}
+                                  onClick={() => removeIntervalForDay(idx, itIdx)}
+                                  className="rounded-full border border-[var(--bt-border)] bg-white px-3 py-1 text-[8px] font-black uppercase tracking-widest text-red-600 disabled:opacity-50 hover:bg-red-50"
+                                  title={
+                                    d.intervals.length <= 2
+                                      ? "Mínimo 2 tramos en jornada partida"
+                                      : "Eliminar tramo"
+                                  }
+                                >
+                                  Eliminar
+                                </button>
+                              </div>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="block text-[8px] font-black uppercase text-[var(--bt-muted)] mb-1">
+                                    Abre
+                                  </label>
+                                  <input
+                                    type="time"
+                                    value={it?.start || "09:00"}
+                                    disabled={!d.is_open}
+                                    onChange={(e) =>
+                                      updateIntervalForDay(idx, itIdx, {
+                                        start: e.target.value,
+                                      })
+                                    }
+                                    className="w-full rounded-xl border border-[var(--bt-border)] bg-[var(--bt-bg)] px-3 py-2 text-[10px] font-black text-[var(--bt-primary)] disabled:opacity-50"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[8px] font-black uppercase text-[var(--bt-muted)] mb-1">
+                                    Cierra
+                                  </label>
+                                  <input
+                                    type="time"
+                                    value={it?.end || "20:00"}
+                                    disabled={!d.is_open}
+                                    onChange={(e) =>
+                                      updateIntervalForDay(idx, itIdx, {
+                                        end: e.target.value,
+                                      })
+                                    }
+                                    className="w-full rounded-xl border border-[var(--bt-border)] bg-[var(--bt-bg)] px-3 py-2 text-[10px] font-black text-[var(--bt-primary)] disabled:opacity-50"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[10px] text-[var(--bt-muted)]">
+                          Añade al menos 2 tramos (por ejemplo 09:00-14:00 y 16:00-20:00).
+                        </p>
+                      )}
                     </div>
-                    <div>
-                      <label className="block text-[8px] font-black uppercase text-[var(--bt-muted)] mb-1">
-                        Cierre
-                      </label>
-                      <input
-                        type="time"
-                        value={d.close_time || "20:00"}
-                        disabled={!d.is_open}
-                        onChange={(e) =>
-                          setHours((prev) =>
-                            prev.map((x, i) =>
-                              i === idx
-                                ? { ...x, close_time: e.target.value }
-                                : x,
-                            ),
-                          )
-                        }
-                        className="w-full rounded-xl border border-[var(--bt-border)] bg-white px-3 py-2 text-[10px] font-black text-[var(--bt-primary)] disabled:opacity-50"
-                      />
+                  ) : (
+                    <div className="mt-3 grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[8px] font-black uppercase text-[var(--bt-muted)] mb-1">
+                          Apertura
+                        </label>
+                        <input
+                          type="time"
+                          value={d?.intervals?.[0]?.start || "09:00"}
+                          disabled={!d.is_open}
+                          onChange={(e) =>
+                            setHours((prev) =>
+                              prev.map((x, i) =>
+                                i === idx
+                                  ? {
+                                      ...x,
+                                      mode: "intensive",
+                                      intervals: [
+                                        {
+                                          start: e.target.value,
+                                          end: x?.intervals?.[0]?.end || "20:00",
+                                        },
+                                      ],
+                                    }
+                                  : x,
+                              ),
+                            )
+                          }
+                          className="w-full rounded-xl border border-[var(--bt-border)] bg-white px-3 py-2 text-[10px] font-black text-[var(--bt-primary)] disabled:opacity-50"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[8px] font-black uppercase text-[var(--bt-muted)] mb-1">
+                          Cierre
+                        </label>
+                        <input
+                          type="time"
+                          value={d?.intervals?.[0]?.end || "20:00"}
+                          disabled={!d.is_open}
+                          onChange={(e) =>
+                            setHours((prev) =>
+                              prev.map((x, i) =>
+                                i === idx
+                                  ? {
+                                      ...x,
+                                      mode: "intensive",
+                                      intervals: [
+                                        {
+                                          start: x?.intervals?.[0]?.start || "09:00",
+                                          end: e.target.value,
+                                        },
+                                      ],
+                                    }
+                                  : x,
+                              ),
+                            )
+                          }
+                          className="w-full rounded-xl border border-[var(--bt-border)] bg-white px-3 py-2 text-[10px] font-black text-[var(--bt-primary)] disabled:opacity-50"
+                        />
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               ))}
               <button
@@ -953,6 +1315,119 @@ export default function SettingsView({
               </button>
             </div>
           )}
+
+          <div className="mt-6 rounded-[2rem] border border-[var(--bt-border)] bg-white p-5">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-[var(--bt-primary)]">
+                  Festivos y cierres
+                </p>
+                <p className="text-[10px] text-[var(--bt-muted)] mt-1">
+                  Fechas en las que el negocio está cerrado (no se ofrecerán citas).
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={loadClosedDates}
+                disabled={closedDatesLoading}
+                className="shrink-0 rounded-full border border-[var(--bt-border)] bg-white px-4 py-2 text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)] disabled:opacity-50"
+              >
+                {closedDatesLoading ? "Cargando…" : "Cargar"}
+              </button>
+            </div>
+
+            {closedDatesMsg && (
+              <p
+                className={`mb-3 text-[10px] font-bold ${
+                  closedDatesMsg === "Festivos guardados." ||
+                  closedDatesMsg.includes("sugeridos")
+                    ? "text-green-700"
+                    : "text-red-600"
+                }`}
+              >
+                {closedDatesMsg}
+              </p>
+            )}
+
+            {!Array.isArray(closedDates) ? (
+              <p className="text-[10px] text-[var(--bt-muted)]">
+                Pulsa <strong>Cargar</strong> para ver tus festivos/cierres.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="date"
+                    value={newClosedDate}
+                    onChange={(e) => setNewClosedDate(e.target.value)}
+                    className="rounded-xl border border-[var(--bt-border)] bg-[var(--bt-bg)] px-3 py-2 text-[10px] font-black text-[var(--bt-primary)]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const v = String(newClosedDate || "").trim();
+                      if (!v) return;
+                      setClosedDates((prev) =>
+                        Array.from(new Set([...(prev || []), v])).sort(),
+                      );
+                      setNewClosedDate("");
+                    }}
+                    className="rounded-full bg-[var(--bt-primary)] px-4 py-2 text-[9px] font-black uppercase tracking-widest text-white hover:bg-[var(--bt-primary-hover)]"
+                  >
+                    Añadir fecha
+                  </button>
+                  <button
+                    type="button"
+                    onClick={suggestHolidays}
+                    disabled={holidaySuggesting}
+                    className="rounded-full border border-[var(--bt-border)] bg-white px-4 py-2 text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)] disabled:opacity-50 hover:bg-[var(--bt-bg)]"
+                    title="Cargar festivos sugeridos por país (se pueden editar)"
+                  >
+                    {holidaySuggesting ? "Cargando…" : "Cargar festivos"}
+                  </button>
+                </div>
+
+                {closedDates.length > 0 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {closedDates.map((d) => (
+                      <div
+                        key={d}
+                        className="flex items-center justify-between gap-2 rounded-xl border border-[var(--bt-border)] bg-[var(--bt-bg)] px-3 py-2"
+                      >
+                        <span className="text-[10px] font-black text-[var(--bt-primary)]">
+                          {formatDateEs(d)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setClosedDates((prev) =>
+                              (prev || []).filter((x) => x !== d),
+                            )
+                          }
+                          className="rounded-lg border border-[var(--bt-border)] bg-white px-2 py-1 text-[8px] font-black uppercase tracking-widest text-red-600 hover:bg-red-50"
+                        >
+                          Quitar
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-[var(--bt-muted)]">
+                    No hay fechas cerradas configuradas.
+                  </p>
+                )}
+
+                <button
+                  type="button"
+                  onClick={saveClosedDates}
+                  disabled={closedDatesSaving}
+                  className="w-full rounded-full bg-[var(--bt-primary)] py-3 text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-50 hover:bg-[var(--bt-primary-hover)]"
+                >
+                  {closedDatesSaving ? "Guardando…" : "Guardar festivos"}
+                </button>
+              </div>
+            )}
+          </div>
         </SettingsAccordion>
       )}
 

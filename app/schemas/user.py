@@ -205,11 +205,40 @@ class VerifyCashCloseBody(BaseModel):
     password: str
 
 
+def _validate_hhmm(v: str) -> str:
+    v = (v or "").strip()
+    parts = v.split(":")
+    if len(parts) != 2:
+        raise ValueError("Time must be HH:MM")
+    hh = int(parts[0])
+    mm = int(parts[1])
+    if hh < 0 or hh > 23 or mm < 0 or mm > 59:
+        raise ValueError("Time must be HH:MM")
+    return f"{hh:02d}:{mm:02d}"
+
+
+class SalonHoursInterval(BaseModel):
+    start: str  # HH:MM
+    end: str  # HH:MM
+
+    @model_validator(mode="after")
+    def validate_interval(self):
+        self.start = _validate_hhmm(self.start)
+        self.end = _validate_hhmm(self.end)
+        if self.start >= self.end:
+            raise ValueError("start must be before end")
+        return self
+
+
 class SalonHoursDay(BaseModel):
     day_of_week: int  # 0=Mon ... 6=Sun
     is_open: bool = True
-    open_time: str = "09:00"  # HH:MM
-    close_time: str = "20:00"  # HH:MM
+    # "intensive": un tramo. "split": dos tramos (típico cierre por comida).
+    mode: str = "intensive"
+    intervals: list[SalonHoursInterval] = []
+    # Legacy (backward compat). If provided and intervals is empty, treated as a single interval.
+    open_time: Optional[str] = None  # HH:MM
+    close_time: Optional[str] = None  # HH:MM
 
     @model_validator(mode="after")
     def validate_times(self):
@@ -217,17 +246,34 @@ class SalonHoursDay(BaseModel):
             raise ValueError("day_of_week must be 0..6")
         if not self.is_open:
             return self
-        for f in ("open_time", "close_time"):
-            v = (getattr(self, f) or "").strip()
-            parts = v.split(":")
-            if len(parts) != 2:
-                raise ValueError("Time must be HH:MM")
-            hh = int(parts[0])
-            mm = int(parts[1])
-            if hh < 0 or hh > 23 or mm < 0 or mm > 59:
-                raise ValueError("Time must be HH:MM")
-        if self.open_time >= self.close_time:
-            raise ValueError("open_time must be before close_time")
+
+        mode = (self.mode or "").strip().lower()
+        if mode not in {"intensive", "split"}:
+            raise ValueError("mode must be intensive or split")
+        self.mode = mode
+
+        # If new format isn't provided, fall back to legacy open_time/close_time.
+        if not self.intervals:
+            ot = self.open_time or "09:00"
+            ct = self.close_time or "20:00"
+            ot = _validate_hhmm(ot)
+            ct = _validate_hhmm(ct)
+            if ot >= ct:
+                raise ValueError("open_time must be before close_time")
+            self.intervals = [SalonHoursInterval(start=ot, end=ct)]
+
+        if mode == "intensive":
+            if len(self.intervals) != 1:
+                raise ValueError("intensive mode must have exactly 1 interval")
+        if mode == "split":
+            if len(self.intervals) < 2:
+                raise ValueError("split mode must have at least 2 intervals")
+            # Ensure no overlaps and sorted by start time.
+            sorted_intervals = sorted(self.intervals, key=lambda x: x.start)
+            for i in range(len(sorted_intervals) - 1):
+                if sorted_intervals[i].end > sorted_intervals[i + 1].start:
+                    raise ValueError("split intervals must not overlap")
+            self.intervals = sorted_intervals
         return self
 
 

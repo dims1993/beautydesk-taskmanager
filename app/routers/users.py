@@ -1,10 +1,12 @@
 import logging
 import os
 import secrets
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
+import requests as py_requests
 from sqlmodel import Session, select
 from typing import List
 from sqlalchemy import or_
@@ -323,26 +325,65 @@ def get_salon_hours(
     if not org:
         raise HTTPException(status_code=404, detail="Organización no encontrada")
     raw = getattr(org, "salon_hours_json", None)
+
+    def _normalize_day(dow: int, row: dict | None) -> dict:
+        # Canonical format returned to the frontend:
+        # { day_of_week, is_open, mode: "intensive"|"split", intervals: [{start,end}, ...] }
+        if not isinstance(row, dict):
+            row = {}
+        is_open = bool(row.get("is_open", True))
+        if not is_open:
+            return {"day_of_week": dow, "is_open": False, "mode": "intensive", "intervals": [{"start": "09:00", "end": "20:00"}]}
+
+        intervals = row.get("intervals")
+        mode = str(row.get("mode") or "").strip().lower()
+
+        # Backward compat (legacy: open_time/close_time only)
+        if not isinstance(intervals, list) or not intervals:
+            ot = str(row.get("open_time") or "09:00").strip() or "09:00"
+            ct = str(row.get("close_time") or "20:00").strip() or "20:00"
+            intervals = [{"start": ot, "end": ct}]
+            mode = "intensive"
+
+        if mode not in {"intensive", "split"}:
+            mode = "split" if len(intervals) >= 2 else "intensive"
+
+        # Defensive cleanup: ensure list of dicts with start/end.
+        clean: list[dict] = []
+        for it in intervals:
+            if isinstance(it, dict) and it.get("start") and it.get("end"):
+                clean.append({"start": str(it["start"]).strip(), "end": str(it["end"]).strip()})
+        if not clean:
+            clean = [{"start": "09:00", "end": "20:00"}]
+            mode = "intensive"
+
+        # If split but only 1 interval, auto-complete with a typical lunch break.
+        if mode == "split" and len(clean) == 1:
+            clean = [
+                {"start": clean[0]["start"], "end": "14:00"},
+                {"start": "16:00", "end": clean[0]["end"]},
+            ]
+        if mode == "intensive" and len(clean) != 1:
+            clean = [{"start": clean[0]["start"], "end": clean[-1]["end"]}]
+
+        return {"day_of_week": dow, "is_open": True, "mode": mode, "intervals": clean}
+
+    parsed_days: list[dict] = []
     if raw and str(raw).strip():
         try:
-            return {"days": json.loads(raw)}
+            parsed_days = json.loads(raw) or []
         except Exception:
-            return {"days": []}
+            parsed_days = []
+
     # Default: Mon-Sat open 09:00-20:00, Sun closed
-    days = []
+    out: list[dict] = []
     for dow in range(7):
-        is_open = dow != 6
-        days.append(
-            {
-                "day_of_week": dow,
-                "is_open": is_open,
-                "open_time": "09:00",
-                "close_time": "20:00",
-            }
+        row = next(
+            (d for d in parsed_days if int(d.get("day_of_week", -1)) == dow),
+            None,
         )
-    if days:
-        days[-1]["is_open"] = False
-    return {"days": days}
+        out.append(_normalize_day(dow, row))
+    return {"days": out}
 
 
 @router.patch("/me/organization/salon-hours")
@@ -358,13 +399,135 @@ def set_salon_hours(
     org = db.get(Organization, current_user.organization_id)
     if not org:
         raise HTTPException(status_code=404, detail="Organización no encontrada")
-    org.salon_hours_json = json.dumps(
-        [d.model_dump() for d in body.days],
-        ensure_ascii=False,
-    )
+    canonical = []
+    for d in body.days:
+        canonical.append(
+            {
+                "day_of_week": d.day_of_week,
+                "is_open": d.is_open,
+                "mode": d.mode,
+                "intervals": [i.model_dump() for i in d.intervals],
+            }
+        )
+    org.salon_hours_json = json.dumps(canonical, ensure_ascii=False)
     db.add(org)
     db.commit()
     return {"success": True}
+
+
+@router.get("/me/organization/closed-dates")
+def get_closed_dates(
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user_for_app),
+):
+    if not current_user.organization_id:
+        raise HTTPException(status_code=400, detail="No perteneces a una organización.")
+    org = db.get(Organization, current_user.organization_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+    raw = (getattr(org, "salon_closed_dates_json", None) or "").strip()
+    if not raw:
+        return {"dates": []}
+    try:
+        dates = json.loads(raw) or []
+        if not isinstance(dates, list):
+            return {"dates": []}
+        out = [str(x).strip() for x in dates if str(x).strip()]
+        return {"dates": sorted(set(out))}
+    except Exception:
+        return {"dates": []}
+
+
+class SetClosedDatesBody(BaseModel):
+    dates: list[str]
+
+
+@router.patch("/me/organization/closed-dates")
+def set_closed_dates(
+    body: SetClosedDatesBody,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user_for_app),
+):
+    if current_user.role != UserRole.OWNER:
+        raise HTTPException(status_code=403, detail="Solo el titular puede configurar los festivos.")
+    if not current_user.organization_id:
+        raise HTTPException(status_code=400, detail="No perteneces a una organización.")
+    org = db.get(Organization, current_user.organization_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+
+    dates = []
+    for d in body.dates or []:
+        s = str(d or "").strip()
+        if not s:
+            continue
+        # Accept YYYY-MM-DD; store as-is (frontend ensures format)
+        dates.append(s)
+    org.salon_closed_dates_json = json.dumps(sorted(set(dates)), ensure_ascii=False)
+    db.add(org)
+    db.commit()
+    return {"success": True}
+
+
+def _country_code_for_org(org: Organization) -> str | None:
+    raw = str(getattr(org, "country", "") or "").strip()
+    if not raw:
+        return None
+    up = raw.upper()
+    if len(up) == 2 and up.isalpha():
+        return up
+    # Very small mapping for common Spanish inputs
+    low = raw.lower()
+    if "espa" in low or "spain" in low:
+        return "ES"
+    if "portugal" in low:
+        return "PT"
+    if "francia" in low or "france" in low:
+        return "FR"
+    if "italia" in low or "italy" in low:
+        return "IT"
+    if "alemania" in low or "germany" in low or "deutsch" in low:
+        return "DE"
+    return None
+
+
+@router.get("/me/organization/holiday-suggestions")
+def holiday_suggestions(
+    year: int | None = None,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user_for_app),
+):
+    """
+    Suggest public holidays (country-level) for the org country.
+    Uses Nager.Date public API.
+    """
+    if not current_user.organization_id:
+        raise HTTPException(status_code=400, detail="No perteneces a una organización.")
+    org = db.get(Organization, current_user.organization_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+
+    cc = _country_code_for_org(org) or "ES"
+    y = int(year or datetime.now().year)
+    if y < 2000 or y > 2100:
+        raise HTTPException(status_code=400, detail="Año inválido")
+
+    url = f"https://date.nager.at/api/v3/PublicHolidays/{y}/{cc}"
+    try:
+        r = py_requests.get(url, timeout=8)
+        if r.status_code != 200:
+            raise HTTPException(status_code=502, detail="No se pudo cargar festivos")
+        data = r.json() or []
+        dates = []
+        for row in data:
+            d = str((row or {}).get("date") or "").strip()
+            if d:
+                dates.append(d)
+        return {"country_code": cc, "year": y, "dates": sorted(set(dates))}
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=502, detail="No se pudo cargar festivos")
 
 
 @router.patch("/me/organization/cash-close-password")

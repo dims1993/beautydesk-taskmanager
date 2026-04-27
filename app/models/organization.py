@@ -78,6 +78,8 @@ class Organization(SQLModel, table=True):
 
     # Salon opening hours (JSON, 7 days). Used by booking agent and availability.
     salon_hours_json: Optional[str] = Field(default=None)
+    # Closed dates (holidays/vacation) as JSON list of YYYY-MM-DD.
+    salon_closed_dates_json: Optional[str] = Field(default=None)
 
     # Cierre de caja (solo el titular la define; todo el personal la usa para validar)
     cash_close_password_hash: Optional[str] = Field(default=None)
