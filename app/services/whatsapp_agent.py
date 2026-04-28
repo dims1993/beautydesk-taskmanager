@@ -232,6 +232,8 @@ def _collect_next_available_days(
     skip: int,
 ) -> list[date]:
     """First `skip` matching days are skipped; then collect up to `want` days that have ≥1 slot."""
+    if not service_ids:
+        return []
     found: list[date] = []
     skip_left = int(skip)
     for i in range(max_scan_days):
@@ -258,7 +260,7 @@ def _available_days_page(
     staff_id: int | None,
     start_from: date,
     skip: int,
-    max_scan_days: int = 120,
+    max_scan_days: int = 56,
 ) -> tuple[list[date], bool]:
     """Up to 10 days to show; has_more if an 11th exists after skip."""
     batch = _collect_next_available_days(
@@ -292,7 +294,7 @@ def _format_day_row_es(d: date) -> str:
         "noviembre",
         "diciembre",
     )
-    return f"{wds[d.weekday()]} {d.day} de {mos[d.month - 1]} ({d.isoformat()})"
+    return f"{wds[d.weekday()]} {d.day} de {mos[d.month - 1]} ({_format_date_dd_mm_yy(d)})"
 
 
 def _day_pick_level1_text() -> str:
@@ -301,10 +303,10 @@ def _day_pick_level1_text() -> str:
     day_after = today + timedelta(days=2)
     return (
         "¿Qué día prefieres?\n\n"
-        f"1) Hoy ({today.isoformat()})\n"
-        f"2) Mañana ({tmr.isoformat()})\n"
-        f"3) Pasado mañana ({day_after.isoformat()})\n"
-        "4) Otros días (te muestro una lista con huecos; máx. 10 por pantalla)\n\n"
+        f"1) Hoy ({_format_date_dd_mm_yy(today)})\n"
+        f"2) Mañana ({_format_date_dd_mm_yy(tmr)})\n"
+        f"3) Pasado mañana ({_format_date_dd_mm_yy(day_after)})\n"
+        "4) Otros días (lista con huecos; máx. 10 por pantalla)\n\n"
         "Responde con 1, 2, 3 o 4."
     )
 
@@ -328,7 +330,7 @@ def _day_alternatives_message(
     if has_more:
         lines.append(f"{n}) Ver más días…")
         n += 1
-    lines.append(f"{n}) Escribir fecha manualmente (AAAA-MM-DD)")
+    lines.append(f"{n}) Escribir fecha manualmente (DD-MM-YY o AAAA-MM-DD)")
     lines.append("")
     lines.append("Responde solo con el número.")
     return "\n".join(lines)
@@ -367,16 +369,25 @@ def _format_services_menu(services: list[Service]) -> str:
 
 
 def _parse_choice_number(txt: str, max_n: int) -> int | None:
+    """Leading integer only (handles '1)', '1.', Twilio quirks)."""
     raw = (txt or "").strip()
     if not raw:
         return None
+    m = re.match(r"^(\d+)", raw)
+    if not m:
+        return None
     try:
-        n = int(raw)
+        n = int(m.group(1))
     except ValueError:
         return None
     if n < 1 or n > max_n:
         return None
     return n
+
+
+def _format_date_dd_mm_yy(d: date) -> str:
+    """Spanish-style calendar date (2-digit year)."""
+    return d.strftime("%d-%m-%y")
 
 
 def _parse_date_yyyy_mm_dd(txt: str) -> date | None:
@@ -385,6 +396,24 @@ def _parse_date_yyyy_mm_dd(txt: str) -> date | None:
         return date.fromisoformat(raw)
     except Exception:
         return None
+
+
+def _parse_date_dd_mm_yy(txt: str) -> date | None:
+    raw = (txt or "").strip()
+    m = re.match(r"^(\d{1,2})[-/](\d{1,2})[-/](\d{2}|\d{4})$", raw)
+    if not m:
+        return None
+    d, mo, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    if y < 100:
+        y += 2000
+    try:
+        return date(y, mo, d)
+    except ValueError:
+        return None
+
+
+def _parse_date_flexible(txt: str) -> date | None:
+    return _parse_date_yyyy_mm_dd(txt) or _parse_date_dd_mm_yy(txt) or _parse_relative_date_es(txt)
 
 
 def _strip_accents(s: str) -> str:
@@ -750,7 +779,7 @@ def _format_slot_confirm_es(dt: datetime) -> str:
     d = dt.date()
     wd = _SPANISH_WEEKDAYS[d.weekday()]
     mo = _SPANISH_MONTHS[d.month - 1]
-    return f"{wd} {d.day} de {mo} a las {dt.strftime('%H:%M')}"
+    return f"{wd} {_format_date_dd_mm_yy(d)} ({d.day} de {mo}) a las {dt.strftime('%H:%M')}"
 
 
 def _day_segments_clipped(
@@ -992,17 +1021,18 @@ def _enter_service_category_step(
 
 def _format_slot_choice_message(slots: list[dict], day: date) -> str:
     lines = [
-        f"Horas libres el {day.isoformat()} (cada 30 min; duración total y agenda ya aplicadas):",
+        f"Horas libres el {_format_date_dd_mm_yy(day)} (cada 30 min; duración y agenda ya aplicadas):",
         "",
     ]
-    for i, opt in enumerate(slots[:24], start=1):
+    shown = slots[:20]
+    for i, opt in enumerate(shown, start=1):
         dt = datetime.fromisoformat(str(opt["start"]))
         lines.append(f"{i}) {dt.strftime('%H:%M')}")
+    n = len(shown)
+    lines.append(f"{n + 1}) Cambiar de día (volver a elegir la fecha)")
+    lines.append(f"{n + 2}) Menú principal del salón")
     lines.append("")
-    lines.append(
-        "Responde con el número. Si ninguna te encaja: RESET = volver a empezar esta reserva; "
-        "MENÚ = menú principal del salón."
-    )
+    lines.append(f"Responde con un número del 1 al {n + 2}.")
     return "\n".join(lines)
 
 
@@ -1033,15 +1063,17 @@ def _advance_to_period_step(
             "Prueba otro día.\n\n" + _day_pick_level1_text()
         )
     if m_slots and not a_slots:
+        pick = m_slots[:20]
         state["step"] = "book_await_slot_pick"
-        state["slot_options"] = m_slots
+        state["slot_options"] = pick
         _save_state(db, conv, state)
-        return _format_slot_choice_message(m_slots, day)
+        return _format_slot_choice_message(pick, day)
     if a_slots and not m_slots:
+        pick = a_slots[:20]
         state["step"] = "book_await_slot_pick"
-        state["slot_options"] = a_slots
+        state["slot_options"] = pick
         _save_state(db, conv, state)
-        return _format_slot_choice_message(a_slots, day)
+        return _format_slot_choice_message(pick, day)
     po: dict[str, list[dict]] = {"1": m_slots, "2": a_slots}
     state["period_options"] = po
     state["step"] = "book_await_day_period"
@@ -1402,6 +1434,14 @@ def handle_inbound_whatsapp(
         )
 
     if step == "book_await_day_pick":
+        sids_chk = [int(x) for x in (state.get("service_ids") or [])]
+        if not sids_chk:
+            state["step"] = "awaiting_main_menu"
+            _save_state(db, conv, state)
+            return (
+                "No hay servicios seleccionados para buscar día. "
+                "Escribe MENÚ y vuelve a reservar desde la opción 1."
+            )
         raw_u = txt.upper()
         today = datetime.now(TZ).date()
         chosen: date | None = None
@@ -1413,10 +1453,57 @@ def handle_inbound_whatsapp(
         elif dch == 3 or "PASADO" in raw_u:
             chosen = today + timedelta(days=2)
         elif dch == 4 or "OTRO" in raw_u or "LISTA" in raw_u:
-            service_ids = [int(x) for x in (state.get("service_ids") or [])]
-            staff_id = state.get("staff_id")
-            start_from = _first_day_for_alternatives_list(today)
-            skip = 0
+            try:
+                service_ids = [int(x) for x in (state.get("service_ids") or [])]
+                staff_id = state.get("staff_id")
+                start_from = _first_day_for_alternatives_list(today)
+                skip = 0
+                days, has_more = _available_days_page(
+                    db,
+                    org_id,
+                    org,
+                    service_ids=service_ids,
+                    staff_id=int(staff_id) if staff_id is not None else None,
+                    start_from=start_from,
+                    skip=skip,
+                )
+            except Exception:
+                state["step"] = "book_await_day_pick"
+                _save_state(db, conv, state)
+                return (
+                    "No pude generar la lista de días ahora mismo. "
+                    "Prueba 1, 2 o 3, o escribe MENÚ. Si sigue fallando, elige fecha manual en la opción 4 otra vez."
+                )
+            if not days:
+                state["step"] = "book_await_custom_date"
+                _save_state(db, conv, state)
+                return (
+                    "No encontramos más días con huecos en la lista automática. "
+                    "Escribe la fecha: DD-MM-YY o AAAA-MM-DD (ej: 27-04-26 o 2026-04-27)."
+                )
+            state["step"] = "book_await_day_alternatives"
+            state["day_alt_skip"] = 0
+            _save_state(db, conv, state)
+            return _day_alternatives_message(days, has_more=has_more)
+        if not chosen:
+            return "Responde 1, 2, 3 o 4 según la lista anterior."
+        try:
+            return _advance_to_period_step(db, conv, org, state, chosen)
+        except Exception:
+            state["step"] = "book_await_day_pick"
+            _save_state(db, conv, state)
+            return (
+                "Ha ocurrido un error al buscar huecos para ese día. "
+                "Prueba otra fecha o escribe MENÚ.\n\n" + _day_pick_level1_text()
+            )
+
+    if step == "book_await_day_alternatives":
+        service_ids = [int(x) for x in (state.get("service_ids") or [])]
+        staff_id = state.get("staff_id")
+        today = datetime.now(TZ).date()
+        start_from = _first_day_for_alternatives_list(today)
+        skip = int(state.get("day_alt_skip") or 0)
+        try:
             days, has_more = _available_days_page(
                 db,
                 org_id,
@@ -1426,41 +1513,21 @@ def handle_inbound_whatsapp(
                 start_from=start_from,
                 skip=skip,
             )
-            if not days:
-                state["step"] = "book_await_custom_date"
-                _save_state(db, conv, state)
-                return (
-                    "No encontramos más días con huecos en la lista automática. "
-                    "Escribe la fecha en formato AAAA-MM-DD (ej: 2026-06-15)."
-                )
-            state["step"] = "book_await_day_alternatives"
-            state["day_alt_skip"] = 0
+        except Exception:
+            state["step"] = "book_await_day_pick"
             _save_state(db, conv, state)
-            return _day_alternatives_message(days, has_more=has_more)
-        if not chosen:
-            return "Responde 1, 2, 3 o 4 según la lista anterior."
-        return _advance_to_period_step(db, conv, org, state, chosen)
-
-    if step == "book_await_day_alternatives":
-        service_ids = [int(x) for x in (state.get("service_ids") or [])]
-        staff_id = state.get("staff_id")
-        today = datetime.now(TZ).date()
-        start_from = _first_day_for_alternatives_list(today)
-        skip = int(state.get("day_alt_skip") or 0)
-        days, has_more = _available_days_page(
-            db,
-            org_id,
-            org,
-            service_ids=service_ids,
-            staff_id=int(staff_id) if staff_id is not None else None,
-            start_from=start_from,
-            skip=skip,
-        )
+            return (
+                "No pude cargar la lista de días. "
+                "Prueba de nuevo con la opción 4 o escribe MENÚ.\n\n" + _day_pick_level1_text()
+            )
         nd = len(days)
         if nd == 0 and not has_more:
             state["step"] = "book_await_custom_date"
             _save_state(db, conv, state)
-            return "No hay más días con huecos en la lista. Escribe la fecha (AAAA-MM-DD)."
+            return (
+                "No hay más días con huecos en la lista. "
+                "Escribe la fecha: DD-MM-YY o AAAA-MM-DD (ej: 27-04-26 o 2026-04-27)."
+            )
         manual_at = nd + (2 if has_more else 1)
         max_ch = manual_at
         ch = _parse_choice_number(txt, max_ch)
@@ -1470,23 +1537,42 @@ def handle_inbound_whatsapp(
             chosen = days[ch - 1]
             state.pop("day_alt_skip", None)
             _save_state(db, conv, state)
-            return _advance_to_period_step(db, conv, org, state, chosen)
+            try:
+                return _advance_to_period_step(db, conv, org, state, chosen)
+            except Exception:
+                state["step"] = "book_await_day_pick"
+                _save_state(db, conv, state)
+                return (
+                    "Ha ocurrido un error al buscar huecos para ese día. "
+                    "Prueba otra fecha o escribe MENÚ.\n\n" + _day_pick_level1_text()
+                )
         if has_more and ch == nd + 1:
             state["day_alt_skip"] = skip + nd
             _save_state(db, conv, state)
-            days2, has_more2 = _available_days_page(
-                db,
-                org_id,
-                org,
-                service_ids=service_ids,
-                staff_id=int(staff_id) if staff_id is not None else None,
-                start_from=start_from,
-                skip=state["day_alt_skip"],
-            )
+            try:
+                days2, has_more2 = _available_days_page(
+                    db,
+                    org_id,
+                    org,
+                    service_ids=service_ids,
+                    staff_id=int(staff_id) if staff_id is not None else None,
+                    start_from=start_from,
+                    skip=state["day_alt_skip"],
+                )
+            except Exception:
+                state["step"] = "book_await_day_pick"
+                _save_state(db, conv, state)
+                return (
+                    "No pude cargar más días. "
+                    "Prueba la opción 4 de nuevo o escribe MENÚ.\n\n" + _day_pick_level1_text()
+                )
             if not days2:
                 state["step"] = "book_await_custom_date"
                 _save_state(db, conv, state)
-                return "No hay más días en la lista. Escribe la fecha (AAAA-MM-DD)."
+                return (
+                    "No hay más días en la lista. "
+                    "Escribe la fecha: DD-MM-YY o AAAA-MM-DD (ej: 27-04-26 o 2026-04-27)."
+                )
             _save_state(db, conv, state)
             return _day_alternatives_message(days2, has_more=has_more2)
         if ch == manual_at:
@@ -1494,19 +1580,24 @@ def handle_inbound_whatsapp(
             state.pop("day_alt_skip", None)
             _save_state(db, conv, state)
             return (
-                "Escribe solo la fecha en formato AAAA-MM-DD "
-                "(ejemplo: 2026-05-01). Para cancelar y volver al menú principal, escribe MENÚ."
+                "Escribe la fecha: DD-MM-YY o AAAA-MM-DD "
+                "(ej: 27-04-26 o 2026-05-01). Para volver al menú principal, escribe MENÚ."
             )
         return f"Responde con un número del 1 al {max_ch}."
 
     if step == "book_await_custom_date":
-        d = _parse_date_yyyy_mm_dd(txt) or _parse_relative_date_es(txt)
+        d = _parse_date_flexible(txt)
         if not d:
             return (
-                "No reconozco esa fecha. Usa el formato AAAA-MM-DD, por ejemplo 2026-05-01. "
-                "También puedes escribir «mañana» o «hoy». O escribe MENÚ para salir."
+                "No reconozco esa fecha. Prueba DD-MM-YY (ej: 27-04-26) o AAAA-MM-DD (ej: 2026-04-27). "
+                "También «hoy» o «mañana». O escribe MENÚ para salir."
             )
-        return _advance_to_period_step(db, conv, org, state, d)
+        try:
+            return _advance_to_period_step(db, conv, org, state, d)
+        except Exception:
+            state["step"] = "book_await_custom_date"
+            _save_state(db, conv, state)
+            return "No pude aplicar esa fecha. Prueba otra o escribe MENÚ."
 
     if step == "book_await_day_period":
         po = state.get("period_options") or {}
@@ -1515,7 +1606,7 @@ def handle_inbound_whatsapp(
         if not slots:
             return "Responde 1 o 2 según la franja que prefieras."
         state["step"] = "book_await_slot_pick"
-        state["slot_options"] = slots
+        state["slot_options"] = (slots or [])[:20]
         d_raw = (state.get("pick_day") or "").strip()
         try:
             d = date.fromisoformat(d_raw)
@@ -1524,13 +1615,29 @@ def handle_inbound_whatsapp(
             _save_state(db, conv, state)
             return "He perdido el día elegido.\n\n" + _day_pick_level1_text()
         _save_state(db, conv, state)
-        return _format_slot_choice_message(slots, d)
+        return _format_slot_choice_message(state["slot_options"], d)
 
     if step == "book_await_slot_pick":
         options = state.get("slot_options") or []
-        choice = _parse_choice_number(txt, len(options))
+        ns = len(options)
+        if ns == 0:
+            state["step"] = "book_await_day_pick"
+            _save_state(db, conv, state)
+            return "No hay horas en esta franja. Elige otro día.\n\n" + _day_pick_level1_text()
+        max_ch = ns + 2
+        choice = _parse_choice_number(txt, max_ch)
         if not choice:
-            return "Responde con el número de una de las horas listadas."
+            return f"Responde con un número del 1 al {max_ch} (hora, cambiar día o menú)."
+        if choice == ns + 1:
+            for k in ("slot_options", "period_options", "pick_day", "selected_slot", "day_alt_skip"):
+                state.pop(k, None)
+            state["step"] = "book_await_day_pick"
+            _save_state(db, conv, state)
+            return "De acuerdo, elijamos otra fecha.\n\n" + _day_pick_level1_text()
+        if choice == ns + 2:
+            state = {"step": "awaiting_main_menu"}
+            _save_state(db, conv, state)
+            return _root_menu_text()
         opt = options[choice - 1]
         start = datetime.fromisoformat(str(opt["start"]))
         staff_id = int(opt["staff_id"])
