@@ -212,8 +212,20 @@ def init_db():
                     'id SERIAL PRIMARY KEY, '
                     'organization_id INTEGER NOT NULL, '
                     'name TEXT NOT NULL, '
-                    'sort_order INTEGER DEFAULT 0'
+                    'sort_order INTEGER DEFAULT 0, '
+                    'is_primary BOOLEAN DEFAULT FALSE, '
+                    'is_active BOOLEAN DEFAULT TRUE'
                     ')'
+                )
+            )
+            conn.execute(
+                text(
+                    'ALTER TABLE "service_category" ADD COLUMN IF NOT EXISTS is_primary BOOLEAN DEFAULT FALSE'
+                )
+            )
+            conn.execute(
+                text(
+                    'ALTER TABLE "service_category" ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE'
                 )
             )
             conn.execute(
