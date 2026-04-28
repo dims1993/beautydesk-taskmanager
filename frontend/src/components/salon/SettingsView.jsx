@@ -2005,8 +2005,9 @@ export default function SettingsView({
                   Configurar categorías
                 </h3>
                 <p className="text-[12px] text-[#6d6359] leading-relaxed mt-2">
-                  Cambia el nombre de una categoría o elimínala. (No se puede eliminar
-                  “General” ni categorías con servicios dentro.)
+                  Cambia el nombre de una categoría o elimínala. Solo hay una regla:
+                  <span className="font-black"> no se puede eliminar la última categoría</span>.
+                  Si una categoría tiene servicios, al eliminarla se eliminarán también.
                 </p>
               </div>
               <button
@@ -2045,6 +2046,7 @@ export default function SettingsView({
                   const isBusy = categorySavingId === catId || categoryDeletingId === catId;
                   const nameDraft = String(categoryEditDrafts?.[draftKey] ?? cat?.name ?? "");
                   const servicesCount = (servicesByCategoryId.get(catId) || []).length;
+                  const isLastCategory = sortedCategories.length <= 1;
                   return (
                     <div
                       key={cat.id}
@@ -2084,11 +2086,16 @@ export default function SettingsView({
                               setCategoryToDelete({ ...cat, servicesCount });
                               setCategoryDeleteForce(servicesCount > 0);
                             }}
-                            disabled={isBusy}
+                            disabled={isBusy || isLastCategory}
                             className="rounded-full border border-[var(--bt-border)] bg-white px-5 py-3 text-[10px] font-black uppercase tracking-widest text-red-600 disabled:opacity-50 hover:bg-red-50"
                           >
                             Eliminar
                           </button>
+                          {isLastCategory ? (
+                            <p className="text-[10px] text-[var(--bt-muted)]">
+                              No puedes eliminar la última categoría.
+                            </p>
+                          ) : null}
                         </div>
                       </div>
                     </div>
@@ -2130,7 +2137,7 @@ export default function SettingsView({
             <p className="text-[12px] leading-relaxed text-[#6d6359] text-center mb-8">
               Esta acción no se puede deshacer.
               {Number(categoryToDelete.servicesCount || 0) > 0
-                ? " Esta categoría tiene servicios dentro. Si continúas, se moverán a “General” y la categoría se eliminará."
+                ? " Esta categoría tiene servicios dentro. Si continúas, se eliminarán también esos servicios."
                 : " Se eliminará la categoría."}
             </p>
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">

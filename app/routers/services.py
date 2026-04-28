@@ -182,15 +182,23 @@ def update_category(
 @router.delete("/categories/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_category(
     category_id: int,
-    force: bool = Query(False, description="If true, move services to General and delete anyway."),
+    force: bool = Query(False, description="If true, delete services in the category and delete anyway."),
     db: Session = Depends(get_session),
     current_user: User = Depends(get_current_user_for_app),
 ):
     if not _can_manage_services(current_user):
         raise HTTPException(status_code=403, detail="No autorizado")
     cat = _get_category_for_org(db, category_id, current_user)
-    if (cat.name or "").strip().lower() == "general":
-        raise HTTPException(status_code=400, detail="No se puede eliminar la categoría General.")
+    # Never allow deleting the last remaining category for an organization.
+    org_id = int(cat.organization_id)
+    remaining = db.exec(
+        select(ServiceCategory.id).where(ServiceCategory.organization_id == org_id)
+    ).all()
+    if len(remaining) <= 1:
+        raise HTTPException(
+            status_code=400,
+            detail="No se puede eliminar la última categoría. Crea otra antes.",
+        )
     has_services = db.exec(
         select(Service.id).where(
             Service.category_id == cat.id,
@@ -203,13 +211,10 @@ def delete_category(
                 status_code=400,
                 detail="No se puede eliminar: hay servicios dentro de esta categoría.",
             )
-        # Force delete: move services to default category "General" and delete category.
-        org_id = int(cat.organization_id)
-        general = _ensure_default_category(db, org_id=org_id)
+        # Force delete: delete services in this category, then delete category.
         svcs = db.exec(select(Service).where(Service.category_id == cat.id)).all()
         for s in svcs:
-            s.category_id = int(general.id)
-            db.add(s)
+            db.delete(s)
         db.commit()
     db.delete(cat)
     db.commit()
