@@ -826,13 +826,11 @@ export default function SettingsView({
   const servicesByCategoryId = useMemo(() => {
     const out = new Map();
     const svcs = Array.isArray(services) ? services : [];
-    const general = sortedCategories.find(
-      (c) => String(c?.name || "").trim().toLowerCase() === "general",
-    );
-    const generalId = general?.id != null ? Number(general.id) : null;
+    const primary = sortedCategories.find((c) => Boolean(c?.is_primary));
+    const primaryId = primary?.id != null ? Number(primary.id) : null;
     for (const s of svcs) {
       const rawCatId = s?.category_id != null ? Number(s.category_id) : null;
-      const catId = rawCatId ?? generalId;
+      const catId = rawCatId ?? primaryId;
       if (catId == null) continue;
       if (!out.has(catId)) out.set(catId, []);
       out.get(catId).push(s);
@@ -1542,7 +1540,7 @@ export default function SettingsView({
                         <ToggleSwitch
                           label="Activa"
                           checked={(cat?.is_active ?? true) !== false}
-                          disabled={categorySaving || isPrimary}
+                          disabled={categorySaving}
                           onChange={async (next) => {
                             if (!cat?.id) return;
                             // If deactivating, backend will archive services too.

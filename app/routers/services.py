@@ -61,10 +61,11 @@ def _get_service_for_org(
 
 
 def _ensure_default_category(db: Session, *, org_id: int) -> ServiceCategory:
+    # Prefer the explicit primary flag (renaming "General" must NOT create a new category).
     existing = db.exec(
         select(ServiceCategory).where(
             ServiceCategory.organization_id == org_id,
-            ServiceCategory.name == "General",
+            ServiceCategory.is_primary == True,  # noqa: E712
         )
     ).first()
     if existing:
@@ -73,6 +74,22 @@ def _ensure_default_category(db: Session, *, org_id: int) -> ServiceCategory:
             db.add(existing)
             db.commit()
         return existing
+
+    # Legacy fallback: older DBs may not have is_primary set yet.
+    legacy = db.exec(
+        select(ServiceCategory).where(
+            ServiceCategory.organization_id == org_id,
+            ServiceCategory.name == "General",
+        )
+    ).first()
+    if legacy:
+        legacy.is_primary = True
+        if getattr(legacy, "is_active", None) is None:
+            legacy.is_active = True
+        db.add(legacy)
+        db.commit()
+        db.refresh(legacy)
+        return legacy
     cat = ServiceCategory(
         organization_id=org_id,
         name="General",
@@ -189,7 +206,33 @@ def update_category(
     if "sort_order" in data and data["sort_order"] is not None:
         cat.sort_order = int(data["sort_order"])
     if "is_active" in data and data["is_active"] is not None:
-        cat.is_active = bool(data["is_active"])
+        next_active = bool(data["is_active"])
+        if next_active is False and getattr(cat, "is_primary", False):
+            # Allow "disabling" the primary category only if there is another active category.
+            other = db.exec(
+                select(ServiceCategory)
+                .where(
+                    ServiceCategory.organization_id == cat.organization_id,
+                    ServiceCategory.id != cat.id,
+                    ServiceCategory.is_active == True,  # noqa: E712
+                )
+                .order_by(ServiceCategory.sort_order.asc(), ServiceCategory.name.asc())
+            ).first()
+            if not other:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No puedes desactivar la categoría principal si no existe otra categoría activa.",
+                )
+            # Move services to the new primary category and switch primary flag.
+            svcs = db.exec(select(Service).where(Service.category_id == cat.id)).all()
+            for s in svcs:
+                s.category_id = int(other.id)
+                db.add(s)
+            other.is_primary = True
+            db.add(other)
+            cat.is_primary = False
+            db.add(cat)
+        cat.is_active = next_active
         if cat.is_active is False:
             # Deactivating a category also archives its services (keeps appointments intact).
             svcs = db.exec(select(Service).where(Service.category_id == cat.id)).all()
