@@ -148,6 +148,9 @@ async def twilio_whatsapp_inbound(
     Twilio WhatsApp inbound webhook (Sandbox or production).
     Responds with TwiML.
     """
+    if (os.getenv("TWILIO_ENABLED", "false").strip().lower() in ("0", "false", "no")):
+        # We're migrating to Meta Cloud API; keep endpoint present but inert by default.
+        raise HTTPException(status_code=410, detail="Twilio WhatsApp disabled (use Meta Cloud API)")
     form = dict(await request.form())
     incoming_text = (form.get("Body") or "").strip()
     from_addr = (form.get("From") or "").strip()
