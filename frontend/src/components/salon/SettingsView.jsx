@@ -1593,147 +1593,151 @@ export default function SettingsView({
             </div>
           )}
 
-          <div className="mt-4 rounded-2xl border border-[var(--bt-border)] bg-white overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setShowDisabledServices((v) => !v)}
-              className="w-full flex items-center justify-between gap-3 px-4 py-4 text-left hover:bg-black/[0.02]"
-            >
-              <div className="min-w-0">
-                <p className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)]">
-                  Servicios desactivados
-                </p>
-                <p className="text-[10px] text-[var(--bt-muted)]">
-                  {archivedServicesLoading
-                    ? "Cargando…"
-                    : `${archivedServices.length} desactivado${archivedServices.length === 1 ? "" : "s"}`}
-                </p>
-              </div>
-              <ChevronDown
-                className={[
-                  "h-5 w-5 shrink-0 text-[var(--bt-muted)] transition-transform duration-300",
-                  showDisabledServices ? "rotate-180" : "",
-                ].join(" ")}
-                aria-hidden
-              />
-            </button>
-            {showDisabledServices ? (
-              <div className="border-t border-[var(--bt-border)] bg-[var(--bt-bg)] p-4 space-y-3">
-                <p className="text-[10px] text-[var(--bt-muted)] leading-relaxed">
-                  Aquí aparecen servicios desactivados. Puedes reactivarlos cuando quieras.
-                </p>
-                {archivedServices.length === 0 ? (
-                  <p className="text-[11px] text-[var(--bt-muted)]">
-                    No hay servicios desactivados.
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {archivedServices.slice(0, 50).map((s) => (
-                      <div
-                        key={s.id}
-                        className="rounded-2xl border border-[var(--bt-border)] bg-white p-3 flex items-center justify-between gap-3"
-                      >
-                        <div className="min-w-0">
-                          <p className="text-[10px] font-black tracking-widest text-[var(--bt-primary)] truncate">
-                            {s.name}
-                          </p>
-                          <p className="text-[10px] text-[var(--bt-muted)]">
-                            {Number(s.duration) || 0}min · {Number(s.price) || 0}€
-                          </p>
-                        </div>
-                        <ToggleSwitch
-                          label="Activo"
-                          checked={false}
-                          disabled={archivedServicesLoading}
-                          onChange={async () => {
-                            if (!s?.id) return;
-                            try {
-                              setArchivedServicesLoading(true);
-                              await apiRequest(`/services/${Number(s.id)}`, "PATCH", { is_active: true });
-                              await loadArchivedServices();
-                              await onRefresh?.();
-                            } catch (err) {
-                              onError?.(formatErr(err));
-                            } finally {
-                              setArchivedServicesLoading(false);
-                            }
-                          }}
-                        />
-                      </div>
-                    ))}
+          {categoryConfigMode ? (
+            <>
+              <div className="mt-4 rounded-2xl border border-[var(--bt-border)] bg-white overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setShowDisabledServices((v) => !v)}
+                  className="w-full flex items-center justify-between gap-3 px-4 py-4 text-left hover:bg-black/[0.02]"
+                >
+                  <div className="min-w-0">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)]">
+                      Servicios desactivados
+                    </p>
+                    <p className="text-[10px] text-[var(--bt-muted)]">
+                      {archivedServicesLoading
+                        ? "Cargando…"
+                        : `${archivedServices.length} desactivado${archivedServices.length === 1 ? "" : "s"}`}
+                    </p>
                   </div>
-                )}
+                  <ChevronDown
+                    className={[
+                      "h-5 w-5 shrink-0 text-[var(--bt-muted)] transition-transform duration-300",
+                      showDisabledServices ? "rotate-180" : "",
+                    ].join(" ")}
+                    aria-hidden
+                  />
+                </button>
+                {showDisabledServices ? (
+                  <div className="border-t border-[var(--bt-border)] bg-[var(--bt-bg)] p-4 space-y-3">
+                    <p className="text-[10px] text-[var(--bt-muted)] leading-relaxed">
+                      Aquí aparecen servicios desactivados. Puedes reactivarlos cuando quieras.
+                    </p>
+                    {archivedServices.length === 0 ? (
+                      <p className="text-[11px] text-[var(--bt-muted)]">
+                        No hay servicios desactivados.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {archivedServices.slice(0, 50).map((s) => (
+                          <div
+                            key={s.id}
+                            className="rounded-2xl border border-[var(--bt-border)] bg-white p-3 flex items-center justify-between gap-3"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-[10px] font-black tracking-widest text-[var(--bt-primary)] truncate">
+                                {s.name}
+                              </p>
+                              <p className="text-[10px] text-[var(--bt-muted)]">
+                                {Number(s.duration) || 0}min · {Number(s.price) || 0}€
+                              </p>
+                            </div>
+                            <ToggleSwitch
+                              label="Activo"
+                              checked={false}
+                              disabled={archivedServicesLoading}
+                              onChange={async () => {
+                                if (!s?.id) return;
+                                try {
+                                  setArchivedServicesLoading(true);
+                                  await apiRequest(`/services/${Number(s.id)}`, "PATCH", { is_active: true });
+                                  await loadArchivedServices();
+                                  await onRefresh?.();
+                                } catch (err) {
+                                  onError?.(formatErr(err));
+                                } finally {
+                                  setArchivedServicesLoading(false);
+                                }
+                              }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
               </div>
-            ) : null}
-          </div>
 
-          <div className="mt-4 rounded-2xl border border-[var(--bt-border)] bg-white overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setShowDisabledCategories((v) => !v)}
-              className="w-full flex items-center justify-between gap-3 px-4 py-4 text-left hover:bg-black/[0.02]"
-            >
-              <div className="min-w-0">
-                <p className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)]">
-                  Categorías desactivadas
-                </p>
-                <p className="text-[10px] text-[var(--bt-muted)]">
-                  {serviceCategoriesLoading
-                    ? "Cargando…"
-                    : `${archivedCategories.length} desactivada${archivedCategories.length === 1 ? "" : "s"}`}
-                </p>
-              </div>
-              <ChevronDown
-                className={[
-                  "h-5 w-5 shrink-0 text-[var(--bt-muted)] transition-transform duration-300",
-                  showDisabledCategories ? "rotate-180" : "",
-                ].join(" ")}
-                aria-hidden
-              />
-            </button>
-            {showDisabledCategories ? (
-              <div className="border-t border-[var(--bt-border)] bg-[var(--bt-bg)] p-4 space-y-3">
-                {archivedCategories.length === 0 ? (
-                  <p className="text-[11px] text-[var(--bt-muted)]">
-                    No hay categorías desactivadas.
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {archivedCategories.map((c) => (
-                      <div
-                        key={c.id}
-                        className="rounded-2xl border border-[var(--bt-border)] bg-white p-3 flex items-center justify-between gap-3"
-                      >
-                        <p className="text-[10px] font-black tracking-widest text-[var(--bt-primary)] truncate">
-                          {c.name}
-                        </p>
-                        <ToggleSwitch
-                          label="Activa"
-                          checked={false}
-                          disabled={archivedCategoriesLoading}
-                          onChange={async () => {
-                            if (!c?.id) return;
-                            try {
-                              setArchivedCategoriesLoading(true);
-                              await apiRequest(`/services/categories/${Number(c.id)}`, "PATCH", {
-                                is_active: true,
-                              });
-                              await loadServiceCategories();
-                              await onRefresh?.();
-                            } catch (err) {
-                              onError?.(formatErr(err));
-                            } finally {
-                              setArchivedCategoriesLoading(false);
-                            }
-                          }}
-                        />
-                      </div>
-                    ))}
+              <div className="mt-4 rounded-2xl border border-[var(--bt-border)] bg-white overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setShowDisabledCategories((v) => !v)}
+                  className="w-full flex items-center justify-between gap-3 px-4 py-4 text-left hover:bg-black/[0.02]"
+                >
+                  <div className="min-w-0">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)]">
+                      Categorías desactivadas
+                    </p>
+                    <p className="text-[10px] text-[var(--bt-muted)]">
+                      {serviceCategoriesLoading
+                        ? "Cargando…"
+                        : `${archivedCategories.length} desactivada${archivedCategories.length === 1 ? "" : "s"}`}
+                    </p>
                   </div>
-                )}
+                  <ChevronDown
+                    className={[
+                      "h-5 w-5 shrink-0 text-[var(--bt-muted)] transition-transform duration-300",
+                      showDisabledCategories ? "rotate-180" : "",
+                    ].join(" ")}
+                    aria-hidden
+                  />
+                </button>
+                {showDisabledCategories ? (
+                  <div className="border-t border-[var(--bt-border)] bg-[var(--bt-bg)] p-4 space-y-3">
+                    {archivedCategories.length === 0 ? (
+                      <p className="text-[11px] text-[var(--bt-muted)]">
+                        No hay categorías desactivadas.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {archivedCategories.map((c) => (
+                          <div
+                            key={c.id}
+                            className="rounded-2xl border border-[var(--bt-border)] bg-white p-3 flex items-center justify-between gap-3"
+                          >
+                            <p className="text-[10px] font-black tracking-widest text-[var(--bt-primary)] truncate">
+                              {c.name}
+                            </p>
+                            <ToggleSwitch
+                              label="Activa"
+                              checked={false}
+                              disabled={archivedCategoriesLoading}
+                              onChange={async () => {
+                                if (!c?.id) return;
+                                try {
+                                  setArchivedCategoriesLoading(true);
+                                  await apiRequest(`/services/categories/${Number(c.id)}`, "PATCH", {
+                                    is_active: true,
+                                  });
+                                  await loadServiceCategories();
+                                  await onRefresh?.();
+                                } catch (err) {
+                                  onError?.(formatErr(err));
+                                } finally {
+                                  setArchivedCategoriesLoading(false);
+                                }
+                              }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
               </div>
-            ) : null}
-          </div>
+            </>
+          ) : null}
 
           {/* Añadir servicio: ahora se hace dentro de cada categoría */}
         </SettingsAccordion>
