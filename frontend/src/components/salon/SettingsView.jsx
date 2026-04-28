@@ -66,6 +66,36 @@ function ToggleSwitch({ checked, onChange, disabled = false, label }) {
   );
 }
 
+function durationLabel(minutesRaw) {
+  const m = Number(minutesRaw) || 0;
+  if (m <= 0) return "—";
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  if (h <= 0) return `${m} min`;
+  if (mm === 0) return `${h} h`;
+  return `${h} h ${mm} min`;
+}
+
+function DurationSelect({ value, onChange, disabled = false, min = 5, max = 8 * 60, step = 5 }) {
+  const v = Number(value) || min;
+  const opts = [];
+  for (let m = min; m <= max; m += step) opts.push(m);
+  return (
+    <select
+      value={String(v)}
+      disabled={disabled}
+      onChange={(e) => onChange?.(Number(e.target.value))}
+      className="w-full bg-[var(--bt-bg)] border border-[var(--bt-border)] py-3 px-4 rounded-2xl text-[10px] font-black"
+    >
+      {opts.map((m) => (
+        <option key={m} value={String(m)}>
+          {durationLabel(m)}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 /**
  * Collapsible settings block (ready for more sections: servicios, facturación, etc.).
  */
@@ -1230,17 +1260,11 @@ export default function SettingsView({
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                               <div className="space-y-2">
                                 <label className="block text-[9px] font-black uppercase tracking-widest text-[var(--bt-muted)] ml-1">
-                                  Duración (min)
+                                  Duración
                                 </label>
-                                <input
-                                  type="number"
-                                  min={5}
-                                  inputMode="numeric"
-                                  className="w-full bg-[var(--bt-bg)] border border-[var(--bt-border)] py-3 px-4 rounded-2xl text-[10px] font-black"
+                                <DurationSelect
                                   value={svcForm.duration}
-                                  onChange={(e) =>
-                                    setSvcForm({ ...svcForm, duration: e.target.value })
-                                  }
+                                  onChange={(mins) => setSvcForm({ ...svcForm, duration: mins })}
                                 />
                               </div>
                               <div className="space-y-2">
@@ -1341,19 +1365,14 @@ export default function SettingsView({
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="block text-[8px] font-black uppercase text-[var(--bt-muted)] mb-1">
-                          Minutos
+                          Duración
                         </label>
-                        <input
-                          type="number"
-                          min={5}
-                          className="w-full bg-white border border-[var(--bt-border)] py-2.5 px-3 rounded-xl text-[10px] font-black"
+                        <DurationSelect
                           value={editingService.duration}
-                          onChange={(e) =>
-                            setEditingService({
-                              ...editingService,
-                              duration: e.target.value,
-                            })
+                          onChange={(mins) =>
+                            setEditingService({ ...editingService, duration: mins })
                           }
+                          disabled={svcEditSaving}
                         />
                       </div>
                       <div>
