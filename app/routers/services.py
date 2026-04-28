@@ -211,10 +211,15 @@ def delete_category(
                 status_code=400,
                 detail="No se puede eliminar: hay servicios dentro de esta categoría.",
             )
-        # Force delete: delete services in this category, then delete category.
+        # Force delete (safe): appointments reference Service with NOT NULL FK.
+        # We cannot hard-delete services without breaking historical appointments.
+        # Instead, deactivate them and detach them from the category, then delete the category.
+        general = _ensure_default_category(db, org_id=org_id)
         svcs = db.exec(select(Service).where(Service.category_id == cat.id)).all()
         for s in svcs:
-            db.delete(s)
+            s.is_active = False
+            s.category_id = int(general.id) if getattr(general, "id", None) is not None else None
+            db.add(s)
         db.commit()
     db.delete(cat)
     db.commit()
