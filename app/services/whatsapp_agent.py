@@ -55,6 +55,17 @@ def _save_state(db: Session, conv: Conversation, state: dict) -> None:
     db.commit()
 
 
+def _service_ids_int_list(state: dict) -> list[int]:
+    """Parse state service_ids; skip invalid entries (avoids uncaught ValueError on corrupt JSON)."""
+    out: list[int] = []
+    for x in state.get("service_ids") or []:
+        try:
+            out.append(int(x))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
 def _get_or_create_conversation(
     db: Session,
     *,
@@ -998,7 +1009,7 @@ def _enter_service_category_step(
     adding_extra: bool,
 ) -> str:
     org_id = int(org.id)
-    exclude = {int(x) for x in (state.get("service_ids") or [])} if adding_extra else set()
+    exclude = set(_service_ids_int_list(state)) if adding_extra else set()
     entries = _collect_category_menu_entries(db, org_id, exclude_service_ids=exclude)
     if not entries:
         state["step"] = "awaiting_main_menu" if not adding_extra else "book_await_more_services"
@@ -1044,7 +1055,7 @@ def _advance_to_period_step(
     day: date,
 ) -> str:
     org_id = int(org.id)
-    service_ids = [int(x) for x in (state.get("service_ids") or [])]
+    service_ids = _service_ids_int_list(state)
     staff_id = state.get("staff_id")
     staff_id_i = int(staff_id) if staff_id is not None else None
     m_slots = _slots_for_day_band(
@@ -1358,7 +1369,7 @@ def handle_inbound_whatsapp(
         state["pick_category_cid"] = cid
         state["service_pick_offset"] = 0
         state["step"] = "book_await_service_pick"
-        exclude = {int(x) for x in (state.get("service_ids") or [])} if state.get("adding_extra") else set()
+        exclude = set(_service_ids_int_list(state)) if state.get("adding_extra") else set()
         svc_list = _services_for_category_bucket(db, org_id, bucket_cid=cid, exclude_service_ids=exclude)
         if not svc_list:
             state["step"] = "book_await_service_category"
@@ -1375,7 +1386,7 @@ def handle_inbound_whatsapp(
 
     if step == "book_await_service_pick":
         cid = state.get("pick_category_cid")
-        exclude = {int(x) for x in (state.get("service_ids") or [])} if state.get("adding_extra") else set()
+        exclude = set(_service_ids_int_list(state)) if state.get("adding_extra") else set()
         svc_list = _services_for_category_bucket(db, org_id, bucket_cid=cid, exclude_service_ids=exclude)
         offset = int(state.get("service_pick_offset") or 0)
         rest = svc_list[offset:]
@@ -1403,7 +1414,7 @@ def handle_inbound_whatsapp(
         sid_new = int(svc.id)
         adding = bool(state.get("adding_extra"))
         if adding:
-            cur = [int(x) for x in (state.get("service_ids") or [])]
+            cur = list(_service_ids_int_list(state))
             if sid_new in cur:
                 return "Ese servicio ya está en la cita. Elige otro."
             cur.append(sid_new)
@@ -1434,7 +1445,7 @@ def handle_inbound_whatsapp(
         )
 
     if step == "book_await_day_pick":
-        sids_chk = [int(x) for x in (state.get("service_ids") or [])]
+        sids_chk = _service_ids_int_list(state)
         if not sids_chk:
             state["step"] = "awaiting_main_menu"
             _save_state(db, conv, state)
@@ -1454,7 +1465,7 @@ def handle_inbound_whatsapp(
             chosen = today + timedelta(days=2)
         elif dch == 4 or "OTRO" in raw_u or "LISTA" in raw_u:
             try:
-                service_ids = [int(x) for x in (state.get("service_ids") or [])]
+                service_ids = _service_ids_int_list(state)
                 staff_id = state.get("staff_id")
                 start_from = _first_day_for_alternatives_list(today)
                 skip = 0
@@ -1498,7 +1509,7 @@ def handle_inbound_whatsapp(
             )
 
     if step == "book_await_day_alternatives":
-        service_ids = [int(x) for x in (state.get("service_ids") or [])]
+        service_ids = _service_ids_int_list(state)
         staff_id = state.get("staff_id")
         today = datetime.now(TZ).date()
         start_from = _first_day_for_alternatives_list(today)
@@ -1641,7 +1652,7 @@ def handle_inbound_whatsapp(
         opt = options[choice - 1]
         start = datetime.fromisoformat(str(opt["start"]))
         staff_id = int(opt["staff_id"])
-        service_ids = [int(x) for x in (state.get("service_ids") or [])]
+        service_ids = _service_ids_int_list(state)
         state["step"] = "book_await_final_confirm"
         state["selected_slot"] = {"start": opt["start"], "staff_id": staff_id}
         _save_state(db, conv, state)
@@ -1677,7 +1688,7 @@ def handle_inbound_whatsapp(
             return "He perdido la selección.\n\n" + _day_pick_level1_text()
         start = datetime.fromisoformat(str(selected["start"]))
         staff_id = int(selected["staff_id"])
-        service_ids = [int(x) for x in (state.get("service_ids") or [])]
+        service_ids = _service_ids_int_list(state)
 
         phone_digits = _norm_phone_es(_digits_only(from_addr))
         if not phone_digits:

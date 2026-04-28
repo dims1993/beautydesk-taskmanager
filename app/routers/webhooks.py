@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import hmac
+import logging
 import os
 from typing import Optional
 
@@ -12,6 +13,8 @@ from app.core.db.session import get_session
 from app.models.organization import Organization
 from app.services.whatsapp_agent import handle_inbound_whatsapp
 
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
@@ -144,14 +147,51 @@ async def twilio_whatsapp_inbound(
         if not ok:
             raise HTTPException(status_code=403, detail="Invalid Twilio signature")
 
-    org = _pick_org_for_twilio(db)
-    reply = handle_inbound_whatsapp(
-        db,
-        org=org,
-        from_addr=from_addr,
-        to_addr=to_addr,
-        body=incoming_text,
-    )
+    try:
+        org = _pick_org_for_twilio(db)
+    except HTTPException as e:
+        # Twilio expects 2xx + TwiML; JSON errors look like a broken bot to users.
+        if e.status_code == 409:
+            return Response(
+                content=_twiml(
+                    [
+                        "Este WhatsApp no está enlazado a un salón en el servidor. "
+                        "Indica a la administración que configure TWILIO_DEFAULT_ORG_ID "
+                        "o que solo un salón tenga clave de agente."
+                    ]
+                ),
+                media_type="application/xml",
+            )
+        if e.status_code == 500:
+            return Response(
+                content=_twiml(
+                    [
+                        "Error de configuración del salón (TWILIO_DEFAULT_ORG_ID u organización). "
+                        "Contacta con soporte."
+                    ]
+                ),
+                media_type="application/xml",
+            )
+        raise
+
+    try:
+        reply = handle_inbound_whatsapp(
+            db,
+            org=org,
+            from_addr=from_addr,
+            to_addr=to_addr,
+            body=incoming_text,
+        )
+    except Exception:
+        logger.exception(
+            "twilio_whatsapp_inbound handler failed from=%s to=%s",
+            from_addr,
+            to_addr,
+        )
+        reply = (
+            "Ha ocurrido un error técnico. Escribe MENÚ para reiniciar o inténtalo más tarde."
+        )
+
     bubbles = reply if isinstance(reply, list) else [reply]
     return Response(content=_twiml(bubbles), media_type="application/xml")
 
