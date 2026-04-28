@@ -16,6 +16,11 @@ from app.services.whatsapp_agent import handle_inbound_whatsapp
 
 logger = logging.getLogger(__name__)
 
+# Twilio treats empty <Message> body as failed delivery (HTTP can still be 200).
+_TWIML_FALLBACK_TEXT = (
+    "No he podido generar una respuesta válida. Escribe MENÚ para reiniciar o inténtalo de nuevo."
+)
+
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
 
@@ -56,24 +61,39 @@ def _twilio_signature_valid(
     return hmac.compare_digest(expected, twilio_signature.strip())
 
 
+def _twiml_sanitize_text(message: str) -> str:
+    """Drop NUL and other control chars that break XML / Twilio parsing."""
+    out: list[str] = []
+    for c in message or "":
+        o = ord(c)
+        if c in "\t\n\r" or o >= 32:
+            out.append(c)
+    return "".join(out)
+
+
 def _twiml_escape(message: str) -> str:
-    return (message or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    s = _twiml_sanitize_text(message)
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def _twiml(messages: list[str]) -> str:
     """
     One or more <Message> nodes — Twilio sends each as a separate WhatsApp bubble.
+    Empty bodies are never sent (Twilio would not deliver them).
     """
+    max_len = 1500
     parts: list[str] = []
     for m in messages:
         if m is None:
             continue
-        s = str(m).strip()
+        s = _twiml_sanitize_text(str(m)).strip()
         if not s:
             continue
+        if len(s) > max_len:
+            s = s[: max_len - 1] + "…"
         parts.append(f"<Message>{_twiml_escape(s)}</Message>")
     if not parts:
-        parts.append("<Message></Message>")
+        parts.append(f"<Message>{_twiml_escape(_TWIML_FALLBACK_TEXT)}</Message>")
     inner = "".join(parts)
     return f'<?xml version="1.0" encoding="UTF-8"?><Response>{inner}</Response>'
 
@@ -152,26 +172,22 @@ async def twilio_whatsapp_inbound(
     except HTTPException as e:
         # Twilio expects 2xx + TwiML; JSON errors look like a broken bot to users.
         if e.status_code == 409:
-            return Response(
-                content=_twiml(
-                    [
-                        "Este WhatsApp no está enlazado a un salón en el servidor. "
-                        "Indica a la administración que configure TWILIO_DEFAULT_ORG_ID "
-                        "o que solo un salón tenga clave de agente."
-                    ]
-                ),
-                media_type="application/xml",
+            xml = _twiml(
+                [
+                    "Este WhatsApp no está enlazado a un salón en el servidor. "
+                    "Indica a la administración que configure TWILIO_DEFAULT_ORG_ID "
+                    "o que solo un salón tenga clave de agente."
+                ]
             )
+            return Response(content=xml.encode("utf-8"), media_type="text/xml; charset=utf-8")
         if e.status_code == 500:
-            return Response(
-                content=_twiml(
-                    [
-                        "Error de configuración del salón (TWILIO_DEFAULT_ORG_ID u organización). "
-                        "Contacta con soporte."
-                    ]
-                ),
-                media_type="application/xml",
+            xml = _twiml(
+                [
+                    "Error de configuración del salón (TWILIO_DEFAULT_ORG_ID u organización). "
+                    "Contacta con soporte."
+                ]
             )
+            return Response(content=xml.encode("utf-8"), media_type="text/xml; charset=utf-8")
         raise
 
     try:
@@ -192,6 +208,29 @@ async def twilio_whatsapp_inbound(
             "Ha ocurrido un error técnico. Escribe MENÚ para reiniciar o inténtalo más tarde."
         )
 
-    bubbles = reply if isinstance(reply, list) else [reply]
-    return Response(content=_twiml(bubbles), media_type="application/xml")
+    if reply is None:
+        logger.error(
+            "twilio_whatsapp_inbound returned None from=%s to=%s step_context=check_handler",
+            from_addr,
+            to_addr,
+        )
+        bubbles = [_TWIML_FALLBACK_TEXT]
+    elif isinstance(reply, list):
+        if len(reply) == 0:
+            logger.error(
+                "twilio_whatsapp_inbound returned empty list from=%s to=%s",
+                from_addr,
+                to_addr,
+            )
+            bubbles = [_TWIML_FALLBACK_TEXT]
+        else:
+            bubbles = reply
+    else:
+        bubbles = [reply]
+
+    xml = _twiml(bubbles)
+    return Response(
+        content=xml.encode("utf-8"),
+        media_type="text/xml; charset=utf-8",
+    )
 
