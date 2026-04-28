@@ -14,5 +14,7 @@ class ServiceCategory(SQLModel, table=True):
     organization_id: int = Field(foreign_key="organization.id", index=True)
     name: str = Field(index=True)
     sort_order: int = Field(default=0)
+    is_primary: bool = Field(default=False, index=True)
+    is_active: bool = Field(default=True, index=True)
 
     services: list["Service"] = Relationship(back_populates="category")

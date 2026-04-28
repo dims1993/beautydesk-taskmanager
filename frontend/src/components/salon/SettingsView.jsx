@@ -28,6 +28,44 @@ function formatErr(err) {
   return err.message || "Error";
 }
 
+function ToggleSwitch({ checked, onChange, disabled = false, label }) {
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        if (!disabled) onChange?.(!checked);
+      }}
+      disabled={disabled}
+      aria-pressed={checked}
+      className={[
+        "inline-flex items-center gap-2 select-none",
+        disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
+      ].join(" ")}
+    >
+      {label ? (
+        <span className="text-[10px] font-black uppercase tracking-widest text-[var(--bt-muted)]">
+          {label}
+        </span>
+      ) : null}
+      <span
+        className={[
+          "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors",
+          checked
+            ? "bg-emerald-500 border-emerald-600"
+            : "bg-[#e9e3db] border-[var(--bt-border)]",
+        ].join(" ")}
+      >
+        <span
+          className={[
+            "inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform",
+            checked ? "translate-x-5" : "translate-x-1",
+          ].join(" ")}
+        />
+      </span>
+    </button>
+  );
+}
+
 /**
  * Collapsible settings block (ready for more sections: servicios, facturación, etc.).
  */
@@ -218,6 +256,9 @@ export default function SettingsView({
 
   const [serviceCategories, setServiceCategories] = useState([]);
   const [serviceCategoriesLoading, setServiceCategoriesLoading] = useState(false);
+  const [archivedServices, setArchivedServices] = useState([]);
+  const [archivedServicesLoading, setArchivedServicesLoading] = useState(false);
+  const [archivedCategoriesLoading, setArchivedCategoriesLoading] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [categoryCreating, setCategoryCreating] = useState(false);
   const [categoryConfigMode, setCategoryConfigMode] = useState(false);
@@ -615,12 +656,27 @@ export default function SettingsView({
     if (!isOwnerWithOrg) return;
     setServiceCategoriesLoading(true);
     try {
-      const r = await apiRequest("/services/categories", "GET");
+      // include inactive categories for "archived" section + toggles
+      const r = await apiRequest("/services/categories?include_inactive=true", "GET");
       setServiceCategories(Array.isArray(r) ? r : []);
     } catch (err) {
       onError?.(formatErr(err));
     } finally {
       setServiceCategoriesLoading(false);
+    }
+  };
+
+  const loadArchivedServices = async () => {
+    if (!isOwnerWithOrg) return;
+    setArchivedServicesLoading(true);
+    try {
+      const r = await apiRequest("/services/?include_inactive=true", "GET");
+      const all = Array.isArray(r) ? r : [];
+      setArchivedServices(all.filter((s) => s && s.is_active === false));
+    } catch (err) {
+      onError?.(formatErr(err));
+    } finally {
+      setArchivedServicesLoading(false);
     }
   };
 
@@ -700,6 +756,7 @@ export default function SettingsView({
       }
 
       await loadServiceCategories();
+      await loadArchivedServices();
       await onRefresh?.();
       setCategoryConfigMode(false);
       setCategoryPendingDelete({});
@@ -714,6 +771,7 @@ export default function SettingsView({
   useEffect(() => {
     if (!isOwnerWithOrg) return;
     loadServiceCategories();
+    loadArchivedServices();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOwnerWithOrg]);
 
@@ -745,13 +803,23 @@ export default function SettingsView({
   };
 
   const sortedCategories = useMemo(() => {
-    const cats = Array.isArray(serviceCategories) ? [...serviceCategories] : [];
+    const cats = (Array.isArray(serviceCategories) ? [...serviceCategories] : []).filter(
+      (c) => (c?.is_active ?? true) !== false,
+    );
     cats.sort((a, b) => {
       const ao = Number(a?.sort_order ?? 0);
       const bo = Number(b?.sort_order ?? 0);
       if (ao !== bo) return ao - bo;
       return String(a?.name || "").localeCompare(String(b?.name || ""));
     });
+    return cats;
+  }, [serviceCategories]);
+
+  const archivedCategories = useMemo(() => {
+    const cats = (Array.isArray(serviceCategories) ? [...serviceCategories] : []).filter(
+      (c) => (c?.is_active ?? true) === false,
+    );
+    cats.sort((a, b) => String(a?.name || "").localeCompare(String(b?.name || ""), "es"));
     return cats;
   }, [serviceCategories]);
 
@@ -1098,6 +1166,7 @@ export default function SettingsView({
                 const pendingDel = Boolean(categoryPendingDelete?.[draftKey]);
                 const deletingWouldRemoveServices = catServices.length > 0;
                 const nameDraft = String(categoryEditDrafts?.[draftKey] ?? cat?.name ?? "");
+                const isPrimary = Boolean(cat?.is_primary);
                 return (
                   <div
                     key={cat.id}
@@ -1158,6 +1227,7 @@ export default function SettingsView({
                                 });
                                 return;
                               }
+                              if (isPrimary) return;
                               requestDeleteCategory(cat, catServices.length);
                             }}
                             disabled={categorySaving}
@@ -1461,6 +1531,38 @@ export default function SettingsView({
                         )}
                       </div>
                     ) : null}
+
+                    {categoryConfigMode ? (
+                      <div className="border-t border-[var(--bt-border)] bg-[var(--bt-bg)] px-4 py-3 flex items-center justify-between gap-3">
+                        <p className="text-[10px] text-[var(--bt-muted)]">
+                          {isPrimary
+                            ? "Categoría principal (no se puede eliminar)."
+                            : "Puedes archivar la categoría para ocultarla."}
+                        </p>
+                        <ToggleSwitch
+                          label="Activa"
+                          checked={(cat?.is_active ?? true) !== false}
+                          disabled={categorySaving || isPrimary}
+                          onChange={async (next) => {
+                            if (!cat?.id) return;
+                            // If deactivating, backend will archive services too.
+                            try {
+                              setCategorySaving(true);
+                              await apiRequest(`/services/categories/${Number(cat.id)}`, "PATCH", {
+                                is_active: Boolean(next),
+                              });
+                              await loadServiceCategories();
+                              await loadArchivedServices();
+                              await onRefresh?.();
+                            } catch (err) {
+                              onError?.(formatErr(err));
+                            } finally {
+                              setCategorySaving(false);
+                            }
+                          }}
+                        />
+                      </div>
+                    ) : null}
                   </div>
                 );
               })}
@@ -1490,6 +1592,116 @@ export default function SettingsView({
               </div>
             </div>
           )}
+
+          <div className="mt-4 rounded-2xl border border-[var(--bt-border)] bg-white p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)]">
+                Servicios archivados
+              </p>
+              <button
+                type="button"
+                onClick={loadArchivedServices}
+                disabled={archivedServicesLoading}
+                className="rounded-full border border-[var(--bt-border)] bg-white px-4 py-2 text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)] disabled:opacity-50 hover:bg-[var(--bt-bg)]"
+              >
+                {archivedServicesLoading ? "Cargando…" : "Recargar"}
+              </button>
+            </div>
+            <p className="text-[10px] text-[var(--bt-muted)] leading-relaxed">
+              Aquí aparecen servicios desactivados. Puedes reactivarlos cuando quieras.
+            </p>
+            {archivedServices.length === 0 ? (
+              <p className="text-[11px] text-[var(--bt-muted)]">No hay servicios archivados.</p>
+            ) : (
+              <div className="space-y-2">
+                {archivedServices.slice(0, 50).map((s) => (
+                  <div
+                    key={s.id}
+                    className="rounded-2xl border border-[var(--bt-border)] bg-[var(--bt-bg)] p-3 flex items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-black tracking-widest text-[var(--bt-primary)] truncate">
+                        {s.name}
+                      </p>
+                      <p className="text-[10px] text-[var(--bt-muted)]">
+                        {Number(s.duration) || 0}min · {Number(s.price) || 0}€
+                      </p>
+                    </div>
+                    <ToggleSwitch
+                      label="Activo"
+                      checked={false}
+                      disabled={archivedServicesLoading}
+                      onChange={async () => {
+                        if (!s?.id) return;
+                        try {
+                          setArchivedServicesLoading(true);
+                          await apiRequest(`/services/${Number(s.id)}`, "PATCH", { is_active: true });
+                          await loadArchivedServices();
+                          await onRefresh?.();
+                        } catch (err) {
+                          onError?.(formatErr(err));
+                        } finally {
+                          setArchivedServicesLoading(false);
+                        }
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-[var(--bt-border)] bg-white p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)]">
+                Categorías archivadas
+              </p>
+              <button
+                type="button"
+                onClick={loadServiceCategories}
+                disabled={archivedCategoriesLoading || serviceCategoriesLoading}
+                className="rounded-full border border-[var(--bt-border)] bg-white px-4 py-2 text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)] disabled:opacity-50 hover:bg-[var(--bt-bg)]"
+              >
+                {serviceCategoriesLoading ? "Cargando…" : "Recargar"}
+              </button>
+            </div>
+            {archivedCategories.length === 0 ? (
+              <p className="text-[11px] text-[var(--bt-muted)]">No hay categorías archivadas.</p>
+            ) : (
+              <div className="space-y-2">
+                {archivedCategories.map((c) => (
+                  <div
+                    key={c.id}
+                    className="rounded-2xl border border-[var(--bt-border)] bg-[var(--bt-bg)] p-3 flex items-center justify-between gap-3"
+                  >
+                    <p className="text-[10px] font-black tracking-widest text-[var(--bt-primary)] truncate">
+                      {c.name}
+                    </p>
+                    <ToggleSwitch
+                      label="Activa"
+                      checked={false}
+                      disabled={archivedCategoriesLoading}
+                      onChange={async () => {
+                        if (!c?.id) return;
+                        try {
+                          setArchivedCategoriesLoading(true);
+                          await apiRequest(`/services/categories/${Number(c.id)}`, "PATCH", {
+                            is_active: true,
+                          });
+                          await loadServiceCategories();
+                          await onRefresh?.();
+                        } catch (err) {
+                          onError?.(formatErr(err));
+                        } finally {
+                          setArchivedCategoriesLoading(false);
+                        }
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Añadir servicio: ahora se hace dentro de cada categoría */}
         </SettingsAccordion>

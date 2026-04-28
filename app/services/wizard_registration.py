@@ -7,10 +7,12 @@ from typing import Any
 from fastapi import HTTPException
 from sqlmodel import Session, select
 
-from app.constants.onboarding import ALLOWED_SALON_CATEGORIES
+from app.constants.onboarding import ALLOWED_SALON_CATEGORIES, DEFAULT_SERVICES_BY_PRIMARY
 from app.core.security import get_password_hash
 from app.models.organization import BusinessType, Organization
 from app.models.pending_registration import PendingRegistration
+from app.models.service import Service
+from app.routers.services import _ensure_default_category
 from app.models.user import User, UserRole
 
 CODE_TTL_MINUTES = 30
@@ -266,6 +268,39 @@ def confirm_owner_wizard_registration(
     db.add(org)
     db.commit()
     db.refresh(org)
+
+    # Seed default services in the primary category (General) based on the wizard selection.
+    try:
+        primary_key = (payload.get("primary_category") or "").strip().upper()
+        defaults = DEFAULT_SERVICES_BY_PRIMARY.get(primary_key) or []
+        if defaults:
+            general = _ensure_default_category(db, org_id=int(org.id))
+            existing = db.exec(
+                select(Service.id).where(
+                    Service.organization_id == org.id,
+                    Service.is_active == True,  # noqa: E712
+                )
+            ).first()
+            # Only seed if org has no active services yet.
+            if not existing:
+                for d in defaults:
+                    nm = (d.get("name") or "").strip()
+                    if not nm:
+                        continue
+                    svc = Service(
+                        name=nm,
+                        description=None,
+                        duration=int(d.get("duration") or 30),
+                        price=float(d.get("price") or 0),
+                        is_active=True,
+                        organization_id=int(org.id),
+                        category_id=int(general.id) if general.id is not None else None,
+                    )
+                    db.add(svc)
+                db.commit()
+    except Exception:
+        # Non-critical: onboarding should succeed even if seeding fails.
+        pass
 
     username = _unique_username(
         db,

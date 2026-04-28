@@ -19,6 +19,7 @@ class ServiceUpdate(BaseModel):
     duration: Optional[int] = None
     price: Optional[float] = None
     category_id: Optional[int] = None
+    is_active: Optional[bool] = None
 
 
 class ServiceCreateBody(BaseModel):
@@ -37,6 +38,7 @@ class ServiceCategoryCreateBody(BaseModel):
 class ServiceCategoryUpdateBody(BaseModel):
     name: Optional[str] = None
     sort_order: Optional[int] = None
+    is_active: Optional[bool] = None
 
 
 def _can_manage_services(user: User) -> bool:
@@ -66,8 +68,18 @@ def _ensure_default_category(db: Session, *, org_id: int) -> ServiceCategory:
         )
     ).first()
     if existing:
+        if getattr(existing, "is_primary", False) is not True:
+            existing.is_primary = True
+            db.add(existing)
+            db.commit()
         return existing
-    cat = ServiceCategory(organization_id=org_id, name="General", sort_order=0)
+    cat = ServiceCategory(
+        organization_id=org_id,
+        name="General",
+        sort_order=0,
+        is_primary=True,
+        is_active=True,
+    )
     db.add(cat)
     db.commit()
     db.refresh(cat)
@@ -108,6 +120,7 @@ def _get_category_for_org(
 
 @router.get("/categories", response_model=List[ServiceCategory])
 def list_categories(
+    include_inactive: bool = Query(False),
     db: Session = Depends(get_session),
     current_user: User = Depends(get_current_user_for_app),
 ):
@@ -116,11 +129,13 @@ def list_categories(
     if current_user.organization_id is None:
         return []
     _ensure_default_category(db, org_id=int(current_user.organization_id))
-    return db.exec(
-        select(ServiceCategory)
-        .where(ServiceCategory.organization_id == current_user.organization_id)
-        .order_by(ServiceCategory.sort_order.asc(), ServiceCategory.name.asc())
-    ).all()
+    q = select(ServiceCategory).where(
+        ServiceCategory.organization_id == current_user.organization_id
+    )
+    if not include_inactive:
+        q = q.where(ServiceCategory.is_active == True)  # noqa: E712
+    q = q.order_by(ServiceCategory.sort_order.asc(), ServiceCategory.name.asc())
+    return db.exec(q).all()
 
 
 @router.post("/categories", response_model=ServiceCategory, status_code=201)
@@ -173,6 +188,14 @@ def update_category(
         cat.name = name
     if "sort_order" in data and data["sort_order"] is not None:
         cat.sort_order = int(data["sort_order"])
+    if "is_active" in data and data["is_active"] is not None:
+        cat.is_active = bool(data["is_active"])
+        if cat.is_active is False:
+            # Deactivating a category also archives its services (keeps appointments intact).
+            svcs = db.exec(select(Service).where(Service.category_id == cat.id)).all()
+            for s in svcs:
+                s.is_active = False
+                db.add(s)
     db.add(cat)
     db.commit()
     db.refresh(cat)
@@ -189,6 +212,8 @@ def delete_category(
     if not _can_manage_services(current_user):
         raise HTTPException(status_code=403, detail="No autorizado")
     cat = _get_category_for_org(db, category_id, current_user)
+    if getattr(cat, "is_primary", False):
+        raise HTTPException(status_code=400, detail="No se puede eliminar la categoría principal.")
     # Never allow deleting the last remaining category for an organization.
     org_id = int(cat.organization_id)
     remaining = db.exec(
@@ -228,6 +253,7 @@ def delete_category(
 
 @router.get("/", response_model=List[Service])
 def list_services(
+    include_inactive: bool = Query(False),
     db: Session = Depends(get_session),
     current_user: User = Depends(get_current_user_for_app),
 ):
@@ -236,12 +262,10 @@ def list_services(
     if current_user.organization_id is None:
         return []
     _normalize_uncategorized_services(db, org_id=int(current_user.organization_id))
-    return db.exec(
-        select(Service).where(
-            Service.organization_id == current_user.organization_id,
-            Service.is_active == True,  # noqa: E712
-        )
-    ).all()
+    q = select(Service).where(Service.organization_id == current_user.organization_id)
+    if not include_inactive:
+        q = q.where(Service.is_active == True)  # noqa: E712
+    return db.exec(q).all()
 
 
 @router.post("/", response_model=Service)
