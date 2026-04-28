@@ -220,6 +220,12 @@ export default function SettingsView({
   const [serviceCategoriesLoading, setServiceCategoriesLoading] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [categoryCreating, setCategoryCreating] = useState(false);
+  const [categoryConfigOpen, setCategoryConfigOpen] = useState(false);
+  const [categoryEditDrafts, setCategoryEditDrafts] = useState({});
+  const [categorySavingId, setCategorySavingId] = useState(null);
+  const [categoryToDelete, setCategoryToDelete] = useState(null);
+  const [categoryDeletingId, setCategoryDeletingId] = useState(null);
+  const [categoryDeleteForce, setCategoryDeleteForce] = useState(false);
   const [openCategoryId, setOpenCategoryId] = useState(null);
   const [addServiceCategoryId, setAddServiceCategoryId] = useState(null);
 
@@ -619,6 +625,53 @@ export default function SettingsView({
     }
   };
 
+  const openCategoryConfig = () => {
+    const drafts = {};
+    for (const c of Array.isArray(serviceCategories) ? serviceCategories : []) {
+      const id = c?.id != null ? String(c.id) : null;
+      if (!id) continue;
+      drafts[id] = String(c?.name || "");
+    }
+    setCategoryEditDrafts(drafts);
+    setCategoryConfigOpen(true);
+  };
+
+  const saveCategoryEdits = async (catIdRaw) => {
+    if (!isOwnerWithOrg) return;
+    const catId = Number(catIdRaw);
+    if (!Number.isFinite(catId)) return;
+    const name = String(categoryEditDrafts?.[String(catId)] || "").trim();
+    if (!name) return;
+    setCategorySavingId(catId);
+    try {
+      await apiRequest(`/services/categories/${catId}`, "PATCH", { name });
+      await loadServiceCategories();
+    } catch (err) {
+      onError?.(formatErr(err));
+    } finally {
+      setCategorySavingId(null);
+    }
+  };
+
+  const confirmDeleteCategory = async () => {
+    if (!isOwnerWithOrg) return;
+    if (!categoryToDelete?.id) return;
+    const catId = Number(categoryToDelete.id);
+    if (!Number.isFinite(catId)) return;
+    setCategoryDeletingId(catId);
+    try {
+      const qs = categoryDeleteForce ? "?force=true" : "";
+      await apiRequest(`/services/categories/${catId}${qs}`, "DELETE");
+      setCategoryToDelete(null);
+      setCategoryDeleteForce(false);
+      await loadServiceCategories();
+    } catch (err) {
+      onError?.(formatErr(err));
+    } finally {
+      setCategoryDeletingId(null);
+    }
+  };
+
   useEffect(() => {
     if (!isOwnerWithOrg) return;
     loadServiceCategories();
@@ -961,12 +1014,15 @@ export default function SettingsView({
             <p className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)]">
               Categorías
             </p>
+            <p className="text-[10px] text-[var(--bt-muted)] leading-relaxed">
+              Para renombrar o eliminar categorías usa <span className="font-black">Configurar</span>. El campo de abajo es solo para crear nuevas.
+            </p>
             <div className="flex flex-col sm:flex-row gap-2">
               <input
                 type="text"
                 value={newCategoryName}
                 onChange={(e) => setNewCategoryName(e.target.value)}
-                placeholder="Nombre de categoría (ej. Mechas)"
+                placeholder="Crear nueva categoría (ej. Mechas)"
                 className="flex-1 bg-white border border-[var(--bt-border)] py-3 px-4 rounded-2xl text-[10px] font-black tracking-widest"
               />
               <button
@@ -979,11 +1035,11 @@ export default function SettingsView({
               </button>
               <button
                 type="button"
-                onClick={loadServiceCategories}
+                onClick={openCategoryConfig}
                 disabled={serviceCategoriesLoading}
                 className="shrink-0 rounded-full border border-[var(--bt-border)] bg-white px-6 py-3 text-[10px] font-black uppercase tracking-widest text-[var(--bt-primary)] disabled:opacity-50 hover:bg-[var(--bt-bg)]"
               >
-                {serviceCategoriesLoading ? "Cargando…" : "Actualizar"}
+                {serviceCategoriesLoading ? "Cargando…" : "Configurar"}
               </button>
             </div>
           </div>
@@ -1916,6 +1972,183 @@ export default function SettingsView({
                 className="w-full sm:w-auto rounded-full bg-red-600 px-6 py-3 text-[10px] font-black uppercase tracking-widest text-white shadow-lg transition hover:bg-red-700 disabled:opacity-50"
               >
                 {svcDeletingId != null ? "Eliminando…" : "Eliminar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {categoryConfigOpen && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          role="presentation"
+          onClick={() => {
+            if (categorySavingId == null && categoryDeletingId == null) setCategoryConfigOpen(false);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settings-category-config-title"
+            className="w-full max-w-2xl rounded-[2.5rem] bg-white p-6 sm:p-8 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 mb-6">
+              <div className="min-w-0">
+                <p className="text-[9px] font-black uppercase tracking-[0.35em] text-[var(--bt-muted)] mb-2">
+                  Categorías
+                </p>
+                <h3
+                  id="settings-category-config-title"
+                  className="font-serif text-xl text-[var(--bt-primary)] leading-snug"
+                >
+                  Configurar categorías
+                </h3>
+                <p className="text-[12px] text-[#6d6359] leading-relaxed mt-2">
+                  Cambia el nombre de una categoría o elimínala. (No se puede eliminar
+                  “General” ni categorías con servicios dentro.)
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCategoryConfigOpen(false)}
+                disabled={categorySavingId != null || categoryDeletingId != null}
+                className="rounded-full border border-[var(--bt-border)] bg-white px-5 py-2 text-[10px] font-black uppercase tracking-widest text-[var(--bt-muted)] transition hover:bg-[var(--bt-bg)] disabled:opacity-50"
+              >
+                Cerrar
+              </button>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between mb-4">
+              <button
+                type="button"
+                onClick={loadServiceCategories}
+                disabled={serviceCategoriesLoading}
+                className="w-full sm:w-auto rounded-full border border-[var(--bt-border)] bg-white px-6 py-3 text-[10px] font-black uppercase tracking-widest text-[var(--bt-primary)] disabled:opacity-50 hover:bg-[var(--bt-bg)]"
+              >
+                {serviceCategoriesLoading ? "Cargando…" : "Recargar"}
+              </button>
+              <p className="text-[10px] text-[var(--bt-muted)]">
+                Tip: para crear nuevas categorías, usa el campo “Crear” en la pantalla anterior.
+              </p>
+            </div>
+
+            <div className="max-h-[55vh] overflow-auto rounded-2xl border border-[var(--bt-border)] bg-[var(--bt-bg)] p-3 space-y-2">
+              {sortedCategories.length === 0 ? (
+                <p className="text-[12px] text-[var(--bt-muted)] p-3">
+                  No hay categorías.
+                </p>
+              ) : (
+                sortedCategories.map((cat) => {
+                  const catId = Number(cat.id);
+                  const draftKey = String(cat.id);
+                  const isBusy = categorySavingId === catId || categoryDeletingId === catId;
+                  const nameDraft = String(categoryEditDrafts?.[draftKey] ?? cat?.name ?? "");
+                  const servicesCount = (servicesByCategoryId.get(catId) || []).length;
+                  return (
+                    <div
+                      key={cat.id}
+                      className="rounded-2xl border border-[var(--bt-border)] bg-white p-4"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-muted)] mb-2">
+                            #{cat.id} · {servicesCount} servicio{servicesCount === 1 ? "" : "s"}
+                          </p>
+                          <input
+                            type="text"
+                            value={nameDraft}
+                            onChange={(e) =>
+                              setCategoryEditDrafts((cur) => ({
+                                ...(cur || {}),
+                                [draftKey]: e.target.value,
+                              }))
+                            }
+                            className="w-full bg-[var(--bt-bg)] border border-[var(--bt-border)] py-3 px-4 rounded-2xl text-[10px] font-black tracking-widest"
+                          />
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-end">
+                          <button
+                            type="button"
+                            onClick={() => saveCategoryEdits(catId)}
+                            disabled={
+                              isBusy || !String(nameDraft || "").trim() || String(nameDraft).trim() === String(cat?.name || "").trim()
+                            }
+                            className="rounded-full bg-[var(--bt-primary)] px-5 py-3 text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-50 hover:bg-[var(--bt-primary-hover)]"
+                          >
+                            {categorySavingId === catId ? "Guardando…" : "Guardar"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCategoryToDelete({ ...cat, servicesCount });
+                              setCategoryDeleteForce(servicesCount > 0);
+                            }}
+                            disabled={isBusy}
+                            className="rounded-full border border-[var(--bt-border)] bg-white px-5 py-3 text-[10px] font-black uppercase tracking-widest text-red-600 disabled:opacity-50 hover:bg-red-50"
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {categoryToDelete && (
+        <div
+          className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          role="presentation"
+          onClick={() => {
+            if (categoryDeletingId == null) setCategoryToDelete(null);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settings-delete-cat-title"
+            className="w-full max-w-sm rounded-[2.5rem] bg-white p-8 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-600 ring-1 ring-red-100">
+              <AlertTriangle className="h-7 w-7" strokeWidth={1.75} />
+            </div>
+            <p className="text-center text-[9px] font-black uppercase tracking-[0.35em] text-[var(--bt-muted)] mb-2">
+              Eliminar categoría
+            </p>
+            <h3
+              id="settings-delete-cat-title"
+              className="font-serif text-lg text-center text-[var(--bt-primary)] mb-3 leading-snug"
+            >
+              ¿Eliminar «{categoryToDelete.name}»?
+            </h3>
+            <p className="text-[12px] leading-relaxed text-[#6d6359] text-center mb-8">
+              Esta acción no se puede deshacer.
+              {Number(categoryToDelete.servicesCount || 0) > 0
+                ? " Esta categoría tiene servicios dentro. Si continúas, se moverán a “General” y la categoría se eliminará."
+                : " Se eliminará la categoría."}
+            </p>
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setCategoryToDelete(null)}
+                disabled={categoryDeletingId != null}
+                className="w-full sm:w-auto rounded-full border border-[var(--bt-border)] bg-white px-6 py-3 text-[10px] font-black uppercase tracking-widest text-[var(--bt-muted)] transition hover:bg-[var(--bt-bg)] disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteCategory}
+                disabled={categoryDeletingId != null}
+                className="w-full sm:w-auto rounded-full bg-red-600 px-6 py-3 text-[10px] font-black uppercase tracking-widest text-white shadow-lg transition hover:bg-red-700 disabled:opacity-50"
+              >
+                {categoryDeletingId != null ? "Eliminando…" : "Eliminar"}
               </button>
             </div>
           </div>

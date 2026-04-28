@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlmodel import Session, select
 from sqlalchemy import or_, and_
@@ -182,6 +182,7 @@ def update_category(
 @router.delete("/categories/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_category(
     category_id: int,
+    force: bool = Query(False, description="If true, move services to General and delete anyway."),
     db: Session = Depends(get_session),
     current_user: User = Depends(get_current_user_for_app),
 ):
@@ -197,10 +198,19 @@ def delete_category(
         ).limit(1)
     ).first()
     if has_services:
-        raise HTTPException(
-            status_code=400,
-            detail="No se puede eliminar: hay servicios dentro de esta categoría.",
-        )
+        if not force:
+            raise HTTPException(
+                status_code=400,
+                detail="No se puede eliminar: hay servicios dentro de esta categoría.",
+            )
+        # Force delete: move services to default category "General" and delete category.
+        org_id = int(cat.organization_id)
+        general = _ensure_default_category(db, org_id=org_id)
+        svcs = db.exec(select(Service).where(Service.category_id == cat.id)).all()
+        for s in svcs:
+            s.category_id = int(general.id)
+            db.add(s)
+        db.commit()
     db.delete(cat)
     db.commit()
     return None
