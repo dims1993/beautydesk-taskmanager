@@ -2333,8 +2333,8 @@ export default function SettingsView({
               ¿Eliminar «{serviceToDelete.name}»?
             </h3>
             <p className="text-[12px] leading-relaxed text-[#6d6359] text-center mb-8">
-              Esta acción no se puede deshacer. Si hay citas asociadas a este
-              servicio, no podrás eliminarlo hasta que las gestiones.
+              Este servicio pasará a la sección de <span className="font-black">Servicios desactivados</span>.
+              Si quieres volver a activarlo, podrás hacerlo desde allí.
             </p>
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
             <button
@@ -2386,8 +2386,9 @@ export default function SettingsView({
               ¿Eliminar «{categoryWarnDelete.name}»?
             </h3>
             <p className="text-[12px] leading-relaxed text-[#6d6359] text-center mb-8">
-              Esta acción no se puede deshacer. Esta categoría tiene servicios dentro.
-              Si continúas, esos servicios se retirarán de la lista (se desactivarán) y la categoría se eliminará.
+              Esta categoría pasará a la sección de <span className="font-black">Categorías desactivadas</span>.
+              Sus servicios se moverán a <span className="font-black">Servicios desactivados</span>.
+              Si quieres volver a activarlos, podrás hacerlo desde allí.
             </p>
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
               <button
