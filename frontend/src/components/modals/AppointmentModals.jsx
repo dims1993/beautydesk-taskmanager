@@ -11,6 +11,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useApi } from "../../hooks/useApi";
+import { serviceNamesForAppointment } from "../../utils/appointmentServices";
 
 function toDatetimeLocalValue(isoOrString) {
   if (!isoOrString) return "";
@@ -256,6 +257,16 @@ export const EditAppointmentModal = ({
             {appointment.client_name}
           </p>
         )}
+        {appointment ? (
+          <div className="rounded-[2rem] border border-[var(--bt-border)] bg-[var(--bt-bg)] p-5">
+            <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[var(--bt-muted)] mb-2">
+              Servicios de la cita
+            </p>
+            <p className="text-[11px] font-bold text-[var(--bt-primary)] leading-relaxed whitespace-normal break-words">
+              {serviceNamesForAppointment(appointment, services).join(" · ")}
+            </p>
+          </div>
+        ) : null}
 
         <div className="space-y-6">
           <div className="relative group">

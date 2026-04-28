@@ -394,7 +394,7 @@ const CalendarView = ({
                             {appo.client_name}
                           </p>
                           <div className="flex flex-wrap gap-x-2 gap-y-1 items-center mt-1">
-                            <span className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-border-strong)] truncate max-w-[12rem]">
+                            <span className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-border-strong)] whitespace-normal break-words">
                               {serviceNamesForAppointment(appo, safeServices).join(
                                 " · ",
                               )}
@@ -471,7 +471,7 @@ const CalendarView = ({
                         <p className="font-bold text-sm text-[var(--bt-primary)] line-through truncate">
                           {appo.client_name}
                         </p>
-                        <p className="text-[8px] font-black uppercase tracking-wider text-[var(--bt-muted)] truncate">
+                        <p className="text-[8px] font-black uppercase tracking-wider text-[var(--bt-muted)] whitespace-normal break-words">
                           {serviceNamesForAppointment(appo, safeServices).join(
                             " · ",
                           )}
