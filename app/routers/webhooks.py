@@ -1,12 +1,14 @@
 import base64
 import hashlib
 import hmac
+import json
 import logging
 import os
 from typing import Optional
 
+import requests
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import Response
+from fastapi.responses import Response, JSONResponse
 from sqlmodel import Session, select
 
 from app.core.db.session import get_session
@@ -20,6 +22,9 @@ logger = logging.getLogger(__name__)
 _TWIML_FALLBACK_TEXT = (
     "No he podido generar una respuesta válida. Escribe MENÚ para reiniciar o inténtalo de nuevo."
 )
+
+# Meta/Cloud API fallback (webhook must return 200 quickly).
+_META_FALLBACK_TEXT = "Ha ocurrido un error técnico. Escribe MENÚ para reiniciar o inténtalo más tarde."
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
@@ -233,4 +238,170 @@ async def twilio_whatsapp_inbound(
         content=xml.encode("utf-8"),
         media_type="text/xml; charset=utf-8",
     )
+
+
+def _pick_org_for_meta(db: Session) -> Organization:
+    """
+    Cloud API helper:
+    - Use WHATSAPP_DEFAULT_ORG_ID if set
+    - Else, if exactly 1 org has an agent key configured, use it
+    """
+    orgs = db.exec(
+        select(Organization).where(Organization.agent_key_hash.is_not(None))
+    ).all()
+    orgs = [o for o in orgs if (o.agent_key_hash or "").strip()]
+
+    env_org_id = (os.getenv("WHATSAPP_DEFAULT_ORG_ID") or "").strip()
+    if env_org_id:
+        try:
+            oid = int(env_org_id)
+        except ValueError:
+            raise HTTPException(status_code=500, detail="WHATSAPP_DEFAULT_ORG_ID must be an integer")
+        org = db.get(Organization, oid)
+        if not org:
+            raise HTTPException(status_code=500, detail="WHATSAPP_DEFAULT_ORG_ID org not found")
+        return org
+
+    if len(orgs) == 1:
+        return orgs[0]
+    raise HTTPException(
+        status_code=409,
+        detail="Unable to pick organization for Meta WhatsApp. Set WHATSAPP_DEFAULT_ORG_ID or configure routing.",
+    )
+
+
+def _meta_send_text(
+    *,
+    access_token: str,
+    phone_number_id: str,
+    to_digits: str,
+    text: str,
+) -> None:
+    """
+    Send a WhatsApp text message via Meta Cloud API.
+    """
+    version = (os.getenv("WHATSAPP_GRAPH_VERSION") or "v20.0").strip()
+    url = f"https://graph.facebook.com/{version}/{phone_number_id}/messages"
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": str(to_digits),
+        "type": "text",
+        "text": {"body": str(text)},
+    }
+    r = requests.post(
+        url,
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+        },
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        timeout=10,
+    )
+    if not r.ok:
+        raise RuntimeError(f"Meta send failed ({r.status_code}): {r.text[:400]}")
+
+
+@router.get("/meta/whatsapp")
+async def meta_whatsapp_verify(request: Request):
+    """
+    Webhook verification endpoint for Meta WhatsApp Cloud API.
+    """
+    qp = request.query_params
+    mode = (qp.get("hub.mode") or "").strip()
+    token = (qp.get("hub.verify_token") or "").strip()
+    challenge = (qp.get("hub.challenge") or "").strip()
+    expected = (os.getenv("WHATSAPP_VERIFY_TOKEN") or "").strip()
+    if mode == "subscribe" and expected and token == expected and challenge:
+        return Response(content=challenge, media_type="text/plain; charset=utf-8")
+    raise HTTPException(status_code=403, detail="Webhook verification failed")
+
+
+@router.post("/meta/whatsapp")
+async def meta_whatsapp_inbound(
+    request: Request,
+    db: Session = Depends(get_session),
+):
+    """
+    WhatsApp Cloud API inbound webhook.
+    Must return 200 quickly; replies are sent via Graph API.
+    """
+    access_token = (os.getenv("WHATSAPP_ACCESS_TOKEN") or "").strip()
+    if not access_token:
+        logger.error("WHATSAPP_ACCESS_TOKEN is not set")
+        return JSONResponse({"status": "error", "detail": "missing access token"}, status_code=200)
+
+    try:
+        payload = await request.json()
+    except Exception:
+        logger.exception("Meta webhook invalid JSON")
+        return JSONResponse({"status": "ok"}, status_code=200)
+
+    try:
+        org = _pick_org_for_meta(db)
+    except HTTPException as e:
+        logger.error("Meta org routing error: %s", getattr(e, "detail", ""))
+        return JSONResponse({"status": "ok"}, status_code=200)
+
+    # Meta payload: entry[].changes[].value.messages[]
+    entries = payload.get("entry") if isinstance(payload, dict) else None
+    if not isinstance(entries, list):
+        return JSONResponse({"status": "ok"}, status_code=200)
+
+    for entry in entries:
+        changes = (entry or {}).get("changes")
+        if not isinstance(changes, list):
+            continue
+        for ch in changes:
+            value = (ch or {}).get("value") or {}
+            metadata = value.get("metadata") or {}
+            phone_number_id = str(metadata.get("phone_number_id") or "").strip()
+            msgs = value.get("messages")
+            if not isinstance(msgs, list):
+                continue
+            for m in msgs:
+                try:
+                    from_digits = str((m or {}).get("from") or "").strip()
+                    mtype = str((m or {}).get("type") or "").strip().lower()
+                    body = ""
+                    if mtype == "text":
+                        body = str(((m or {}).get("text") or {}).get("body") or "").strip()
+                    else:
+                        # Ignore non-text for now (can be extended later).
+                        continue
+                    if not from_digits or not body:
+                        continue
+
+                    # Run agent
+                    reply = handle_inbound_whatsapp(
+                        db,
+                        org=org,
+                        from_addr=f"whatsapp:+{from_digits}",
+                        to_addr=f"whatsapp:{phone_number_id}" if phone_number_id else "whatsapp:cloud",
+                        body=body,
+                    )
+                    bubbles = reply if isinstance(reply, list) else [reply]
+                    bubbles = [str(x).strip() for x in bubbles if x is not None and str(x).strip()]
+                    if not bubbles:
+                        bubbles = [_META_FALLBACK_TEXT]
+
+                    # Send replies
+                    # If phone_number_id missing, fall back to env
+                    pnid = phone_number_id or (os.getenv("WHATSAPP_PHONE_NUMBER_ID") or "").strip()
+                    if not pnid:
+                        logger.error("Missing phone_number_id (metadata + WHATSAPP_PHONE_NUMBER_ID)")
+                        continue
+                    for b in bubbles:
+                        try:
+                            _meta_send_text(
+                                access_token=access_token,
+                                phone_number_id=pnid,
+                                to_digits=from_digits,
+                                text=b,
+                            )
+                        except Exception:
+                            logger.exception("Meta send failed to=%s", from_digits)
+                except Exception:
+                    logger.exception("Meta message processing failed")
+
+    return JSONResponse({"status": "ok"}, status_code=200)
 
