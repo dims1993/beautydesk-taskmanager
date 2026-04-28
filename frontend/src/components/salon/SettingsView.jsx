@@ -692,6 +692,8 @@ export default function SettingsView({
         }
         setCategoryEditDrafts(drafts);
         setOpenCategoryId(null);
+        setShowDisabledServices(false);
+        setShowDisabledCategories(false);
       }
       return next;
     });
@@ -716,6 +718,9 @@ export default function SettingsView({
       await loadArchivedServices();
       await onRefresh?.();
       setCategoryConfigMode(false);
+      setOpenCategoryId(null);
+      setShowDisabledServices(false);
+      setShowDisabledCategories(false);
     } catch (err) {
       onError?.(formatErr(err));
     } finally {
