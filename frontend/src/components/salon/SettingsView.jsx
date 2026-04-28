@@ -265,8 +265,6 @@ export default function SettingsView({
   const [categoryCreating, setCategoryCreating] = useState(false);
   const [categoryConfigMode, setCategoryConfigMode] = useState(false);
   const [categoryEditDrafts, setCategoryEditDrafts] = useState({});
-  const [categoryPendingDelete, setCategoryPendingDelete] = useState({}); // { [id]: { force: boolean } }
-  const [categoryWarnDelete, setCategoryWarnDelete] = useState(null); // { id, name, servicesCount }
   const [categorySaving, setCategorySaving] = useState(false);
   const [openCategoryId, setOpenCategoryId] = useState(null);
   const [addServiceCategoryId, setAddServiceCategoryId] = useState(null);
@@ -693,44 +691,10 @@ export default function SettingsView({
           drafts[id] = String(c?.name || "");
         }
         setCategoryEditDrafts(drafts);
-        setCategoryPendingDelete({});
-        setCategoryWarnDelete(null);
         setOpenCategoryId(null);
-      } else {
-        setCategoryWarnDelete(null);
       }
       return next;
     });
-  };
-
-  const requestDeleteCategory = (cat, servicesCount) => {
-    const id = cat?.id != null ? String(cat.id) : null;
-    if (!id) return;
-    // If it's the last category, we block deletion entirely (UI + backend rule).
-    if (sortedCategories.length <= 1) return;
-
-    if (Number(servicesCount || 0) > 0) {
-      setCategoryWarnDelete({
-        id,
-        name: String(cat?.name || ""),
-        servicesCount: Number(servicesCount || 0),
-      });
-      return;
-    }
-    // No services: toggle pending delete without warning.
-    setCategoryPendingDelete((cur) => {
-      const next = { ...(cur || {}) };
-      if (next[id]) delete next[id];
-      else next[id] = { force: false };
-      return next;
-    });
-  };
-
-  const confirmForceDeleteAfterWarning = () => {
-    if (!categoryWarnDelete?.id) return;
-    const id = String(categoryWarnDelete.id);
-    setCategoryPendingDelete((cur) => ({ ...(cur || {}), [id]: { force: true } }));
-    setCategoryWarnDelete(null);
   };
 
   const saveCategoryChanges = async () => {
@@ -738,31 +702,20 @@ export default function SettingsView({
     if (categorySaving) return;
     setCategorySaving(true);
     try {
-      // 1) Rename categories (skip ones pending deletion)
+      // 1) Rename categories
       for (const cat of sortedCategories) {
         const id = cat?.id != null ? String(cat.id) : null;
         if (!id) continue;
-        if (categoryPendingDelete?.[id]) continue;
         const nextName = String(categoryEditDrafts?.[id] ?? cat?.name ?? "").trim();
         const prevName = String(cat?.name ?? "").trim();
         if (!nextName || nextName === prevName) continue;
         await apiRequest(`/services/categories/${Number(id)}`, "PATCH", { name: nextName });
       }
 
-      // 2) Delete categories (pending)
-      const ids = Object.keys(categoryPendingDelete || {});
-      for (const id of ids) {
-        const meta = categoryPendingDelete[id] || {};
-        const qs = meta.force ? "?force=true" : "";
-        await apiRequest(`/services/categories/${Number(id)}${qs}`, "DELETE");
-      }
-
       await loadServiceCategories();
       await loadArchivedServices();
       await onRefresh?.();
       setCategoryConfigMode(false);
-      setCategoryPendingDelete({});
-      setCategoryWarnDelete(null);
     } catch (err) {
       onError?.(formatErr(err));
     } finally {
@@ -1144,13 +1097,12 @@ export default function SettingsView({
                 type="button"
                 onClick={toggleCategoryConfigMode}
                 disabled={serviceCategoriesLoading || categorySaving}
-                className="shrink-0 rounded-full border border-[var(--bt-border)] bg-white px-6 py-3 text-[10px] font-black uppercase tracking-widest text-[var(--bt-primary)] disabled:opacity-50 hover:bg-[var(--bt-bg)]"
+                className={[
+                  "shrink-0 rounded-full border border-[var(--bt-border)] bg-white px-6 py-3 text-[10px] font-black uppercase tracking-widest text-[var(--bt-primary)] disabled:opacity-50 hover:bg-[var(--bt-bg)]",
+                  categoryConfigMode ? "hidden" : "",
+                ].join(" ")}
               >
-                {serviceCategoriesLoading
-                  ? "Cargando…"
-                  : categoryConfigMode
-                    ? "Listo"
-                    : "Configurar"}
+                {serviceCategoriesLoading ? "Cargando…" : "Configurar"}
               </button>
             </div>
           </div>
@@ -1163,8 +1115,6 @@ export default function SettingsView({
                 const catServices = servicesByCategoryId.get(catId) || [];
                 const draftKey = String(cat.id);
                 const isLastCategory = sortedCategories.length <= 1;
-                const pendingDel = Boolean(categoryPendingDelete?.[draftKey]);
-                const deletingWouldRemoveServices = catServices.length > 0;
                 const nameDraft = String(categoryEditDrafts?.[draftKey] ?? cat?.name ?? "");
                 const isPrimary = Boolean(cat?.is_primary);
                 return (
@@ -1198,11 +1148,6 @@ export default function SettingsView({
                               className="w-full bg-[var(--bt-bg)] border border-[var(--bt-border)] py-2 px-3 rounded-2xl text-[10px] font-black tracking-widest"
                               onClick={(e) => e.stopPropagation()}
                             />
-                            {pendingDel ? (
-                              <p className="text-[10px] text-red-600 font-black tracking-widest">
-                                Marcada para eliminar
-                              </p>
-                            ) : null}
                           </div>
                         ) : (
                           <p className="text-[10px] font-black tracking-widest text-[var(--bt-primary)] truncate">
@@ -1214,42 +1159,9 @@ export default function SettingsView({
                         </p>
                       </div>
                       {categoryConfigMode ? (
-                        !isLastCategory ? (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (pendingDel) {
-                                setCategoryPendingDelete((cur) => {
-                                  const next = { ...(cur || {}) };
-                                  delete next[draftKey];
-                                  return next;
-                                });
-                                return;
-                              }
-                              if (isPrimary) return;
-                              requestDeleteCategory(cat, catServices.length);
-                            }}
-                            disabled={categorySaving}
-                            className={[
-                              "shrink-0 rounded-full border px-4 py-2 text-[9px] font-black uppercase tracking-widest transition disabled:opacity-50",
-                              pendingDel
-                                ? "border-[var(--bt-border)] bg-white text-[var(--bt-muted)] hover:bg-[var(--bt-bg)]"
-                                : "border-red-200 bg-white text-red-600 hover:bg-red-50",
-                            ].join(" ")}
-                            title={
-                              deletingWouldRemoveServices
-                                ? "Eliminar categoría y sus servicios (requiere confirmación)"
-                                : "Eliminar categoría"
-                            }
-                          >
-                            {pendingDel ? "Deshacer" : "Eliminar"}
-                          </button>
-                        ) : (
-                          <span className="text-[10px] text-[var(--bt-muted)] font-black tracking-widest">
-                            Última categoría
-                          </span>
-                        )
+                        <span className="text-[10px] text-[var(--bt-muted)] font-black tracking-widest">
+                          {isLastCategory ? "Última categoría" : isPrimary ? "Principal" : "Configurar"}
+                        </span>
                       ) : (
                         <ChevronDown
                           className={[
@@ -2358,59 +2270,7 @@ export default function SettingsView({
         </div>
       )}
 
-      {categoryWarnDelete && (
-        <div
-          className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-          role="presentation"
-          onClick={() => {
-            if (!categorySaving) setCategoryWarnDelete(null);
-          }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="settings-delete-cat-title"
-            className="w-full max-w-sm rounded-[2.5rem] bg-white p-8 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-600 ring-1 ring-red-100">
-              <AlertTriangle className="h-7 w-7" strokeWidth={1.75} />
-            </div>
-            <p className="text-center text-[9px] font-black uppercase tracking-[0.35em] text-[var(--bt-muted)] mb-2">
-              Eliminar categoría
-            </p>
-            <h3
-              id="settings-delete-cat-title"
-              className="font-serif text-lg text-center text-[var(--bt-primary)] mb-3 leading-snug"
-            >
-              ¿Eliminar «{categoryWarnDelete.name}»?
-            </h3>
-            <p className="text-[12px] leading-relaxed text-[#6d6359] text-center mb-8">
-              Esta categoría pasará a la sección de <span className="font-black">Categorías desactivadas</span>.
-              Sus servicios se moverán a <span className="font-black">Servicios desactivados</span>.
-              Si quieres volver a activarlos, podrás hacerlo desde allí.
-            </p>
-            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                onClick={() => setCategoryWarnDelete(null)}
-                disabled={categorySaving}
-                className="w-full sm:w-auto rounded-full border border-[var(--bt-border)] bg-white px-6 py-3 text-[10px] font-black uppercase tracking-widest text-[var(--bt-muted)] transition hover:bg-[var(--bt-bg)] disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={confirmForceDeleteAfterWarning}
-                disabled={categorySaving}
-                className="w-full sm:w-auto rounded-full bg-red-600 px-6 py-3 text-[10px] font-black uppercase tracking-widest text-white shadow-lg transition hover:bg-red-700 disabled:opacity-50"
-              >
-                Confirmar eliminación
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Category deletion is no longer exposed (use deactivation switch). */}
     </div>
   );
 }
