@@ -3,6 +3,7 @@ services:
   db:
     image: postgres:15-alpine
     restart: always
+    profiles: ["localdb"]
     volumes:
       - postgres_data:/var/lib/postgresql/data # Persistencia de datos
     env_file:
@@ -25,10 +26,8 @@ services:
       - "8000:8000"
     env_file:
       - .env
-    environment:
-      - POSTGRES_SERVER=db
-    depends_on:
-      - db # Espera a que la DB arranque antes de iniciar (básico)
+    # Por defecto usa DATABASE_URL (Neon / remoto). Si quieres Postgres local,
+    # arranca también el servicio `db` con el profile `localdb` y NO pongas DATABASE_URL.
 
   # Servicio de Frontend (Vite + React)
   frontend:
@@ -38,8 +37,11 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
+    env_file:
+      - .env
     environment:
       - VITE_API_URL=http://localhost:8000
+      - VITE_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
     depends_on:
       - backend
 

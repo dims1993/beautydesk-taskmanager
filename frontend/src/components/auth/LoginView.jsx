@@ -2,13 +2,22 @@ import React, { useCallback, useEffect, useState } from "react";
 import { useApi } from "../../hooks/useApi"; // Asegúrate de que la ruta sea correcta
 import { Link, useSearchParams } from "react-router-dom";
 import { planLabel } from "../../utils/billingPlan";
-import { Sparkles, User, Lock, ArrowRight, Home } from "lucide-react"; // Importamos los iconos
+import {
+  Sparkles,
+  User,
+  Lock,
+  ArrowRight,
+  Home,
+  Eye,
+  EyeOff,
+} from "lucide-react"; // Importamos los iconos
 import GoogleLoginButton from "./GoogleLoginButton";
 
 export default function LoginView({ onLogin, onGoToRegister }) {
   const [searchParams] = useSearchParams();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const { apiRequest } = useApi();
@@ -40,7 +49,9 @@ export default function LoginView({ onLogin, onGoToRegister }) {
       formData.append("username", username);
       formData.append("password", password);
 
-      const data = await apiRequest("/token", "POST", formData);
+      const data = await apiRequest("/token", "POST", formData, {
+        skipAuthRedirect: true,
+      });
 
       if (data && data.access_token) {
         localStorage.setItem("token", data.access_token);
@@ -50,7 +61,17 @@ export default function LoginView({ onLogin, onGoToRegister }) {
         setError("Credenciales incorrectas");
       }
     } catch (err) {
-      setError("Error al conectar con el servidor");
+      const msg =
+        (err && typeof err === "object" && "detail" in err && err.detail) ||
+        (err && typeof err === "object" && "message" in err && err.message) ||
+        "";
+      if (String(msg || "").toLowerCase().includes("credenciales")) {
+        setError("Contraseña o usuario incorrectos");
+      } else if (msg) {
+        setError(String(msg));
+      } else {
+        setError("No se pudo iniciar sesión. Revisa tu conexión.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -179,13 +200,28 @@ export default function LoginView({ onLogin, onGoToRegister }) {
               <div className="relative group">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#c4bdb5] group-focus-within:text-[#5d5045]" />
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   placeholder="CONTRASEÑA"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-[#FAF9F6] border border-[#eaddcf] py-5 pl-12 pr-4 rounded-2xl text-base font-black tracking-widest focus:outline-none focus:border-[#5d5045] text-[#5d5045] placeholder:uppercase"
+                  className="w-full bg-[#FAF9F6] border border-[#eaddcf] py-5 pl-12 pr-12 rounded-2xl text-base font-black tracking-widest focus:outline-none focus:border-[#5d5045] text-[#5d5045] placeholder:uppercase"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((s) => !s)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-[#c4bdb5] hover:text-[#5d5045]"
+                  title={showPassword ? "Ocultar contraseña" : "Ver contraseña"}
+                  aria-label={
+                    showPassword ? "Ocultar contraseña" : "Ver contraseña"
+                  }
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
               </div>
             </div>
 

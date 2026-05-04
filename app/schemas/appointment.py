@@ -16,6 +16,7 @@ class AppointmentCreate(BaseModel):
 # Actualización parcial desde el modal de edición
 class AppointmentUpdate(BaseModel):
     service_id: Optional[int] = None
+    service_ids: Optional[list[int]] = Field(default=None, min_length=1)
     start_time: Optional[datetime] = None
 
 

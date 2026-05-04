@@ -9,9 +9,14 @@ import {
   Timer,
   Layers,
   Trash2,
+  Plus,
 } from "lucide-react";
 import { useApi } from "../../hooks/useApi";
-import { serviceNamesForAppointment } from "../../utils/appointmentServices";
+import {
+  allServiceIdsFromAppointment,
+  serviceNamesForAppointment,
+  totalsForSelectedServiceIds,
+} from "../../utils/appointmentServices";
 
 function toDatetimeLocalValue(isoOrString) {
   if (!isoOrString) return "";
@@ -212,27 +217,49 @@ export const EditAppointmentModal = ({
   onSaved,
 }) => {
   const { apiRequest } = useApi();
-  const [serviceId, setServiceId] = useState("");
+  const [selectedServiceIds, setSelectedServiceIds] = useState([]);
   const [startLocal, setStartLocal] = useState("");
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState(null);
 
   useEffect(() => {
     if (!isOpen || !appointment) return;
-    setServiceId(String(appointment.service_id ?? ""));
+    const initialIds = allServiceIdsFromAppointment(appointment).map((x) =>
+      String(x),
+    );
+    setSelectedServiceIds(() => {
+      const valid = initialIds.filter((id) =>
+        services.some((s) => String(s.id) === String(id)),
+      );
+      if (valid.length > 0) return valid;
+      return services[0]?.id != null ? [String(services[0].id)] : [];
+    });
     setStartLocal(toDatetimeLocalValue(appointment.start_time));
     setFormError(null);
-  }, [isOpen, appointment?.id, appointment?.service_id, appointment?.start_time]);
+  }, [isOpen, appointment?.id, appointment?.service_id, appointment?.start_time, services]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setSelectedServiceIds((prev) => {
+      const valid = prev.filter((id) =>
+        services.some((s) => String(s.id) === String(id)),
+      );
+      if (valid.length > 0) return valid;
+      return services[0]?.id != null ? [String(services[0].id)] : [];
+    });
+  }, [services, isOpen]);
+
+  const totals = totalsForSelectedServiceIds(selectedServiceIds, services);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!appointment?.id || !startLocal) return;
+    if (!appointment?.id || !startLocal || selectedServiceIds.length < 1) return;
 
     setSaving(true);
     setFormError(null);
     try {
       await apiRequest(`/appointments/${appointment.id}`, "PATCH", {
-        service_id: Number(serviceId),
+        service_ids: selectedServiceIds.map((id) => parseInt(id, 10)),
         start_time: startLocal,
       });
       onSaved?.();
@@ -271,22 +298,81 @@ export const EditAppointmentModal = ({
         <div className="space-y-6">
           <div className="relative group">
             <label className="px-1 text-[9px] font-black text-[var(--bt-muted)] uppercase tracking-[0.3em] block mb-2">
-              Servicio
+              Servicios
             </label>
-            <div className="relative">
-              <Layers className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--bt-icon)]" />
-              <select
-                required
-                value={serviceId}
-                onChange={(e) => setServiceId(e.target.value)}
-                className="w-full min-w-0 max-w-full pl-8 py-4 bg-transparent border-b border-[var(--bt-border)] outline-none text-base font-bold tracking-wide text-[var(--bt-primary)] appearance-none"
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[var(--bt-muted)]">
+                Añadir / quitar
+              </p>
+              <button
+                type="button"
+                disabled={services.length === 0}
+                onClick={() => {
+                  const fallback = services[0]?.id;
+                  if (fallback == null) return;
+                  setSelectedServiceIds((prev) => [...prev, String(fallback)]);
+                }}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--bt-border)] bg-[var(--bt-bg)] text-[var(--bt-primary)] hover:border-[var(--bt-primary)] disabled:opacity-40"
+                title="Añadir otro servicio"
               >
-                {services.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name.toUpperCase()}
-                  </option>
-                ))}
-              </select>
+                <Plus className="w-4 h-4" strokeWidth={2.5} />
+              </button>
+            </div>
+
+            <div className="mt-3 space-y-2">
+              {selectedServiceIds.map((sid, index) => {
+                const canRemove = selectedServiceIds.length > 1;
+                return (
+                  <div
+                    key={`${sid}-${index}`}
+                    className="flex min-w-0 w-full max-w-full items-stretch gap-2 rounded-2xl border border-[var(--bt-border)] bg-[var(--bt-bg)] focus-within:border-[var(--bt-primary)] focus-within:bg-white"
+                  >
+                    <div className="relative min-w-0 flex-1">
+                      <Layers className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--bt-icon)]" />
+                      <select
+                        required
+                        value={sid}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setSelectedServiceIds((prev) => {
+                            const next = [...prev];
+                            next[index] = v;
+                            return next;
+                          });
+                        }}
+                        className="w-full min-w-0 max-w-full pl-11 pr-4 py-4 bg-transparent outline-none text-base font-bold tracking-wide text-[var(--bt-primary)] appearance-none"
+                      >
+                        {services.length === 0 ? (
+                          <option value="">Sin servicios — Ajustes</option>
+                        ) : (
+                          services.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name.toUpperCase()} · {s.duration} min · {s.price}€
+                            </option>
+                          ))
+                        )}
+                      </select>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSelectedServiceIds((prev) =>
+                          prev.length <= 1 ? prev : prev.filter((_, i) => i !== index),
+                        )
+                      }
+                      disabled={!canRemove}
+                      className="shrink-0 self-stretch px-4 text-[9px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 rounded-r-2xl disabled:opacity-40"
+                    >
+                      Quitar
+                    </button>
+                  </div>
+                );
+              })}
+              {selectedServiceIds.length > 0 && services.length > 0 ? (
+                <p className="px-1 text-[10px] font-bold uppercase tracking-widest text-[#c4a484]">
+                  Total estimado: {totals.minutes} min · {totals.price}€
+                </p>
+              ) : null}
             </div>
           </div>
 

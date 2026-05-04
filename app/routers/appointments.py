@@ -247,10 +247,10 @@ def update_appointment(
     db: Session = Depends(get_session),
     current_user: User = Depends(get_current_user_for_app),
 ):
-    if data.service_id is None and data.start_time is None:
+    if data.service_id is None and data.service_ids is None and data.start_time is None:
         raise HTTPException(
             status_code=400,
-            detail="Envía al menos service_id o start_time para actualizar.",
+            detail="Envía al menos service_id, service_ids o start_time para actualizar.",
         )
 
     appo = db.get(Appointment, appointment_id)
@@ -260,17 +260,43 @@ def update_appointment(
     if not _user_can_access_appointment(current_user, appo):
         raise HTTPException(status_code=403, detail="Sin acceso a esta cita")
 
-    new_service_id = (
-        data.service_id if data.service_id is not None else appo.service_id
+    requested_service_ids: Optional[list[int]] = None
+    if data.service_ids is not None:
+        requested_service_ids = [int(x) for x in list(data.service_ids)]
+        if len(requested_service_ids) < 1:
+            raise HTTPException(status_code=400, detail="Selecciona al menos un servicio.")
+    elif data.service_id is not None:
+        requested_service_ids = [int(data.service_id)]
+    else:
+        requested_service_ids = None
+
+    current_ids = [int(appo.service_id)] + _parse_extra_service_ids_json(
+        getattr(appo, "additional_service_ids_json", None)
     )
+    new_ids = requested_service_ids if requested_service_ids is not None else current_ids
+    if len(new_ids) < 1:
+        raise HTTPException(status_code=400, detail="Selecciona al menos un servicio.")
+
+    new_service_id = int(new_ids[0])
     new_start = data.start_time if data.start_time is not None else appo.start_time
 
-    service = db.get(Service, new_service_id)
-    if not service:
-        raise HTTPException(status_code=400, detail="Servicio no válido")
+    ordered_services: list[Service] = []
+    for sid in new_ids:
+        svc = db.get(Service, sid)
+        if not svc:
+            raise HTTPException(status_code=400, detail="Servicio no válido")
+        if current_user.role != UserRole.SUPER_ADMIN:
+            if not current_user.organization_id or svc.organization_id != current_user.organization_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="El servicio no pertenece a tu organización.",
+                )
+        ordered_services.append(svc)
 
-    duration = service.duration if service.duration else 60
-    new_end = new_start + timedelta(minutes=duration)
+    total_minutes = sum((s.duration or 60) for s in ordered_services)
+    if total_minutes <= 0:
+        total_minutes = 60
+    new_end = new_start + timedelta(minutes=total_minutes)
 
     if appo.status == "scheduled":
         collision_stmt = select(Appointment).where(
@@ -304,7 +330,8 @@ def update_appointment(
     appo.service_id = new_service_id
     appo.start_time = new_start
     appo.end_time = new_end
-    appo.additional_service_ids_json = None
+    extras = [int(x) for x in new_ids[1:]]
+    appo.additional_service_ids_json = json.dumps(extras) if extras else None
 
     db.add(appo)
     db.commit()
