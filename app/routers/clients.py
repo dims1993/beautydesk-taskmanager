@@ -8,6 +8,7 @@ from app.core.db.session import get_session
 from app.models.client import Client
 from app.models.client_note import ClientNote
 from app.models.appointment import Appointment
+from app.models.organization import Organization
 from app.models.service import Service
 from app.schemas.client import (
     ClientCreate,
@@ -38,27 +39,45 @@ def _norm_phone(raw: str | None) -> str:
     return digits
 
 
-def _require_org(current_user: User) -> int:
+def _resolve_org_for_client_writes(
+    current_user: User,
+    request: Request,
+    db: Session,
+) -> int:
+    """
+    OWNER/STAFF: organización del usuario.
+    SUPER_ADMIN: misma cabecera que GET /clients/ (`X-Organization-Id`) al actuar en nombre de un salón.
+    """
     if current_user.role == UserRole.SUPER_ADMIN:
+        raw = request.headers.get("x-organization-id") if request else None
+        if raw and str(raw).strip().isdigit():
+            org_id = int(str(raw).strip())
+            if db.get(Organization, org_id) is None:
+                raise HTTPException(status_code=404, detail="Organización no encontrada")
+            return org_id
         raise HTTPException(
             status_code=400,
-            detail="Gestión de clientes desde el panel de cada organización.",
+            detail=(
+                "Como administrador general, elige primero un salón en el panel maestro "
+                "(o envía la cabecera X-Organization-Id) para crear clientes en esa cuenta."
+            ),
         )
     if not current_user.organization_id:
         raise HTTPException(
             status_code=400,
             detail="Completa los datos fiscales de tu negocio en Ajustes antes de gestionar clientes.",
         )
-    return current_user.organization_id
+    return int(current_user.organization_id)
 
 
 @router.post("/", response_model=ClientOut)
 def create_client(
     client_data: ClientCreate,
+    request: Request,
     db: Session = Depends(get_session),
     current_user: User = Depends(get_current_user_for_app),
 ):
-    org_id = _require_org(current_user)
+    org_id = _resolve_org_for_client_writes(current_user, request, db)
     existing = db.exec(
         select(Client).where(
             Client.telefono == client_data.telefono,
@@ -118,6 +137,7 @@ def _find_client_by_norm_phone(
 @router.post("/import", response_model=ClientImportResult)
 def import_clients(
     body: ClientImportRequest,
+    request: Request,
     db: Session = Depends(get_session),
     current_user: User = Depends(get_current_user_for_app),
 ):
@@ -125,7 +145,7 @@ def import_clients(
     Importa o fusiona clientes por teléfono (misma lógica que duplicados en alta).
     Útil para sincronizar con la agenda del teléfono (vCard / Contact Picker).
     """
-    org_id = _require_org(current_user)
+    org_id = _resolve_org_for_client_writes(current_user, request, db)
 
     existing_rows = list(
         db.exec(select(Client).where(Client.organization_id == org_id)).all()

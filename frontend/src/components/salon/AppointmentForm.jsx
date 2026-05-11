@@ -55,6 +55,30 @@ function normalizePhoneDigits(raw) {
   return String(raw).replace(/\D/g, "");
 }
 
+function findClientByPhoneInList(clientList, rawPhone) {
+  const key = normalizePhoneDigits(rawPhone);
+  if (!key || !Array.isArray(clientList)) return null;
+  return (
+    clientList.find((c) => normalizePhoneDigits(c?.telefono) === key) || null
+  );
+}
+
+/** POST /clients/ cuando el teléfono ya existe (p. ej. lista `clients` aún no refrescada). */
+function isDuplicateClientPhoneError(err) {
+  const d =
+    typeof err?.detail === "string"
+      ? err.detail
+      : Array.isArray(err?.detail)
+        ? err.detail.map((x) => x?.msg || "").join(" ")
+        : String(err?.message || "");
+  const t = d.toLowerCase();
+  return (
+    t.includes("ya está registrado") ||
+    t.includes("teléfono ya") ||
+    (t.includes("already") && t.includes("phone"))
+  );
+}
+
 /** Text for wa.me after creating an appointment (salon + billing address from profile). */
 function buildAppointmentWhatsAppText(clientName, startAt, currentUser) {
   const d = new Date(startAt);
@@ -286,14 +310,28 @@ const AppointmentForm = ({
         const nombre = nameParts[0];
         const apellidos = nameParts.slice(1).join(" ");
 
-        const newClient = await apiRequest("/clients/", "POST", {
-          nombre,
-          apellidos,
-          telefono: formData.client_phone,
-          email: formData.client_email || null,
-        });
-
-        finalClientId = newClient.id;
+        try {
+          const newClient = await apiRequest("/clients/", "POST", {
+            nombre,
+            apellidos,
+            telefono: formData.client_phone,
+            email: formData.client_email || null,
+          });
+          finalClientId = newClient.id;
+        } catch (clientErr) {
+          if (!isDuplicateClientPhoneError(clientErr)) {
+            throw clientErr;
+          }
+          const refreshed = await apiRequest("/clients/");
+          const found = findClientByPhoneInList(
+            Array.isArray(refreshed) ? refreshed : [],
+            formData.client_phone,
+          );
+          if (!found?.id) {
+            throw clientErr;
+          }
+          finalClientId = found.id;
+        }
       } else if (existingClientByPhone && inputNameKey) {
         // If phone matches an existing client, keep data consistent (best-effort).
         const currentName =
@@ -334,19 +372,27 @@ const AppointmentForm = ({
         startAt: formData.start_time,
       });
 
-      setFormData({
-        client_name: "",
-        client_email: "",
-        client_phone: "",
+      // Misma persona, nueva cita: conservar contacto y profesional; solo pedir nueva fecha/hora.
+      setFormData((prev) => ({
+        ...prev,
         start_time: "",
-      });
+        staff_id: prev.staff_id || String(currentUser?.id || ""),
+      }));
+      setCustomEndEnabled(false);
+      setCustomEndLocal("");
       setSelectedServiceIds(
         services[0]?.id != null ? [String(services[0].id)] : [],
       );
 
-      onSuccess();
+      await Promise.resolve(onSuccess?.());
     } catch (err) {
-      onError(err.detail || "Error al procesar la cita");
+      const detail =
+        typeof err?.detail === "string"
+          ? err.detail
+          : Array.isArray(err?.detail)
+            ? err.detail.map((x) => x?.msg || JSON.stringify(x)).join(" ")
+            : err?.message;
+      onError(detail || "Error al procesar la cita");
     } finally {
       setLoading(false);
     }
