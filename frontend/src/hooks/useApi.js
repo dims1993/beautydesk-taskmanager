@@ -23,6 +23,18 @@ export const useApi = () => {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     };
 
+    // SUPER_ADMIN "org context": when browsing a specific salon, scope API reads to that org.
+    // This prevents seeing cross-tenant data while using the master panel.
+    try {
+      const role = String(localStorage.getItem("role") || "").toUpperCase();
+      const orgId = String(localStorage.getItem("organization_id") || "").trim();
+      if (role === "SUPER_ADMIN" && orgId) {
+        headers["X-Organization-Id"] = orgId;
+      }
+    } catch {
+      /* ignore */
+    }
+
     const fetchOpts = { method, headers };
 
     if (body) {

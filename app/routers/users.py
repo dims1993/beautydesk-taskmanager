@@ -4,7 +4,7 @@ import secrets
 from datetime import datetime
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 import requests as py_requests
@@ -638,11 +638,22 @@ def delete_user(user_id: int, db: Session = Depends(get_session)):
 async def get_team(
     db: Session = Depends(get_session),
     current_user: User = Depends(get_current_user_for_app),
+    request: Request = None,
 ):
-    if not current_user.organization_id:
+    org_scope = None
+    if current_user.role == UserRole.SUPER_ADMIN:
+        raw = None
+        if request is not None:
+            raw = request.headers.get("x-organization-id")
+        if raw and str(raw).strip().isdigit():
+            org_scope = int(str(raw).strip())
+    else:
+        org_scope = current_user.organization_id
+
+    if not org_scope:
         return []
     statement = select(User).where(
-        User.organization_id == current_user.organization_id
+        User.organization_id == org_scope
     )
     return db.exec(statement).all()
 

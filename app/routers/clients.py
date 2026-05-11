@@ -1,5 +1,5 @@
 import json
-from fastapi import APIRouter, Depends, HTTPException, Body
+from fastapi import APIRouter, Depends, HTTPException, Body, Request
 from starlette.responses import Response
 from sqlmodel import Session, select
 from typing import List
@@ -79,14 +79,26 @@ def create_client(
 def list_clients(
     db: Session = Depends(get_session),
     current_user: User = Depends(get_current_user_for_app),
+    request: Request = None,
 ):
+    org_scope = None
     if current_user.role == UserRole.SUPER_ADMIN:
-        return db.exec(select(Client)).all()
-    if not current_user.organization_id:
+        raw = None
+        if request is not None:
+            raw = request.headers.get("x-organization-id")
+        if raw and str(raw).strip().isdigit():
+            org_scope = int(str(raw).strip())
+    else:
+        if not current_user.organization_id:
+            return []
+        org_scope = int(current_user.organization_id)
+
+    if org_scope is None:
+        # SUPER_ADMIN without a specific org context should not browse the full
+        # client directory from here.
         return []
-    return db.exec(
-        select(Client).where(Client.organization_id == current_user.organization_id)
-    ).all()
+
+    return db.exec(select(Client).where(Client.organization_id == org_scope)).all()
 
 
 def _find_client_by_norm_phone(

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from pydantic import BaseModel
 from sqlmodel import Session, select
 from sqlalchemy import or_, and_
@@ -299,13 +299,24 @@ def list_services(
     include_inactive: bool = Query(False),
     db: Session = Depends(get_session),
     current_user: User = Depends(get_current_user_for_app),
+    request: Request = None,
 ):
+    org_scope: Optional[int] = None
     if current_user.role == UserRole.SUPER_ADMIN:
-        return db.exec(select(Service)).all()
-    if current_user.organization_id is None:
-        return []
-    _normalize_uncategorized_services(db, org_id=int(current_user.organization_id))
-    q = select(Service).where(Service.organization_id == current_user.organization_id)
+        raw = None
+        if request is not None:
+            raw = request.headers.get("x-organization-id")
+        if raw and str(raw).strip().isdigit():
+            org_scope = int(str(raw).strip())
+    else:
+        if current_user.organization_id is None:
+            return []
+        org_scope = int(current_user.organization_id)
+
+    q = select(Service)
+    if org_scope is not None:
+        _normalize_uncategorized_services(db, org_id=int(org_scope))
+        q = q.where(Service.organization_id == org_scope)
     if not include_inactive:
         q = q.where(Service.is_active == True)  # noqa: E712
     return db.exec(q).all()

@@ -1,6 +1,7 @@
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import Request
 from sqlmodel import Session, select
 from typing import List, Optional  # Añadimos Optional
 from datetime import timedelta, datetime
@@ -38,6 +39,17 @@ def _parse_extra_service_ids_json(raw: Optional[str]) -> list[int]:
 
 
 def appointment_to_out(a: Appointment) -> AppointmentOut:
+    def _name(u: Optional[User]) -> Optional[str]:
+        if not u:
+            return None
+        raw = " ".join([str(getattr(u, "first_name", "") or "").strip(), str(getattr(u, "last_name", "") or "").strip()]).strip()
+        if raw:
+            return raw
+        return (getattr(u, "username", None) or getattr(u, "email", None) or None)
+
+    creator_id = getattr(a, "created_by_id", None)
+    if creator_id is None:
+        creator_id = a.staff_id
     return AppointmentOut(
         id=a.id,
         client_id=a.client_id,
@@ -49,6 +61,11 @@ def appointment_to_out(a: Appointment) -> AppointmentOut:
         status=a.status,
         service_id=a.service_id,
         staff_id=a.staff_id,
+        created_by_id=creator_id,
+        staff_name=_name(getattr(a, "staff", None)),
+        created_by_name=_name(getattr(a, "creator", None))
+        if getattr(a, "creator", None) is not None
+        else _name(getattr(a, "staff", None)),
         additional_service_ids=_parse_extra_service_ids_json(
             getattr(a, "additional_service_ids_json", None)
         ),
@@ -68,18 +85,27 @@ class StatusUpdate(BaseModel):
 @router.get("/", response_model=List[AppointmentOut])
 async def get_appointments(
     db: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user_for_app)
+    current_user: User = Depends(get_current_user_for_app),
+    request: Request = None,
 ):
     try:
         print(f"DEBUG: Current User ID: {current_user.id}")
         statement = select(Appointment).order_by(Appointment.start_time.asc())
-        
-        if current_user.role != UserRole.SUPER_ADMIN:
+
+        org_scope: Optional[int] = None
+        if current_user.role == UserRole.SUPER_ADMIN:
+            raw = None
+            if request is not None:
+                raw = request.headers.get("x-organization-id")
+            if raw and str(raw).strip().isdigit():
+                org_scope = int(str(raw).strip())
+        else:
             if not current_user.organization_id:
                 return []
-            statement = statement.where(
-                Appointment.organization_id == current_user.organization_id
-            )
+            org_scope = int(current_user.organization_id)
+
+        if org_scope is not None:
+            statement = statement.where(Appointment.organization_id == org_scope)
         
         results = db.exec(statement).all()
         print(f"DEBUG: Appointments in DB: {len(results)}")
@@ -93,20 +119,29 @@ async def get_appointments(
 @router.get("/upcoming", response_model=List[AppointmentOut])
 async def get_upcoming(
     db: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user_for_app)
+    current_user: User = Depends(get_current_user_for_app),
+    request: Request = None,
 ):
     try:
         today = datetime.now().date()
         statement = select(Appointment).where(
             Appointment.start_time >= datetime.combine(today, datetime.min.time())
         ).order_by(Appointment.start_time.asc())
-        
-        # Filtro multi-tenant
-        if current_user.role != UserRole.SUPER_ADMIN:
-            # Si el admin no tiene org_id, no devolvemos error, devolvemos vacío
+
+        org_scope: Optional[int] = None
+        if current_user.role == UserRole.SUPER_ADMIN:
+            raw = None
+            if request is not None:
+                raw = request.headers.get("x-organization-id")
+            if raw and str(raw).strip().isdigit():
+                org_scope = int(str(raw).strip())
+        else:
             if not current_user.organization_id:
                 return []
-            statement = statement.where(Appointment.organization_id == current_user.organization_id)
+            org_scope = int(current_user.organization_id)
+
+        if org_scope is not None:
+            statement = statement.where(Appointment.organization_id == org_scope)
         
         results = db.exec(statement).all()
         return [appointment_to_out(a) for a in results]
@@ -146,13 +181,26 @@ async def create_appointment(
     primary = ordered_services[0]
     extras = service_ids[1:]
 
+    # Assigned staff (who will perform the service) can differ from creator.
+    assigned_staff_id = int(data.staff_id or current_user.id)
+    assigned_staff = db.get(User, assigned_staff_id)
+    if not assigned_staff:
+        raise HTTPException(status_code=400, detail="Profesional no válido")
+    if current_user.role != UserRole.SUPER_ADMIN:
+        if not current_user.organization_id or assigned_staff.organization_id != current_user.organization_id:
+            raise HTTPException(
+                status_code=400,
+                detail="El profesional no pertenece a tu organización.",
+            )
+
     appointment_data = data.model_dump(exclude={"service_ids"})
     appointment_data["service_id"] = primary.id
-    appointment_data["staff_id"] = current_user.id
+    appointment_data["staff_id"] = assigned_staff_id
     appointment_data["additional_service_ids_json"] = (
         json.dumps(extras) if extras else None
     )
     new_appo = Appointment(**appointment_data)
+    new_appo.created_by_id = current_user.id
     new_appo.organization_id = (
         current_user.organization_id
         if current_user.organization_id is not None
@@ -168,7 +216,7 @@ async def create_appointment(
     new_appo.end_time = new_appo.start_time + timedelta(minutes=total_minutes)
 
     collision_stmt = select(Appointment).where(
-        Appointment.staff_id == current_user.id,
+        Appointment.staff_id == assigned_staff_id,
         or_(
             Appointment.status == "scheduled",
             and_(
@@ -192,7 +240,7 @@ async def create_appointment(
         print(
             "⚠️ Collision detected:",
             {
-                "staff_id": current_user.id,
+                "staff_id": assigned_staff_id,
                 "org_id": current_user.organization_id,
                 "requested_start": str(new_appo.start_time),
                 "requested_end": str(new_appo.end_time),

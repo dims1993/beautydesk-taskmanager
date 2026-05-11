@@ -32,6 +32,9 @@ class AppointmentOut(BaseModel):
     status: str
     service_id: int
     staff_id: int
+    created_by_id: Optional[int] = None
+    staff_name: Optional[str] = None
+    created_by_name: Optional[str] = None
     additional_service_ids: list[int] = Field(default_factory=list)
     # Cambiamos estos dos para que acepten valores nulos de la base de datos
     final_price: Optional[float] = 0.0

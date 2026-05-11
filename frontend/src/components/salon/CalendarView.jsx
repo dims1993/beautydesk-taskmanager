@@ -33,6 +33,15 @@ function staffLabelForAppointment(staffId, teamMembers, currentUser) {
   return "Profesional";
 }
 
+function creatorLabelForAppointment(appo, teamMembers, currentUser) {
+  if (!appo) return "Profesional";
+  const directName = String(appo.created_by_name || "").trim();
+  if (directName) return directName;
+  const creatorId =
+    appo.created_by_id != null ? appo.created_by_id : appo.staff_id;
+  return staffLabelForAppointment(creatorId, teamMembers, currentUser);
+}
+
 const CalendarView = ({
   currentUser = null,
   allAppointments = [],
@@ -283,8 +292,15 @@ const CalendarView = ({
           {[...Array(daysInMonth)].map((_, i) => {
             const day = i + 1;
             const dayApps = getAppsForDay(day);
-            const staffIdsDay = [
-              ...new Set(dayApps.map((a) => a.staff_id).filter((id) => id != null)),
+            // Dots represent appointment creators (created_by_id), not assigned staff.
+            const creatorIdsDay = [
+              ...new Set(
+                dayApps
+                  .map((a) =>
+                    a?.created_by_id != null ? a.created_by_id : a?.staff_id,
+                  )
+                  .filter((id) => id != null),
+              ),
             ].sort((a, b) => Number(a) - Number(b));
             const isSelected = selectedDay === day;
             const isToday =
@@ -323,13 +339,13 @@ const CalendarView = ({
                   {day}
                 </span>
                 <div className="flex gap-0.5 mt-1 flex-wrap justify-center max-w-[90%]">
-                  {staffIdsDay.slice(0, 4).map((sid, idx) => (
+                  {creatorIdsDay.slice(0, 4).map((cid, idx) => (
                     <div
-                      key={sid}
+                      key={cid}
                       className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                         isSelected ? dotPaletteSel[idx % dotPaletteSel.length] : dotPalette[idx % dotPalette.length]
                       }`}
-                      title={staffLabelForAppointment(sid, teamMembers, currentUser)}
+                      title={staffLabelForAppointment(cid, teamMembers, currentUser)}
                     />
                   ))}
                 </div>
@@ -378,6 +394,11 @@ const CalendarView = ({
                     teamMembers,
                     currentUser,
                   );
+                  const creatorName = creatorLabelForAppointment(
+                    appo,
+                    teamMembers,
+                    currentUser,
+                  );
                   return (
                     <div
                       key={appo.id}
@@ -407,8 +428,11 @@ const CalendarView = ({
                               {dur} min
                             </span>
                             <span className="text-[10px] opacity-30">•</span>
-                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-white/15 text-white max-w-[10rem] truncate">
-                              {staffName}
+                            <span
+                              className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-white/15 text-white max-w-[10rem] truncate"
+                              title={`Creada por ${creatorName}`}
+                            >
+                              {creatorName}
                             </span>
                           </div>
                         </div>

@@ -151,6 +151,11 @@ def init_db():
                     'ALTER TABLE "appointment" ADD COLUMN IF NOT EXISTS additional_service_ids_json TEXT'
                 )
             )
+            conn.execute(
+                text(
+                    'ALTER TABLE "appointment" ADD COLUMN IF NOT EXISTS created_by_id INTEGER'
+                )
+            )
             for col in (
                 "deposit_percent",
                 "deposit_amount",

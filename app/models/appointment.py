@@ -40,6 +40,8 @@ class Appointment(SQLModel, table=True):
 
     # Claves foráneas
     staff_id: int = Field(foreign_key="user.id")
+    # Who created the appointment (owner/staff). Optional for legacy/public bookings.
+    created_by_id: Optional[int] = Field(default=None, foreign_key="user.id")
     service_id: int = Field(foreign_key="service.id")
     # JSON array of extra service IDs (same order as booked), e.g. "[2,3]"
     additional_service_ids_json: Optional[str] = Field(default=None)
@@ -49,6 +51,13 @@ class Appointment(SQLModel, table=True):
         default=None, foreign_key="organization.id", index=True
     )
 
-    # RELACIONES (Esto es lo que faltaba y causaba el error)
-    staff: Optional["User"] = Relationship(back_populates="appointments")
+    # Relationships must disambiguate which FK is used (staff_id vs created_by_id).
+    staff: Optional["User"] = Relationship(
+        back_populates="appointments",
+        sa_relationship_kwargs={"foreign_keys": "Appointment.staff_id"},
+    )
+    creator: Optional["User"] = Relationship(
+        back_populates="created_appointments",
+        sa_relationship_kwargs={"foreign_keys": "Appointment.created_by_id"},
+    )
     service: Optional["Service"] = Relationship(back_populates="appointments")

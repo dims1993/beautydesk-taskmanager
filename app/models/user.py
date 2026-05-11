@@ -27,7 +27,16 @@ class User(SQLModel, table=True):
     organization_id: Optional[int] = Field(default=None, foreign_key="organization.id")
 
     # Relaciones
-    appointments: List["Appointment"] = Relationship(back_populates="staff")
+    # There are two FKs from appointment → user (staff_id + created_by_id).
+    # We must disambiguate relationships with foreign_keys to avoid mapper init errors.
+    appointments: List["Appointment"] = Relationship(
+        back_populates="staff",
+        sa_relationship_kwargs={"foreign_keys": "Appointment.staff_id"},
+    )
+    created_appointments: List["Appointment"] = Relationship(
+        back_populates="creator",
+        sa_relationship_kwargs={"foreign_keys": "Appointment.created_by_id"},
+    )
     
     # Nuevos campos para almacenar los tokens de Google
     google_access_token: str | None = Field(default=None)
