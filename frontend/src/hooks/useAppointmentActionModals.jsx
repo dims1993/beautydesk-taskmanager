@@ -52,6 +52,13 @@ export function useAppointmentActionModals(
         appointment={selectedAppo}
         services={safeServices}
         onSaved={refresh}
+        onRequestCompleteCita={() => {
+          if (!selectedAppo) return;
+          const price = totalPriceForAppointment(selectedAppo, safeServices);
+          setSelectedAppo({ ...selectedAppo, price });
+          setModalType("payment");
+        }}
+        onRequestArchive={() => setModalType("archive")}
       />
       <PaymentModal
         isOpen={modalType === "payment"}

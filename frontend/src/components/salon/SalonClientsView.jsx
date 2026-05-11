@@ -34,6 +34,9 @@ const SalonClientsView = ({
   onRefresh,
   onError,
   blockedMessage = null,
+  /** Desde URL/modales: abrir ficha y opcionalmente scroll a notas. */
+  deepLinkClientId = null,
+  deepLinkScrollNotes = false,
 }) => {
   const { apiRequest } = useApi();
   const apiRequestRef = useRef(apiRequest);
@@ -68,6 +71,8 @@ const SalonClientsView = ({
   const noteTouchDragRef = useRef(null);
   const noteSwipeXRef = useRef({});
   const [noteSwipeXById, setNoteSwipeXById] = useState({});
+  const notesSectionRef = useRef(null);
+  const notesScrollDoneForLinkRef = useRef(false);
   const onErrorRef = useRef(onError);
 
   useEffect(() => {
@@ -116,6 +121,36 @@ const SalonClientsView = ({
     setNoteSwipeXById({});
     setDetailEditMode(false);
   }, [selectedClientId]);
+
+  useEffect(() => {
+    if (!deepLinkClientId) return;
+    const id = Number(deepLinkClientId);
+    if (!Number.isFinite(id)) return;
+    setSelectedClientId(id);
+    setShowAllContacts(true);
+    setSearchTerm("");
+    notesScrollDoneForLinkRef.current = false;
+  }, [deepLinkClientId]);
+
+  useEffect(() => {
+    if (!deepLinkScrollNotes || !deepLinkClientId) return;
+    if (Number(selectedClientId) !== Number(deepLinkClientId)) return;
+    if (insightsLoading || notesScrollDoneForLinkRef.current) return;
+    const t = window.setTimeout(() => {
+      notesSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+      notesScrollDoneForLinkRef.current = true;
+    }, 350);
+    return () => window.clearTimeout(t);
+  }, [
+    deepLinkScrollNotes,
+    deepLinkClientId,
+    selectedClientId,
+    insightsLoading,
+    clientInsights,
+  ]);
 
   useEffect(() => {
     if (!selectedClientId) return;
@@ -789,7 +824,11 @@ const SalonClientsView = ({
                 </div>
 
                 {/* Notas */}
-                <div className="rounded-2xl border border-[var(--bt-border)] bg-[var(--bt-bg)] p-5">
+                <div
+                  ref={notesSectionRef}
+                  id="client-notes-panel"
+                  className="rounded-2xl border border-[var(--bt-border)] bg-[var(--bt-bg)] p-5 scroll-mt-24"
+                >
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--bt-muted)]">
                       Notas

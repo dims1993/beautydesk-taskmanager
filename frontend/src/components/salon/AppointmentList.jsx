@@ -112,22 +112,28 @@ const AppointmentList = ({
 
                 <div className="flex items-center gap-3 self-end md:self-center">
                   <button
+                    type="button"
                     onClick={() => openEdit(appo)}
                     className="w-14 h-14 flex items-center justify-center bg-[var(--bt-bg)] text-[var(--bt-icon)] hover:text-[var(--bt-primary)] rounded-full border border-[var(--bt-border)] transition-all"
+                    title="Editar cita"
                   >
                     <Edit3 className="w-5 h-5" />
                   </button>
 
                   <button
+                    type="button"
                     onClick={() => openPayment(appo)}
                     className="w-14 h-14 flex items-center justify-center bg-white text-[var(--bt-muted)] hover:bg-[var(--bt-primary)] hover:text-white rounded-full border border-[var(--bt-border)] transition-all shadow-sm"
+                    title="Confirmar y cobrar"
                   >
                     <Check className="w-5 h-5" />
                   </button>
 
                   <button
+                    type="button"
                     onClick={() => openArchive(appo)}
                     className="w-14 h-14 flex items-center justify-center bg-white text-[var(--bt-icon)] hover:text-red-400 hover:border-red-100 rounded-full border border-[var(--bt-border)] transition-all"
+                    title="Archivar"
                   >
                     <Archive className="w-5 h-5" />
                   </button>

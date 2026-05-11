@@ -213,7 +213,16 @@ async def create_appointment(
         )
 
     total_minutes = sum((s.duration or 60) for s in ordered_services)
-    new_appo.end_time = new_appo.start_time + timedelta(minutes=total_minutes)
+    computed_end = new_appo.start_time + timedelta(minutes=total_minutes)
+    if data.end_time is not None:
+        if data.end_time <= new_appo.start_time:
+            raise HTTPException(
+                status_code=400,
+                detail="La hora de fin debe ser posterior a la hora de inicio.",
+            )
+        new_appo.end_time = data.end_time
+    else:
+        new_appo.end_time = computed_end
 
     collision_stmt = select(Appointment).where(
         Appointment.staff_id == assigned_staff_id,
@@ -295,10 +304,15 @@ def update_appointment(
     db: Session = Depends(get_session),
     current_user: User = Depends(get_current_user_for_app),
 ):
-    if data.service_id is None and data.service_ids is None and data.start_time is None:
+    if (
+        data.service_id is None
+        and data.service_ids is None
+        and data.start_time is None
+        and data.end_time is None
+    ):
         raise HTTPException(
             status_code=400,
-            detail="Envía al menos service_id, service_ids o start_time para actualizar.",
+            detail="Envía al menos service_id, service_ids, start_time o end_time para actualizar.",
         )
 
     appo = db.get(Appointment, appointment_id)
@@ -344,7 +358,16 @@ def update_appointment(
     total_minutes = sum((s.duration or 60) for s in ordered_services)
     if total_minutes <= 0:
         total_minutes = 60
-    new_end = new_start + timedelta(minutes=total_minutes)
+    computed_end = new_start + timedelta(minutes=total_minutes)
+    if data.end_time is not None:
+        if data.end_time <= new_start:
+            raise HTTPException(
+                status_code=400,
+                detail="La hora de fin debe ser posterior a la hora de inicio.",
+            )
+        new_end = data.end_time
+    else:
+        new_end = computed_end
 
     if appo.status == "scheduled":
         collision_stmt = select(Appointment).where(

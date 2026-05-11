@@ -89,8 +89,11 @@ const AppointmentForm = ({
   onSuccess,
   onError,
   initialDate,
+  initialStaffId,
   clients = [],
   disabledReason = null,
+  /** "sidebar" = sticky column in /app; "modal" = same UI inside overlay (no sticky). */
+  variant = "sidebar",
 }) => {
   const { apiRequest } = useApi();
   const [loading, setLoading] = useState(false);
@@ -101,10 +104,12 @@ const AppointmentForm = ({
     client_email: "",
     client_phone: "",
     start_time: initialDate || "",
-    staff_id: currentUser?.id || "",
+    staff_id: initialStaffId || currentUser?.id || "",
   });
 
   const [selectedServiceIds, setSelectedServiceIds] = useState([]);
+  const [customEndEnabled, setCustomEndEnabled] = useState(false);
+  const [customEndLocal, setCustomEndLocal] = useState("");
 
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -127,6 +132,32 @@ const AppointmentForm = ({
     () => totalsForSelectedServiceIds(selectedServiceIds, services),
     [selectedServiceIds, services],
   );
+
+  useEffect(() => {
+    setFormData((prev) => ({
+      ...prev,
+      start_time: initialDate || prev.start_time,
+      staff_id: initialStaffId || prev.staff_id || currentUser?.id || "",
+    }));
+    setCustomEndEnabled(false);
+    setCustomEndLocal("");
+  }, [initialDate, initialStaffId, currentUser?.id]);
+
+  useEffect(() => {
+    if (!customEndEnabled) return;
+    if (!formData.start_time) return;
+    if (!serviceTotals.minutes) return;
+    try {
+      const start = new Date(formData.start_time);
+      if (Number.isNaN(start.getTime())) return;
+      const end = new Date(start.getTime() + serviceTotals.minutes * 60000);
+      const pad = (n) => String(n).padStart(2, "0");
+      const v = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}T${pad(end.getHours())}:${pad(end.getMinutes())}`;
+      setCustomEndLocal((prev) => prev || v);
+    } catch {
+      /* ignore */
+    }
+  }, [customEndEnabled, formData.start_time, serviceTotals.minutes]);
 
   const selectedServicesKey = selectedServiceIds.join(",");
 
@@ -234,9 +265,8 @@ const AppointmentForm = ({
       const existingClientByName = inputNameKey
         ? clients.find(
             (c) =>
-              `${c.nombre} ${c.apellidos || ""}`
-                .trim()
-                .toLowerCase() === inputNameKey,
+              `${c.nombre} ${c.apellidos || ""}`.trim().toLowerCase() ===
+              inputNameKey,
           )
         : null;
 
@@ -266,9 +296,10 @@ const AppointmentForm = ({
         finalClientId = newClient.id;
       } else if (existingClientByPhone && inputNameKey) {
         // If phone matches an existing client, keep data consistent (best-effort).
-        const currentName = `${existingClient.nombre} ${existingClient.apellidos || ""}`
-          .trim()
-          .toLowerCase();
+        const currentName =
+          `${existingClient.nombre} ${existingClient.apellidos || ""}`
+            .trim()
+            .toLowerCase();
         if (currentName !== inputNameKey) {
           try {
             const nameParts = (formData.client_name || "").trim().split(" ");
@@ -290,6 +321,7 @@ const AppointmentForm = ({
         client_email: formData.client_email || null,
         client_id: finalClientId,
         start_time: formData.start_time,
+        end_time: customEndEnabled && customEndLocal ? customEndLocal : null,
         staff_id: formData.staff_id || currentUser?.id || 1,
         service_ids: selectedServiceIds.map((id) => parseInt(id, 10)),
       };
@@ -335,8 +367,13 @@ const AppointmentForm = ({
     );
   })();
 
+  const shellClass =
+    variant === "modal"
+      ? "min-w-0 max-w-full bg-white rounded-[3rem] shadow-2xl shadow-black/10 border border-[var(--bt-border)] overflow-x-clip overflow-y-visible transition-all duration-500"
+      : "min-w-0 max-w-full bg-white rounded-[3rem] shadow-2xl shadow-black/10 border border-[var(--bt-border)] overflow-x-clip overflow-y-visible sticky top-8 z-40 transition-all duration-500";
+
   return (
-    <div className="min-w-0 max-w-full bg-white rounded-[3rem] shadow-2xl shadow-black/10 border border-[var(--bt-border)] overflow-x-clip overflow-y-visible sticky top-8 z-40 transition-all duration-500">
+    <div className={shellClass}>
       {/* Cabecera Editorial */}
       <div className="bg-[var(--bt-bg)] p-10 border-b border-[var(--bt-border)] text-center space-y-2 rounded-t-[3rem]">
         <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[var(--bt-muted)]">
@@ -622,6 +659,40 @@ const AppointmentForm = ({
               }
             />
           </div>
+        </div>
+
+        {/* Optional end time override */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3 px-2">
+            <label className="text-[10px] font-black text-[var(--bt-muted)] uppercase tracking-[0.2em]">
+              Tiempo fin (opcional)
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                setCustomEndEnabled((s) => !s);
+                if (customEndEnabled) setCustomEndLocal("");
+              }}
+              className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)] underline decoration-1 underline-offset-4"
+            >
+              {customEndEnabled ? "Quitar fin" : "Añadir fin"}
+            </button>
+          </div>
+          {customEndEnabled ? (
+            <div className="relative min-w-0 w-full">
+              <Calendar className="pointer-events-none absolute left-5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-[var(--bt-icon)]" />
+              <input
+                type="datetime-local"
+                value={customEndLocal}
+                onChange={(e) => setCustomEndLocal(e.target.value)}
+                className="appearance-none block w-full bg-[var(--bt-bg)] border border-[var(--bt-border)] rounded-2xl outline-none focus:border-[var(--bt-primary)] focus:bg-white transition-all text-base font-bold tracking-wider text-[var(--bt-primary)] [color-scheme:light] pl-14 pr-4 py-5 m-0 box-border [&::-webkit-datetime-edit]:flex [&::-webkit-datetime-edit-fields-wrapper]:p-0 [&::-webkit-datetime-edit-text]:p-0"
+                style={{
+                  fontSize: "16px",
+                  minWidth: "0",
+                }}
+              />
+            </div>
+          ) : null}
         </div>
 
         {/* Botón de Acción Principal */}

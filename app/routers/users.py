@@ -319,10 +319,24 @@ def set_organization_ui_theme(
 def get_salon_hours(
     db: Session = Depends(get_session),
     current_user: User = Depends(get_current_user_for_app),
+    request: Request = None,
 ):
-    if not current_user.organization_id:
+    org_id = None
+    if current_user.role == UserRole.SUPER_ADMIN:
+        raw = None
+        if request is not None:
+            raw = request.headers.get("x-organization-id")
+        if raw and str(raw).strip().isdigit():
+            org_id = int(str(raw).strip())
+    else:
+        if not current_user.organization_id:
+            raise HTTPException(status_code=400, detail="No perteneces a una organización.")
+        org_id = int(current_user.organization_id)
+
+    if org_id is None:
         raise HTTPException(status_code=400, detail="No perteneces a una organización.")
-    org = db.get(Organization, current_user.organization_id)
+
+    org = db.get(Organization, org_id)
     if not org:
         raise HTTPException(status_code=404, detail="Organización no encontrada")
     raw = getattr(org, "salon_hours_json", None)

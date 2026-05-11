@@ -18,6 +18,7 @@ class AppointmentUpdate(BaseModel):
     service_id: Optional[int] = None
     service_ids: Optional[list[int]] = Field(default=None, min_length=1)
     start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
 
 
 # Lo que enviamos a React (incluyendo los nuevos campos para la gráfica)

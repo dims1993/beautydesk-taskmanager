@@ -1,11 +1,193 @@
-import { useEffect, useState } from "react";
-import { Check, Archive, Edit3, Clock } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Archive } from "lucide-react";
 import { useApi } from "../../hooks/useApi";
 import { useAppointmentActionModals } from "../../hooks/useAppointmentActionModals";
 import {
   durationMinutesForAppointment,
   serviceNamesForAppointment,
 } from "../../utils/appointmentServices";
+
+const MINUTE_PX = 1.2; // 60 min ≈ 72px; good for scrollable day view
+const GRID_STEP_MINUTES = 15;
+const TOP_PAD_PX = 10; // breathing room so first hour label isn't clipped
+/** Espacio bajo la rejilla para la última hora (-translate-y-1/2) y bordes redondeados (overflow-hidden). */
+const BOTTOM_PAD_PX = 22;
+/** Tramos clicables de 30 min alineados a :00 / :30 (misma rejilla que Google Calendar). */
+const HALF_HOUR_SLOT_MINUTES = 30;
+/** Mínimo de minutos libres en un hueco para intentar generar tramos (tramos reales exigen caber 30 min alineados). */
+const MIN_GAP_MINUTES_FOR_ADD = 30;
+// Header is rendered in a separate grid row (no pixel offsets in the timeline).
+
+/**
+ * Alternancia fuerte claro / oscuro (estilo “papel–tinta”) con variables de marca.
+ * Cabecera y carril usan `soft` + `headerText`; las citas siguen en blanco con `bar` + `cardName`.
+ */
+const STAFF_CALENDAR_TONE_PAIRS = {
+  nails: {
+    light: {
+      soft: "#ffffff",
+      bar: "#5d5045",
+      headerText: "#4a3f36",
+      headerMuted: "rgba(140, 133, 125, 0.95)",
+      cardName: "#4a3f36",
+    },
+    dark: {
+      /* Mismo que el botón «+ Nueva Cita» (`--bt-primary` en `index.css`) */
+      soft: "var(--bt-primary)",
+      bar: "#f5ebe0",
+      headerText: "#faf9f6",
+      headerMuted: "rgba(250, 249, 246, 0.55)",
+      cardName: "#3d322c",
+      gridLine: "rgba(250, 249, 246, 0.14)",
+      closedShade: "rgba(250, 249, 246, 0.08)",
+    },
+  },
+  hair: {
+    light: {
+      soft: "#ffffff",
+      bar: "#4a4a48",
+      headerText: "#333332",
+      headerMuted: "rgba(122, 122, 120, 0.95)",
+      cardName: "#333332",
+    },
+    dark: {
+      soft: "var(--bt-primary)",
+      bar: "#e5e5e3",
+      headerText: "#f7f7f7",
+      headerMuted: "rgba(247, 247, 247, 0.5)",
+      cardName: "#2a2a29",
+      gridLine: "rgba(255, 255, 255, 0.12)",
+      closedShade: "rgba(255, 255, 255, 0.07)",
+    },
+  },
+};
+
+function staffColumnAccent(uiThemeKey, colIndex) {
+  const key =
+    String(uiThemeKey || "nails").trim().toLowerCase() === "hair"
+      ? "hair"
+      : "nails";
+  const pair = STAFF_CALENDAR_TONE_PAIRS[key];
+  return colIndex % 2 === 0 ? pair.light : pair.dark;
+}
+
+function parseHHMM(s) {
+  const raw = String(s || "").trim();
+  const m = raw.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const hh = Number(m[1]);
+  const mm = Number(m[2]);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null;
+  if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
+  return hh * 60 + mm;
+}
+
+function minutesFromIsoLocal(isoLike) {
+  const raw = String(isoLike || "");
+  const m = raw.match(/T(\d{2}):(\d{2})/);
+  if (!m) return null;
+  const hh = Number(m[1]);
+  const mm = Number(m[2]);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null;
+  if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
+  return hh * 60 + mm;
+}
+
+function minutesFromLocalDate(isoLike) {
+  const d = new Date(isoLike);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.getHours() * 60 + d.getMinutes();
+}
+
+function formatLocalHHMM(isoLike) {
+  const d = new Date(isoLike);
+  if (Number.isNaN(d.getTime())) {
+    const m = minutesFromIsoLocal(isoLike);
+    return m == null ? "" : toHHMM(m);
+  }
+  return d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatDayMinuteLabel(dateObj, totalMinutes) {
+  // Use wall-clock labels to match the salon-hours "HH:MM" inputs.
+  // Avoid timezone conversions that can shift labels by 1 hour (DST/UTC offsets).
+  return toHHMM(totalMinutes);
+}
+
+function toHHMM(totalMinutes) {
+  const m = Math.max(0, Math.round(totalMinutes));
+  const hh = Math.floor(m / 60) % 24;
+  const mm = m % 60;
+  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+}
+
+function dateAtMinutes(dateObj, minutes) {
+  if (!(dateObj instanceof Date) || Number.isNaN(dateObj.getTime())) return null;
+  const base = new Date(
+    dateObj.getFullYear(),
+    dateObj.getMonth(),
+    dateObj.getDate(),
+    0,
+    0,
+    0,
+    0,
+  );
+  return new Date(base.getTime() + minutes * 60000);
+}
+
+/** Ranges { start, end } in minutes-from-midnight, sorted; merge overlap/touch. */
+function mergeMinuteRanges(ranges) {
+  const sorted = [...ranges]
+    .filter((r) => r && Number.isFinite(r.start) && Number.isFinite(r.end) && r.end > r.start)
+    .sort((a, b) => a.start - b.start);
+  const out = [];
+  for (const r of sorted) {
+    if (!out.length) {
+      out.push({ start: r.start, end: r.end });
+      continue;
+    }
+    const last = out[out.length - 1];
+    if (r.start <= last.end) last.end = Math.max(last.end, r.end);
+    else out.push({ start: r.start, end: r.end });
+  }
+  return out;
+}
+
+/** Subintervals of [rangeStart, rangeEnd) not covered by merged occupied ranges. */
+function freeMinuteGapsInRange(rangeStart, rangeEnd, mergedOccupied) {
+  const gaps = [];
+  let cur = rangeStart;
+  for (const r of mergedOccupied) {
+    if (r.end <= cur) continue;
+    if (r.start >= rangeEnd) break;
+    const rs = Math.max(r.start, rangeStart);
+    const re = Math.min(r.end, rangeEnd);
+    if (rs > cur) gaps.push({ start: cur, end: rs });
+    cur = Math.max(cur, re);
+    if (cur >= rangeEnd) return gaps;
+  }
+  if (cur < rangeEnd) gaps.push({ start: cur, end: rangeEnd });
+  return gaps;
+}
+
+/** Parte un hueco libre en tramos de 30 min [s, s+30) alineados a múltiplos de 30 min desde medianoche. */
+function splitGapIntoHalfHourSlots(gapStart, gapEnd) {
+  const dur = gapEnd - gapStart;
+  if (dur < HALF_HOUR_SLOT_MINUTES) return [];
+  let s = Math.ceil(gapStart / HALF_HOUR_SLOT_MINUTES) * HALF_HOUR_SLOT_MINUTES;
+  const zones = [];
+  while (s + HALF_HOUR_SLOT_MINUTES <= gapEnd) {
+    zones.push({ start: s, end: s + HALF_HOUR_SLOT_MINUTES });
+    s += HALF_HOUR_SLOT_MINUTES;
+  }
+  return zones;
+}
+
+function dayOfWeekMon0(date) {
+  const d = date instanceof Date ? date : new Date(date);
+  const js = d.getDay(); // 0=Sun..6=Sat
+  return (js + 6) % 7; // 0=Mon..6=Sun
+}
 
 function formatTimeRangeEs(appo, services) {
   const dm = durationMinutesForAppointment(appo, services);
@@ -47,12 +229,15 @@ const CalendarView = ({
   allAppointments = [],
   services = [],
   teamMembers = [],
+  salonHoursDays = [],
+  /** Alineado con Ajustes → interfaz (`organization_ui_theme`: nails | hair). */
+  uiTheme = "nails",
   onUpdateStatus,
   onRefresh,
   onAddClick,
 }) => {
   const { apiRequest } = useApi();
-  const { openEdit, openPayment, openArchive, appointmentModals } =
+  const { openEdit, openArchive, appointmentModals } =
     useAppointmentActionModals(services, onUpdateStatus, onRefresh);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState(new Date().getDate());
@@ -109,9 +294,135 @@ const CalendarView = ({
       )
     : [];
 
-  const pendingApps = dayApps.filter((a) => a.status === "scheduled");
+  const pendingApps = dayApps.filter((a) =>
+    ["scheduled", "pending_deposit"].includes(String(a.status || "")),
+  );
   // Aquí filtramos para que en "Finalizadas" solo salgan las 'completed'
   const completedApps = dayApps.filter((a) => a.status === "completed");
+
+  const selectedDateObj = selectedDay
+    ? new Date(currentDate.getFullYear(), currentDate.getMonth(), selectedDay)
+    : null;
+
+  const hoursForSelectedDay = (() => {
+    if (!selectedDateObj) return null;
+    const dow = dayOfWeekMon0(selectedDateObj);
+    const days = Array.isArray(salonHoursDays) ? salonHoursDays : [];
+    const row = days.find((d) => Number(d?.day_of_week) === dow) || null;
+    if (!row) return null;
+    return row;
+  })();
+
+  const openIntervals = (() => {
+    if (!hoursForSelectedDay || hoursForSelectedDay.is_open === false) return [];
+    const raw = Array.isArray(hoursForSelectedDay.intervals)
+      ? hoursForSelectedDay.intervals
+      : [];
+    const parsed = raw
+      .map((it) => ({
+        start: parseHHMM(it?.start),
+        end: parseHHMM(it?.end),
+      }))
+      .filter((x) => x.start != null && x.end != null && x.end > x.start);
+    return parsed.length ? parsed : [{ start: 9 * 60, end: 20 * 60 }];
+  })();
+
+  const openStartMin = openIntervals.length
+    ? Math.min(...openIntervals.map((x) => x.start))
+    : 9 * 60;
+  const openEndMin = openIntervals.length
+    ? Math.max(...openIntervals.map((x) => x.end))
+    : 20 * 60;
+
+  const appsMinMax = (() => {
+    const list = Array.isArray(dayApps) ? dayApps : [];
+    if (!list.length) return null;
+    let minStart = null;
+    let maxEnd = null;
+    for (const a of list) {
+      const startMin =
+        minutesFromIsoLocal(a?.start_time);
+      if (startMin == null) continue;
+      const dur = durationMinutesForAppointment(a, safeServices);
+      const endMin = startMin + Math.max(1, Number(dur) || 0);
+      if (minStart == null || startMin < minStart) minStart = startMin;
+      if (maxEnd == null || endMin > maxEnd) maxEnd = endMin;
+    }
+    if (minStart == null || maxEnd == null) return null;
+    return { minStart, maxEnd };
+  })();
+
+  // Expand the visible range to include out-of-hours appointments if they exist.
+  const dayStartMin = (() => {
+    const base = appsMinMax ? Math.min(openStartMin, appsMinMax.minStart) : openStartMin;
+    return Math.floor(base / GRID_STEP_MINUTES) * GRID_STEP_MINUTES;
+  })();
+  const dayEndMin = (() => {
+    const base = appsMinMax ? Math.max(openEndMin, appsMinMax.maxEnd) : openEndMin;
+    return Math.ceil(base / GRID_STEP_MINUTES) * GRID_STEP_MINUTES;
+  })();
+
+  const dayHeightPx = Math.max(
+    240,
+    (dayEndMin - dayStartMin) * MINUTE_PX + TOP_PAD_PX + BOTTOM_PAD_PX,
+  );
+
+  const selectedDayStartDate = null;
+
+  const timeTicks = (() => {
+    // Important: ticks must start exactly at dayStartMin so grid aligns with top=0.
+    const end = Math.ceil(dayEndMin / GRID_STEP_MINUTES) * GRID_STEP_MINUTES;
+    const start = dayStartMin;
+    const out = [];
+    for (let t = start; t <= end; t += GRID_STEP_MINUTES) out.push(t);
+    return out;
+  })();
+
+  const hourLabels = (() => {
+    // Labels at full hours within the visible range.
+    const start = Math.ceil(dayStartMin / 60) * 60;
+    const end = Math.floor(dayEndMin / 60) * 60;
+    const out = [];
+    for (let t = start; t <= end; t += 60) out.push(t);
+    return out;
+  })();
+
+  const closedBlocks = (() => {
+    if (!openIntervals.length) return [];
+    const sorted = [...openIntervals].sort((a, b) => a.start - b.start);
+    const blocks = [];
+    for (let i = 0; i < sorted.length - 1; i += 1) {
+      const a = sorted[i];
+      const b = sorted[i + 1];
+      if (a && b && b.start > a.end) {
+        blocks.push({ start: a.end, end: b.start });
+      }
+    }
+    return blocks;
+  })();
+
+  const staffColumns = useMemo(() => {
+    if (!selectedDay) return [];
+    const byId = new Map();
+    // Columns represent the salon team (owner + staff). Do NOT include SUPER_ADMIN
+    // unless they are actually part of the org team list.
+    for (const m of [...(teamMembers || [])].filter(Boolean)) {
+      const id = Number(m?.id);
+      if (!Number.isFinite(id)) continue;
+      if (!byId.has(id)) byId.set(id, m);
+    }
+    const ids = Array.from(byId.keys()).sort((a, b) => a - b);
+    return ids.map((id) => ({
+      staffId: id,
+      member: byId.get(id),
+      apps: pendingApps
+        .filter((a) => Number(a?.staff_id) === id)
+        .sort((a, b) => new Date(a.start_time) - new Date(b.start_time)),
+    }));
+  }, [teamMembers, currentUser, selectedDay, pendingApps]);
+
+  const staffColumnCount = staffColumns.length || 1;
+  const allowHorizontalScroll = staffColumnCount > 2;
 
   const refreshGoogleCalendarStatus = async () => {
     try {
@@ -358,7 +669,7 @@ const CalendarView = ({
       {selectedDay && (
         <div className="space-y-6">
           {/* BLOQUE DE PENDIENTES */}
-          <div className="bg-[var(--bt-primary)] rounded-[2.5rem] p-8 text-white shadow-2xl animate-slideUp">
+          <div className="bg-white rounded-[2.5rem] p-8 text-[var(--bt-primary)] shadow-sm border border-[var(--bt-border)] animate-slideUp">
             <div className="flex justify-between items-start mb-8">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-50 mb-1">
@@ -379,7 +690,7 @@ const CalendarView = ({
                     ),
                   )
                 }
-                className="bg-white/10 hover:bg-white/20 backdrop-blur-md text-white border border-white/20 px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
+                className="bg-[var(--bt-primary)] hover:bg-[var(--bt-primary-hover)] text-white border border-[var(--bt-primary)]/20 px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm"
               >
                 + Nueva Cita
               </button>
@@ -387,85 +698,348 @@ const CalendarView = ({
 
             <div className="space-y-4">
               {pendingApps.length > 0 ? (
-                pendingApps.map((appo) => {
-                  const dur = durationMinutesForAppointment(appo, safeServices);
-                  const staffName = staffLabelForAppointment(
-                    appo.staff_id,
-                    teamMembers,
-                    currentUser,
-                  );
-                  const creatorName = creatorLabelForAppointment(
-                    appo,
-                    teamMembers,
-                    currentUser,
-                  );
-                  return (
-                    <div
-                      key={appo.id}
-                      className="bg-white/5 rounded-3xl p-5 border border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-4"
-                    >
-                      <div className="flex items-center gap-4 min-w-0">
-                        <div className="bg-white/10 px-3 py-2 rounded-xl text-center min-w-[140px] shrink-0">
-                          <p className="text-[10px] font-black leading-tight">
-                            {formatTimeRangeEs(appo, safeServices)}
-                          </p>
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-bold text-base leading-tight truncate">
-                            {appo.client_name}
-                          </p>
-                          <div className="flex flex-wrap gap-x-2 gap-y-1 items-center mt-1">
-                            <span className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-border-strong)] whitespace-normal break-words">
-                              {serviceNamesForAppointment(appo, safeServices).join(
-                                " · ",
-                              )}
-                            </span>
-                            <span className="text-[10px] opacity-30 hidden sm:inline">
-                              •
-                            </span>
-                            <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase text-white/90">
-                              <Clock className="w-3 h-3 opacity-70 shrink-0" />
-                              {dur} min
-                            </span>
-                            <span className="text-[10px] opacity-30">•</span>
-                            <span
-                              className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-white/15 text-white max-w-[10rem] truncate"
-                              title={`Creada por ${creatorName}`}
-                            >
-                              {creatorName}
-                            </span>
+                <div className="rounded-[2rem] border border-[var(--bt-border)] bg-[var(--bt-bg)] overflow-hidden">
+                  <div className={allowHorizontalScroll ? "overflow-x-auto overflow-y-visible" : "overflow-visible"}>
+                    <div className={allowHorizontalScroll ? "min-w-[900px]" : ""}>
+                        <div className="grid grid-cols-[88px_1fr] grid-rows-[auto_1fr]">
+                          {/* Top-left: empty header (aligns with staff headers) */}
+                          <div className="sticky left-0 z-30 border-r border-b border-[var(--bt-border)] bg-white px-3 py-4" />
+
+                          {/* Top-right: staff headers */}
+                          <div
+                            className="grid border-b border-[var(--bt-border)] bg-white"
+                            style={{
+                              gridTemplateColumns: allowHorizontalScroll
+                                ? `repeat(${staffColumnCount}, minmax(240px, 1fr))`
+                                : `repeat(${staffColumnCount}, minmax(0, 1fr))`,
+                            }}
+                          >
+                            {staffColumns.map((col, colIndex) => {
+                              const accent = staffColumnAccent(uiTheme, colIndex);
+                              const staffName = staffLabelForAppointment(
+                                col.staffId,
+                                teamMembers,
+                                currentUser,
+                              );
+                              return (
+                                <div
+                                  key={col.staffId}
+                                  className="min-w-0 border-r last:border-r-0 border-[var(--bt-border)] px-5 py-4"
+                                  style={{
+                                    borderLeftWidth: 4,
+                                    borderLeftColor: accent.bar,
+                                    backgroundColor: accent.soft,
+                                  }}
+                                >
+                                  <p
+                                    className="text-[9px] font-black uppercase tracking-[0.35em]"
+                                    style={{ color: accent.headerMuted }}
+                                  >
+                                    Profesional
+                                  </p>
+                                  <p
+                                    className="mt-1 text-[12px] font-black tracking-widest uppercase truncate"
+                                    style={{ color: accent.headerText }}
+                                  >
+                                    {staffName}
+                                  </p>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Bottom-left: time gutter */}
+                          <div className="sticky left-0 z-20 relative border-r border-[var(--bt-border)] bg-white">
+                            <div style={{ height: dayHeightPx }} />
+                            {hourLabels.map((t) => (
+                              <div
+                                key={t}
+                                className="absolute left-0 right-0 px-3"
+                                style={{
+                                  top: TOP_PAD_PX + (t - dayStartMin) * MINUTE_PX,
+                                }}
+                              >
+                                <span className="block -translate-y-1/2 text-[9px] font-black uppercase tracking-widest text-[var(--bt-muted)]">
+                                  {formatDayMinuteLabel(selectedDateObj, t)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Bottom-right: timelines */}
+                          <div
+                            className="grid"
+                            style={{
+                              gridTemplateColumns: allowHorizontalScroll
+                                ? `repeat(${staffColumnCount}, minmax(240px, 1fr))`
+                                : `repeat(${staffColumnCount}, minmax(0, 1fr))`,
+                            }}
+                          >
+                            {staffColumns.map((col, colIndex) => {
+                              const accent = staffColumnAccent(uiTheme, colIndex);
+                              return (
+                                <div
+                                  key={col.staffId}
+                                  className="min-w-0 border-r last:border-r-0 border-[var(--bt-border)]"
+                                  style={{
+                                    borderLeftWidth: 4,
+                                    borderLeftColor: accent.bar,
+                                    backgroundColor: accent.soft,
+                                  }}
+                                >
+                                  <div
+                                    className="relative"
+                                    style={{ height: dayHeightPx }}
+                                  >
+                                  {/* grid lines */}
+                                  {timeTicks.map((t) => (
+                                    <div
+                                      key={t}
+                                      className="absolute left-0 right-0 border-t border-[var(--bt-border)]"
+                                      style={{
+                                        top: TOP_PAD_PX + (t - dayStartMin) * MINUTE_PX,
+                                        opacity: t % 60 === 0 ? 0.35 : 0.18,
+                                        ...(accent.gridLine
+                                          ? { borderTopColor: accent.gridLine }
+                                          : {}),
+                                      }}
+                                    />
+                                  ))}
+
+                                  {/* closed blocks (split schedule gaps) */}
+                                  {closedBlocks.map((blk, idx) => (
+                                    <div
+                                      key={`${blk.start}-${blk.end}-${idx}`}
+                                      className="absolute left-0 right-0 pointer-events-none"
+                                      style={{
+                                        top:
+                                          TOP_PAD_PX +
+                                          (blk.start - dayStartMin) * MINUTE_PX,
+                                        height:
+                                          (blk.end - blk.start) * MINUTE_PX,
+                                        backgroundColor:
+                                          accent.closedShade ?? "rgba(0, 0, 0, 0.05)",
+                                      }}
+                                      title="Tramo cerrado"
+                                    />
+                                  ))}
+
+                                  {/* Huecos libres clicables (sin icono): tramos de 30 min en :00 / :30. */}
+                                  {(() => {
+                                    if (!selectedDateObj) return null;
+                                    const occupiedRaw = col.apps
+                                      .map((a) => {
+                                        const start =
+                                          minutesFromIsoLocal(a?.start_time) ?? null;
+                                        if (start == null) return null;
+                                        const dur = durationMinutesForAppointment(
+                                          a,
+                                          safeServices,
+                                        );
+                                        const end =
+                                          start + Math.max(1, Number(dur) || 0);
+                                        return { start, end };
+                                      })
+                                      .filter(Boolean);
+                                    const mergedOccupied = mergeMinuteRanges(occupiedRaw);
+                                    const gaps = [];
+                                    for (const o of openIntervals) {
+                                      const a = Math.max(o.start, dayStartMin);
+                                      const b = Math.min(o.end, dayEndMin);
+                                      if (b <= a) continue;
+                                      gaps.push(
+                                        ...freeMinuteGapsInRange(a, b, mergedOccupied),
+                                      );
+                                    }
+                                    const addZones = gaps
+                                      .filter(
+                                        (g) =>
+                                          g.end - g.start >= MIN_GAP_MINUTES_FOR_ADD,
+                                      )
+                                      .flatMap((g) =>
+                                        splitGapIntoHalfHourSlots(g.start, g.end),
+                                      );
+                                    return addZones.map((g) => {
+                                        const top =
+                                          TOP_PAD_PX +
+                                          (g.start - dayStartMin) * MINUTE_PX;
+                                        const heightPx = Math.max(
+                                          40,
+                                          (g.end - g.start) * MINUTE_PX,
+                                        );
+                                        return (
+                                          <button
+                                            key={`add-${col.staffId}-${g.start}-${g.end}`}
+                                            type="button"
+                                            title="Nueva cita"
+                                            aria-label="Nueva cita en este hueco"
+                                            className="absolute left-0 right-0 cursor-pointer rounded-lg border-0 bg-transparent p-0 outline-none transition-colors hover:bg-[var(--bt-primary)]/[0.06] focus-visible:bg-[var(--bt-primary)]/[0.08] focus-visible:ring-2 focus-visible:ring-[var(--bt-primary)]/25 focus-visible:ring-inset"
+                                            style={{ top, height: heightPx }}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              const d = dateAtMinutes(
+                                                selectedDateObj,
+                                                g.start,
+                                              );
+                                              if (!d) return;
+                                              onAddClick?.({
+                                                date: d,
+                                                staffId: col.staffId,
+                                              });
+                                            }}
+                                          />
+                                        );
+                                    });
+                                  })()}
+
+                                  {/* appointments */}
+                                  {col.apps.map((appo) => {
+                                    // Place blocks using wall-clock time from the API string (HH:MM).
+                                    // This matches the left-hand labels and the salon-hours configuration.
+                                    const minutesFromMidnight =
+                                      minutesFromIsoLocal(appo.start_time) ?? 0;
+                                    const minutesFromStart =
+                                      minutesFromMidnight - dayStartMin;
+                                    const top =
+                                      TOP_PAD_PX + minutesFromStart * MINUTE_PX;
+                                    const dur = durationMinutesForAppointment(
+                                      appo,
+                                      safeServices,
+                                    );
+                                    const height = Math.max(
+                                      44,
+                                      dur * MINUTE_PX,
+                                    );
+                                    /** Citas cortas (p. ej. 20–30 min): solo nombre en la tarjeta; el resto va al title. */
+                                    const nameOnlyCard = dur <= 30;
+                                    const compact = !nameOnlyCard && height < 78;
+                                    const ultraCompact = !nameOnlyCard && height < 58;
+                                    const deposit =
+                                      String(appo.status || "") ===
+                                      "pending_deposit";
+                                    const creatorName = creatorLabelForAppointment(
+                                      appo,
+                                      teamMembers,
+                                      currentUser,
+                                    );
+                                    const servicesLine =
+                                      serviceNamesForAppointment(
+                                        appo,
+                                        safeServices,
+                                      ).join(" · ") || "";
+                                    const hoverDetailTitle = [
+                                      formatLocalHHMM(appo.start_time),
+                                      `${dur}m`,
+                                      appo.client_name,
+                                      servicesLine,
+                                      creatorName,
+                                      deposit ? "DEPÓSITO" : "",
+                                    ]
+                                      .filter(Boolean)
+                                      .join(" · ");
+                                    const nameColorStyle =
+                                      deposit ? undefined : { color: accent.cardName };
+                                    return (
+                                      <div
+                                        key={appo.id}
+                                        className={[
+                                          "absolute left-3 right-3 cursor-pointer rounded-2xl border shadow-sm overflow-hidden transition-shadow hover:shadow-md",
+                                          deposit
+                                            ? "border-amber-200/60 bg-amber-50"
+                                            : "border-[var(--bt-border)] bg-white",
+                                        ].join(" ")}
+                                        style={{
+                                          top: Math.max(0, top),
+                                          height,
+                                          ...(deposit
+                                            ? {}
+                                            : {
+                                                borderLeftWidth: 4,
+                                                borderLeftColor: accent.bar,
+                                              }),
+                                        }}
+                                        title={
+                                          nameOnlyCard
+                                            ? hoverDetailTitle
+                                            : `Hora grid: ${toHHMM(minutesFromMidnight)} | raw: ${String(appo.start_time || "")} | creada por ${creatorName}`
+                                        }
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={() => openEdit(appo)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter" || e.key === " ") {
+                                            e.preventDefault();
+                                            openEdit(appo);
+                                          }
+                                        }}
+                                      >
+                                        <div
+                                          className={
+                                            nameOnlyCard
+                                              ? "min-h-0 p-2.5"
+                                              : compact
+                                                ? "p-2.5"
+                                                : "p-3"
+                                          }
+                                        >
+                                          {nameOnlyCard ? (
+                                            <p
+                                              className="min-w-0 font-black uppercase tracking-tight truncate text-[12px] text-[var(--bt-primary)]"
+                                              style={nameColorStyle}
+                                            >
+                                              {appo.client_name}
+                                            </p>
+                                          ) : (
+                                            <div className="min-w-0">
+                                              <p className="text-[10px] font-black uppercase tracking-widest text-[var(--bt-muted)]">
+                                                {formatLocalHHMM(appo.start_time)}{" "}
+                                                · {dur}m
+                                              </p>
+                                              <p
+                                                className={[
+                                                  "mt-1 font-black uppercase tracking-tight truncate text-[var(--bt-primary)]",
+                                                  ultraCompact
+                                                    ? "text-[11px]"
+                                                    : "text-[12px]",
+                                                  compact ? "mt-0.5" : "mt-1",
+                                                ].join(" ")}
+                                                style={nameColorStyle}
+                                              >
+                                                {appo.client_name}
+                                              </p>
+                                              {!ultraCompact && (
+                                                <p
+                                                  className={[
+                                                    "text-[9px] font-black uppercase tracking-widest text-[var(--bt-border-strong)]",
+                                                    compact
+                                                      ? "mt-0.5 truncate"
+                                                      : "mt-1 whitespace-normal break-words",
+                                                  ].join(" ")}
+                                                >
+                                                  {servicesLine}
+                                                </p>
+                                              )}
+                                              {!compact && (
+                                                <p className="mt-1 text-[9px] font-black uppercase text-[var(--bt-muted)] truncate">
+                                                  {creatorName}
+                                                  {deposit ? " · DEPÓSITO" : ""}
+                                                </p>
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
-                      </div>
-                      <div className="flex gap-2 justify-end">
-                        <button
-                          type="button"
-                          onClick={() => openEdit(appo)}
-                          className="h-10 w-10 flex items-center justify-center bg-white/10 hover:bg-white/20 text-white/80 hover:text-white rounded-xl transition-all border border-white/5"
-                          title="Editar cita"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openPayment(appo)}
-                          className="h-10 w-10 flex items-center justify-center bg-white/10 hover:bg-green-500/20 hover:text-green-300 rounded-xl transition-all border border-white/5"
-                          title="Confirmar y cobrar"
-                        >
-                          <Check className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openArchive(appo)}
-                          className="h-10 w-10 flex items-center justify-center bg-white/10 hover:bg-red-500/20 hover:text-red-300 rounded-xl transition-all border border-white/5"
-                          title="Archivar"
-                        >
-                          <Archive className="w-4 h-4" />
-                        </button>
-                      </div>
                     </div>
-                  );
-                })
+                  </div>
+                </div>
               ) : (
                 <p className="text-center py-4 text-[10px] font-black uppercase opacity-30">
                   No hay citas pendientes

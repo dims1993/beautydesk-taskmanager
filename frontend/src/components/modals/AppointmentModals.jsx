@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   X,
   Fingerprint,
@@ -6,15 +7,17 @@ import {
   Banknote,
   CheckCircle2,
   Archive,
+  Check,
   Timer,
   Layers,
   Trash2,
   Plus,
+  StickyNote,
+  ChevronRight,
 } from "lucide-react";
 import { useApi } from "../../hooks/useApi";
 import {
   allServiceIdsFromAppointment,
-  serviceNamesForAppointment,
   totalsForSelectedServiceIds,
 } from "../../utils/appointmentServices";
 
@@ -34,6 +37,49 @@ function formatApiError(err) {
     return detail.map((x) => x.msg || JSON.stringify(x)).join(" ");
   }
   return err.message || "No se pudo guardar.";
+}
+
+function formatSummaryDateTime(isoOrLocal) {
+  if (!isoOrLocal) return "—";
+  const d = new Date(isoOrLocal);
+  if (Number.isNaN(d.getTime())) return String(isoOrLocal);
+  return d.toLocaleString("es-ES", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function sameCalendarDayLocal(a, b) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+/** Misma línea: día una vez; si termina el mismo día, solo se repite la hora de fin. */
+function formatAppointmentScheduleSummary(start, end) {
+  if (!(start instanceof Date) || Number.isNaN(start.getTime())) return "—";
+  if (!(end instanceof Date) || Number.isNaN(end.getTime())) return "—";
+  const dateOpts = { weekday: "short", day: "numeric", month: "short" };
+  const timeOpts = { hour: "2-digit", minute: "2-digit" };
+  const datePart = start.toLocaleString("es-ES", dateOpts);
+  const t0 = start.toLocaleTimeString("es-ES", timeOpts);
+  const t1 = end.toLocaleTimeString("es-ES", timeOpts);
+  if (sameCalendarDayLocal(start, end)) {
+    return `${datePart} · ${t0} — ${t1}`;
+  }
+  const dateEnd = end.toLocaleString("es-ES", dateOpts);
+  return `${datePart} · ${t0} — ${dateEnd} · ${t1}`;
+}
+
+function truncateNotePreview(text, max = 120) {
+  const t = String(text || "").trim().replace(/\s+/g, " ");
+  if (t.length <= max) return t;
+  return `${t.slice(0, max - 1)}…`;
 }
 
 // --- COMPONENTE BASE PARA EL BACKDROP Y CONTENEDOR ---
@@ -215,12 +261,22 @@ export const EditAppointmentModal = ({
   appointment,
   services = [],
   onSaved,
+  onRequestCompleteCita,
+  onRequestArchive,
 }) => {
   const { apiRequest } = useApi();
+  const apiRequestRef = useRef(apiRequest);
+  apiRequestRef.current = apiRequest;
+  const navigate = useNavigate();
   const [selectedServiceIds, setSelectedServiceIds] = useState([]);
   const [startLocal, setStartLocal] = useState("");
+  const [customEndEnabled, setCustomEndEnabled] = useState(false);
+  const [customEndLocal, setCustomEndLocal] = useState("");
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState(null);
+  const [clientNotesPreview, setClientNotesPreview] = useState([]);
+  const [clientNotesLoading, setClientNotesLoading] = useState(false);
+  const [clientNotesError, setClientNotesError] = useState("");
 
   useEffect(() => {
     if (!isOpen || !appointment) return;
@@ -235,6 +291,8 @@ export const EditAppointmentModal = ({
       return services[0]?.id != null ? [String(services[0].id)] : [];
     });
     setStartLocal(toDatetimeLocalValue(appointment.start_time));
+    setCustomEndEnabled(false);
+    setCustomEndLocal("");
     setFormError(null);
   }, [isOpen, appointment?.id, appointment?.service_id, appointment?.start_time, services]);
 
@@ -249,7 +307,81 @@ export const EditAppointmentModal = ({
     });
   }, [services, isOpen]);
 
+  useEffect(() => {
+    if (!isOpen || !appointment?.client_id) {
+      setClientNotesPreview([]);
+      setClientNotesError("");
+      setClientNotesLoading(false);
+      return;
+    }
+    const clientId = appointment.client_id;
+    let abandoned = false;
+
+    setClientNotesLoading(true);
+    setClientNotesError("");
+
+    const req = apiRequestRef.current(`/clients/${clientId}/insights`);
+    Promise.resolve(req)
+      .then((data) => {
+        if (abandoned) return;
+        const notes = Array.isArray(data?.notes) ? data.notes : [];
+        setClientNotesPreview(notes.slice(0, 3));
+      })
+      .catch((err) => {
+        if (abandoned) return;
+        setClientNotesError(formatApiError(err));
+      })
+      .finally(() => {
+        if (!abandoned) setClientNotesLoading(false);
+      });
+
+    return () => {
+      abandoned = true;
+      setClientNotesLoading(false);
+    };
+  }, [isOpen, appointment?.client_id, appointment?.id]);
+
   const totals = totalsForSelectedServiceIds(selectedServiceIds, services);
+
+  const summaryScheduleLine = useMemo(() => {
+    if (!startLocal) return "—";
+    const start = new Date(startLocal);
+    if (Number.isNaN(start.getTime())) return "—";
+    let end;
+    if (customEndEnabled && customEndLocal) {
+      end = new Date(customEndLocal);
+    } else if (totals.minutes) {
+      end = new Date(start.getTime() + totals.minutes * 60000);
+    } else {
+      return formatSummaryDateTime(startLocal);
+    }
+    if (Number.isNaN(end.getTime())) return "—";
+    return formatAppointmentScheduleSummary(start, end);
+  }, [customEndEnabled, customEndLocal, startLocal, totals.minutes]);
+
+  const summaryServicesLine = useMemo(() => {
+    return selectedServiceIds
+      .map((id) => {
+        const s = services.find((x) => String(x.id) === String(id));
+        return s ? s.name : `#${id}`;
+      })
+      .join(" · ");
+  }, [selectedServiceIds, services]);
+
+  useEffect(() => {
+    if (!isOpen || !customEndEnabled) return;
+    if (!startLocal || !totals.minutes) return;
+    try {
+      const start = new Date(startLocal);
+      if (Number.isNaN(start.getTime())) return;
+      const end = new Date(start.getTime() + totals.minutes * 60000);
+      const pad = (n) => String(n).padStart(2, "0");
+      const v = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}T${pad(end.getHours())}:${pad(end.getMinutes())}`;
+      setCustomEndLocal((prev) => prev || v);
+    } catch {
+      /* ignore */
+    }
+  }, [isOpen, customEndEnabled, startLocal, totals.minutes]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -258,10 +390,14 @@ export const EditAppointmentModal = ({
     setSaving(true);
     setFormError(null);
     try {
-      await apiRequest(`/appointments/${appointment.id}`, "PATCH", {
+      const body = {
         service_ids: selectedServiceIds.map((id) => parseInt(id, 10)),
         start_time: startLocal,
-      });
+      };
+      if (customEndEnabled && customEndLocal) {
+        body.end_time = customEndLocal;
+      }
+      await apiRequest(`/appointments/${appointment.id}`, "PATCH", body);
       onSaved?.();
       onClose();
     } catch (err) {
@@ -279,28 +415,166 @@ export const EditAppointmentModal = ({
       subtitle="Ajustes"
     >
       <form className="min-w-0 space-y-8" onSubmit={handleSubmit}>
-        {appointment?.client_name && (
-          <p className="text-[11px] font-bold text-[var(--bt-primary)] px-1">
-            {appointment.client_name}
-          </p>
-        )}
+        {appointment?.client_name ? (
+          <div className="rounded-[2rem] border border-[var(--bt-border)] bg-[var(--bt-bg)] p-6 md:p-7">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="min-w-0 flex-1 space-y-1">
+                <p className="text-[9px] font-black uppercase tracking-[0.35em] text-[var(--bt-muted)]">
+                  Cliente
+                </p>
+                {(() => {
+                  const raw = String(appointment.client_name || "");
+                  const len = raw.length;
+                  const sizeClass =
+                    len > 44
+                      ? "text-sm md:text-base"
+                      : len > 30
+                        ? "text-base md:text-lg"
+                        : len > 20
+                          ? "text-lg md:text-xl"
+                          : "text-2xl md:text-3xl";
+                  return (
+                    <p
+                      className={`min-w-0 font-serif font-bold text-[var(--bt-primary)] leading-tight tracking-tight truncate whitespace-nowrap ${sizeClass}`}
+                      title={raw}
+                    >
+                      {raw}
+                    </p>
+                  );
+                })()}
+              </div>
+              {appointment?.id ? (
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    title="Cita realizada"
+                    aria-label="Cita realizada"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onRequestCompleteCita?.();
+                    }}
+                    className="flex h-11 w-11 items-center justify-center rounded-xl border border-green-200 bg-green-50 text-green-700 transition-all hover:border-green-600 hover:bg-green-600 hover:text-white md:h-12 md:w-12"
+                  >
+                    <Check className="h-5 w-5" strokeWidth={2.5} />
+                  </button>
+                  <button
+                    type="button"
+                    title="Archivar cita"
+                    aria-label="Archivar cita"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onRequestArchive?.();
+                    }}
+                    className="flex h-11 w-11 items-center justify-center rounded-xl border border-red-200 bg-red-50 text-red-700 transition-all hover:border-red-600 hover:bg-red-600 hover:text-white md:h-12 md:w-12"
+                  >
+                    <Archive className="h-5 w-5" strokeWidth={2.5} />
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
         {appointment ? (
-          <div className="rounded-[2rem] border border-[var(--bt-border)] bg-[var(--bt-bg)] p-5">
-            <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[var(--bt-muted)] mb-2">
-              Servicios de la cita
+          <div className="rounded-[2rem] border border-[var(--bt-border)] bg-[var(--bt-bg)] p-5 space-y-3">
+            <p className="text-[9px] font-black uppercase tracking-[0.35em] text-[var(--bt-muted)]">
+              Resumen de la cita
             </p>
-            <p className="text-[11px] font-bold text-[var(--bt-primary)] leading-relaxed whitespace-normal break-words">
-              {serviceNamesForAppointment(appointment, services).join(" · ")}
-            </p>
+            <div className="space-y-1.5">
+              <p className="text-[12px] md:text-[13px] font-bold text-[var(--bt-primary)] leading-snug whitespace-normal break-words">
+                {summaryServicesLine || "—"}
+              </p>
+              <p className="text-[10px] font-medium leading-relaxed text-[var(--bt-muted)] normal-case tracking-normal">
+                {summaryScheduleLine}
+              </p>
+            </div>
+            {appointment.client_id ? (
+              <div className="rounded-2xl border border-[var(--bt-border)] bg-white overflow-hidden">
+                <div className="border-b border-[var(--bt-border)] px-4 py-3">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-muted)]">
+                    Notas del cliente
+                  </p>
+                  {clientNotesLoading ? (
+                    <p className="mt-2 text-[10px] font-medium text-[var(--bt-muted)]">
+                      Cargando notas…
+                    </p>
+                  ) : clientNotesError ? (
+                    <p className="mt-2 text-[10px] font-medium text-red-500">
+                      {clientNotesError}
+                    </p>
+                  ) : clientNotesPreview.length === 0 ? (
+                    <p className="mt-2 text-[11px] font-medium text-[var(--bt-primary)]">
+                      No hay notas todavía.
+                    </p>
+                  ) : (
+                    <ul className="mt-2 space-y-2">
+                      {clientNotesPreview.map((n) => (
+                        <li key={n.id} className="min-w-0">
+                          <p className="text-[8px] font-black uppercase tracking-wider text-[var(--bt-muted)]">
+                            {n.created_at
+                              ? new Date(n.created_at).toLocaleString("es-ES", {
+                                  day: "numeric",
+                                  month: "short",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
+                              : ""}
+                          </p>
+                          <p className="text-[10px] font-medium leading-snug text-[var(--bt-primary)] line-clamp-2">
+                            {truncateNotePreview(n.text)}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    navigate(
+                      `/app?tab=clientes&clientId=${appointment.client_id}&notes=1`,
+                    );
+                  }}
+                  className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-all hover:bg-[var(--bt-bg)]"
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <StickyNote className="h-4 w-4 shrink-0 text-[var(--bt-icon)]" />
+                    <span className="text-[11px] font-bold text-[var(--bt-primary)]">
+                      {clientNotesPreview.length > 0
+                        ? "Ver todas / añadir notas"
+                        : "Añadir notas"}
+                    </span>
+                  </span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-[var(--bt-muted)]" />
+                </button>
+              </div>
+            ) : (
+              <p className="text-[10px] font-medium leading-relaxed text-[var(--bt-muted)]">
+                Sin ficha de cliente vinculada: puedes añadir notas al{" "}
+                <strong className="text-[var(--bt-primary)]">cerrar el ticket</strong>{" "}
+                (confirmación de pago) si el teléfono queda registrado.
+              </p>
+            )}
+          </div>
+        ) : null}
+
+        {appointment ? (
+          <div
+            className="flex items-center gap-3 py-2 select-none"
+            role="separator"
+            aria-label="Servicios — edición"
+          >
+            <div className="h-px min-w-[12px] flex-1 bg-gradient-to-r from-transparent via-[var(--bt-border)] to-[var(--bt-border)] opacity-80" />
+            <span className="shrink-0 text-center text-[9px] font-black uppercase tracking-[0.38em] text-[var(--bt-muted)]">
+              Servicios
+            </span>
+            <div className="h-px min-w-[12px] flex-1 bg-gradient-to-l from-transparent via-[var(--bt-border)] to-[var(--bt-border)] opacity-80" />
           </div>
         ) : null}
 
         <div className="space-y-6">
           <div className="relative group">
-            <label className="px-1 text-[9px] font-black text-[var(--bt-muted)] uppercase tracking-[0.3em] block mb-2">
-              Servicios
-            </label>
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-3 px-1 mb-2">
               <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[var(--bt-muted)]">
                 Añadir / quitar
               </p>
@@ -387,9 +661,40 @@ export const EditAppointmentModal = ({
                 required
                 value={startLocal}
                 onChange={(e) => setStartLocal(e.target.value)}
-                className="box-border w-full min-w-0 max-w-full pl-8 py-4 bg-transparent border-b border-[var(--bt-border)] outline-none text-base font-bold tracking-wide text-[var(--bt-primary)] [color-scheme:light]"
+                className="box-border w-full min-w-0 max-w-full pl-8 py-5 min-h-[3.25rem] bg-transparent border-b border-[var(--bt-border)] outline-none text-base font-bold tracking-wide text-[var(--bt-primary)] [color-scheme:light] [&::-webkit-datetime-edit]:flex [&::-webkit-datetime-edit-fields-wrapper]:p-0 [&::-webkit-datetime-edit-text]:p-0"
+                style={{ fontSize: "16px", minWidth: "0" }}
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3 px-1">
+              <label className="text-[9px] font-black text-[var(--bt-muted)] uppercase tracking-[0.3em]">
+                Tiempo fin (opcional)
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setCustomEndEnabled((s) => !s);
+                  if (customEndEnabled) setCustomEndLocal("");
+                }}
+                className="text-[9px] font-black uppercase tracking-widest text-[var(--bt-primary)] underline decoration-1 underline-offset-4"
+              >
+                {customEndEnabled ? "Quitar fin" : "Añadir fin"}
+              </button>
+            </div>
+            {customEndEnabled ? (
+              <div className="relative min-w-0 w-full max-w-full">
+                <Timer className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 shrink-0 text-[var(--bt-icon)] pointer-events-none opacity-60" />
+                <input
+                  type="datetime-local"
+                  value={customEndLocal}
+                  onChange={(e) => setCustomEndLocal(e.target.value)}
+                  className="box-border w-full min-w-0 max-w-full pl-8 py-5 min-h-[3.25rem] bg-transparent border-b border-[var(--bt-border)] outline-none text-base font-bold tracking-wide text-[var(--bt-primary)] [color-scheme:light] [&::-webkit-datetime-edit]:flex [&::-webkit-datetime-edit-fields-wrapper]:p-0 [&::-webkit-datetime-edit-text]:p-0"
+                  style={{ fontSize: "16px", minWidth: "0" }}
+                />
+              </div>
+            ) : null}
           </div>
         </div>
 

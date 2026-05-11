@@ -36,6 +36,7 @@ import BillingSubscriptionPanel from "./components/salon/BillingSubscriptionPane
 import FirstVisitGuide from "./components/onboarding/FirstVisitGuide";
 import PendingSetupTasksModal from "./components/onboarding/PendingSetupTasksModal";
 import MorningWhatsAppRemindersModal from "./components/modals/MorningWhatsAppRemindersModal";
+import { X } from "lucide-react";
 
 const ONBOARDING_STORAGE_KEY = "beautydesk_onboarding_v2";
 const SETUP_SESSION_DISMISS_KEY = "beautydesk_setup_dismiss_session_v1";
@@ -82,6 +83,36 @@ function RegisterFromLandingRoute() {
   );
 }
 
+const APP_TAB_QUERY = new Set([
+  "agenda",
+  "calendario",
+  "equipo",
+  "stats",
+  "clientes",
+  "ajustes",
+]);
+
+/** Lee ?tab= & ?clientId= & ?notes= dentro de /app (debe renderizarse bajo <Router>). */
+function AppDeepLinkSync({ setActiveTab, onClientDeepLink }) {
+  const [searchParams] = useSearchParams();
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab && APP_TAB_QUERY.has(tab)) setActiveTab(tab);
+    if (tab === "clientes") {
+      const cid = searchParams.get("clientId");
+      if (cid && /^\d+$/.test(cid)) {
+        onClientDeepLink({
+          clientId: cid,
+          scrollNotes: searchParams.get("notes") === "1",
+        });
+        return;
+      }
+    }
+    onClientDeepLink(null);
+  }, [searchParams, setActiveTab, onClientDeepLink]);
+  return null;
+}
+
 /** Google Sign-In only when VITE_GOOGLE_CLIENT_ID is set (e.g. Vercel env). */
 function GoogleAuthShell({ children }) {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -106,8 +137,22 @@ function App() {
   const [services, setServices] = useState([]);
   const [errorMessage, setErrorMessage] = useState("");
   const [preselectedDate, setPreselectedDate] = useState("");
+  const [preselectedStaffId, setPreselectedStaffId] = useState("");
+  /** Nueva cita desde calendario: mismo AppointmentForm que el panel lateral, en modal. */
+  const [calendarBookingModalOpen, setCalendarBookingModalOpen] =
+    useState(false);
+  const [calendarBookingInitialDate, setCalendarBookingInitialDate] =
+    useState("");
+  const [calendarBookingInitialStaffId, setCalendarBookingInitialStaffId] =
+    useState("");
+  const [calendarBookingModalKey, setCalendarBookingModalKey] = useState(0);
   const [clients, setClients] = useState([]);
+  const [clientDeepLink, setClientDeepLink] = useState({
+    clientId: null,
+    scrollNotes: false,
+  });
   const [teamMembers, setTeamMembers] = useState([]);
+  const [salonHoursDays, setSalonHoursDays] = useState([]);
   const [isRegistering, setIsRegistering] = useState(false);
   const [showFirstVisitGuide, setShowFirstVisitGuide] = useState(false);
   const [showPendingSetup, setShowPendingSetup] = useState(false);
@@ -156,6 +201,17 @@ function App() {
     if (typeof window !== "undefined") {
       window.scrollTo({ top: 0, left: 0, behavior: "auto" });
     }
+  }, []);
+
+  const handleClientDeepLink = useCallback((payload) => {
+    if (!payload) {
+      setClientDeepLink({ clientId: null, scrollNotes: false });
+      return;
+    }
+    setClientDeepLink({
+      clientId: payload.clientId,
+      scrollNotes: !!payload.scrollNotes,
+    });
   }, []);
 
   const todaysAppointments = useMemo(() => {
@@ -229,19 +285,23 @@ function App() {
         setAppointments([]);
         setClients([]);
         setTeamMembers([]);
+        setSalonHoursDays([]);
         return;
       }
-      const [svcs, apps, clientsFromDB, team] = await Promise.all([
+      const [svcs, apps, clientsFromDB, team, hours] = await Promise.all([
         apiRequest("/services/"),
         apiRequest("/appointments/"),
         apiRequest("/clients/"),
         apiRequest("/users/team"),
+        apiRequest("/users/me/organization/salon-hours", "GET").catch(() => null),
       ]);
       console.log("Fetched appointments:", apps);
       if (svcs) setServices(svcs);
       if (clientsFromDB) setClients(clientsFromDB);
       if (Array.isArray(team)) setTeamMembers(team);
       else setTeamMembers([]);
+      if (hours && Array.isArray(hours?.days)) setSalonHoursDays(hours.days);
+      else setSalonHoursDays([]);
       if (apps) {
         setAppointments(
           apps.sort((a, b) => new Date(a.start_time) - new Date(b.start_time)),
@@ -445,6 +505,10 @@ function App() {
             element={
               isLoggedIn ? (
                 <div className="min-h-screen bg-[var(--bt-bg)] pb-24 md:pb-12 pt-6 md:pt-12 px-4 md:px-6 font-sans text-[var(--bt-primary)]">
+                  <AppDeepLinkSync
+                    setActiveTab={setActiveTab}
+                    onClientDeepLink={handleClientDeepLink}
+                  />
                   {impersonationTargetEmail && (
                     <div className="max-w-6xl mx-auto mb-4 px-1">
                       <div className="rounded-2xl border border-purple-200 bg-purple-50/95 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-[10px] font-bold text-purple-950">
@@ -571,6 +635,7 @@ function App() {
                           currentUser={currentUser}
                           onSuccess={fetchInitialData}
                           initialDate={preselectedDate}
+                            initialStaffId={preselectedStaffId}
                           onError={(msg) => setErrorMessage(msg)}
                           disabledReason={
                             currentUser?.needs_fiscal_completion
@@ -645,18 +710,26 @@ function App() {
                             allAppointments={appointments}
                             services={services}
                             teamMembers={teamMembers}
+                            salonHoursDays={salonHoursDays}
+                            uiTheme={uiTheme}
                             onUpdateStatus={handleUpdateStatus}
                             onRefresh={fetchInitialData}
                             onAddClick={(date) => {
-                              setPreselectedDate(
-                                new Date(
-                                  date.getTime() -
-                                    date.getTimezoneOffset() * 60000,
-                                )
+                              const payload =
+                                date && typeof date === "object" && "date" in date
+                                  ? date
+                                  : { date };
+                              const d = payload?.date instanceof Date ? payload.date : new Date(payload?.date);
+                              setCalendarBookingInitialDate(
+                                new Date(d.getTime() - d.getTimezoneOffset() * 60000)
                                   .toISOString()
                                   .slice(0, 16),
                               );
-                              setActiveTab("agenda");
+                              setCalendarBookingInitialStaffId(
+                                payload?.staffId != null ? String(payload.staffId) : "",
+                              );
+                              setCalendarBookingModalKey((k) => k + 1);
+                              setCalendarBookingModalOpen(true);
                             }}
                           />
                         )}
@@ -682,6 +755,8 @@ function App() {
                             clients={clients}
                             onRefresh={fetchInitialData}
                             onError={setErrorMessage}
+                            deepLinkClientId={clientDeepLink.clientId}
+                            deepLinkScrollNotes={clientDeepLink.scrollNotes}
                             blockedMessage={
                               currentUser?.needs_fiscal_completion
                                 ? "Completa los datos fiscales en Ajustes para gestionar clientes."
@@ -708,6 +783,48 @@ function App() {
                       </section>
                     </main>
                   </div>
+
+                  {currentUser &&
+                    !currentUser.app_access_locked &&
+                    calendarBookingModalOpen && (
+                      <div className="fixed inset-0 z-[100] flex items-start md:items-center justify-center p-4 md:p-6 overflow-y-auto">
+                        <div
+                          className="absolute inset-0 bg-[var(--bt-primary)]/20 backdrop-blur-md"
+                          onClick={() => setCalendarBookingModalOpen(false)}
+                          aria-hidden
+                        />
+                        <div className="relative w-full min-w-0 max-w-xl max-h-[calc(100vh-2rem)] md:max-h-[calc(100vh-3rem)] overflow-y-auto rounded-[3rem] shadow-2xl">
+                          <button
+                            type="button"
+                            onClick={() => setCalendarBookingModalOpen(false)}
+                            className="absolute right-6 top-6 z-[110] flex h-10 w-10 items-center justify-center rounded-full bg-white/90 border border-[var(--bt-border)] text-[var(--bt-muted)] hover:text-[var(--bt-primary)] hover:bg-white transition-colors"
+                            aria-label="Cerrar"
+                          >
+                            <X className="h-5 w-5" />
+                          </button>
+                          <AppointmentForm
+                            key={calendarBookingModalKey}
+                            variant="modal"
+                            services={services}
+                            clients={clients}
+                            currentUser={currentUser}
+                            initialDate={calendarBookingInitialDate}
+                            initialStaffId={calendarBookingInitialStaffId}
+                            onSuccess={() => {
+                              fetchInitialData();
+                              setCalendarBookingModalOpen(false);
+                            }}
+                            onError={(msg) => setErrorMessage(msg)}
+                            disabledReason={
+                              currentUser?.needs_fiscal_completion
+                                ? "Completa los datos fiscales en Ajustes para crear citas."
+                                : null
+                            }
+                          />
+                        </div>
+                      </div>
+                    )}
+
                   <MobileNavbar
                     activeTab={activeTab}
                     setActiveTab={setActiveTabFromNavbar}
